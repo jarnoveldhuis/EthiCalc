@@ -23,7 +23,8 @@ interface UseBankConnectionResult {
   manuallyFetchTransactions: () => Promise<void>;
 }
 
-export function useBankConnection(user: User | null): UseBankConnectionResult {
+export function useBankConnection(user: User | null, firebaseLoadingComplete = true): UseBankConnectionResult {
+  
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     isConnected: false,
@@ -195,8 +196,7 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
   );
   // Check for existing connection on component mount
   useEffect(() => {
-    if (!user) return;
-
+    if (!user || !firebaseLoadingComplete) return;
     // Check if we have a stored token
     const storedData = localStorage.getItem("plaid_access_token_info");
     if (!storedData) return;

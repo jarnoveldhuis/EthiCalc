@@ -38,6 +38,9 @@ import {
 const isSandboxMode =
   process.env.NODE_ENV === "development" || config.plaid.isSandbox;
 
+const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState(false);
+
+
 export default function Dashboard() {
   // Authentication
   const { user, loading: authLoading, logout } = useAuth();
@@ -49,7 +52,7 @@ export default function Dashboard() {
     connectBank, 
     disconnectBank,
     manuallyFetchTransactions
-  } = useBankConnection(user);
+  } = useBankConnection(user, firebaseLoadingComplete);
   
   // Transaction storage and analysis
   const {
@@ -58,8 +61,10 @@ export default function Dashboard() {
     isLoading: storageLoading,
     error: storageError,
     saveTransactions,
-    hasSavedData
+    hasSavedData,
+    loadLatestTransactions
   } = useTransactionStorage(user);
+  
   
   const {
     analyzedData,
@@ -159,6 +164,22 @@ export default function Dashboard() {
     });
   }, []);
   
+  useEffect(() => {
+    if (user && !firebaseLoadingComplete && !hasSavedData && !storageLoading) {
+      // Try to load from Firebase first
+      loadLatestTransactions()
+        .then(hasData => {
+          console.log(`Firebase load complete, found data: ${hasData}`);
+          setFirebaseLoadingComplete(true);
+        })
+        .catch(err => {
+          console.error("Firebase load failed:", err);
+          setFirebaseLoadingComplete(true); // Mark as complete even on error
+        });
+    }
+  }, [user, firebaseLoadingComplete, hasSavedData, storageLoading, loadLatestTransactions]);
+  
+
   // Save analyzed transactions to storage
   useEffect(() => {
     if (

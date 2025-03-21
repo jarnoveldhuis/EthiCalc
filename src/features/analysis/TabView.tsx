@@ -19,7 +19,7 @@ export function TabView({
   transactions,
   totalSocietalDebt,
   getColorClass,
-  initialActiveTab = "transactions",
+  initialActiveTab = "impact",
 }: TabViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>(initialActiveTab);
 
