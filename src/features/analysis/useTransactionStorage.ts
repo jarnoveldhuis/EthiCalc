@@ -33,8 +33,21 @@ interface UseTransactionStorageResult {
 
 // Type for state update function to fix linting errors
 type StateUpdateFunction = () => void;
+// Add a function to check if disconnect was manual
 
 export function useTransactionStorage(user: User | null): UseTransactionStorageResult {
+  const wasManuallyDisconnected = useCallback((): boolean => {
+    try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+        return false;
+      }
+      return sessionStorage.getItem('wasManuallyDisconnected') === 'true';
+    } catch (e) {
+      console.warn('Error checking manual disconnect status:', e);
+      return false;
+    }
+  }, []);
   const [savedTransactions, setSavedTransactions] = useState<Transaction[] | null>(null);
   const [totalSocietalDebt, setTotalSocietalDebt] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -70,7 +83,7 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
     if (!user || isLoadingRef.current || preventAutoLoadRef.current) {
       return false;
     }
-
+  
     console.log(`Loading latest transactions for user ${user.uid}...`);
     isLoadingRef.current = true;
     
@@ -155,7 +168,7 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
       isLoadingRef.current = false;
       return false;
     }
-  }, [user]);
+  }, [user, wasManuallyDisconnected]);
   
   // Reset the storage state - with prevention flag
   const resetStorage = useCallback(() => {
@@ -323,19 +336,7 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
     previousUserIdRef.current = currentUserId;
   }, [user, resetStorage]);
 
-  // Add a function to check if disconnect was manual
-  const wasManuallyDisconnected = useCallback((): boolean => {
-    try {
-      // Check if we're in a browser environment
-      if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
-        return false;
-      }
-      return sessionStorage.getItem('wasManuallyDisconnected') === 'true';
-    } catch (e) {
-      console.warn('Error checking manual disconnect status:', e);
-      return false;
-    }
-  }, []);
+  
 
   // Auto-load latest transactions only on initial mount or user change
   // Modified to respect the prevention flag and manual disconnect

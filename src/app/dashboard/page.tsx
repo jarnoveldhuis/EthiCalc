@@ -1,4 +1,4 @@
-// src/app/dashboard/page.tsx
+// Update to your src/app/dashboard/page.tsx
 "use client";
 
 import { useCallback, useState, useEffect } from "react";
@@ -17,6 +17,7 @@ import { ConsolidatedImpactView } from "@/features/analysis/ConsolidatedImpactVi
 import { CategoryExperimentView } from "@/features/analysis/CategoryExperimentView";
 import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
 import { useSampleData } from "@/features/debug/useSampleData";
+import { ManualFetchButton } from "@/features/debug/ManualFetchButton"; // Import the new component
 
 // Utility functions
 import { 
@@ -44,8 +45,10 @@ export default function Dashboard() {
   // Bank connection
   const { 
     connectionStatus, 
+    transactions,
     connectBank, 
-    disconnectBank 
+    disconnectBank,
+    manuallyFetchTransactions
   } = useBankConnection(user);
   
   // Transaction storage and analysis
@@ -69,6 +72,7 @@ export default function Dashboard() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Loading...");
+  const [fetchError, setFetchError] = useState<string | null>(null);
   
   // Sample data utility
   const { generateSampleTransactions } = useSampleData();
@@ -95,10 +99,21 @@ export default function Dashboard() {
     storageLoading;
   
   // Combined error state
-  const error = connectionStatus.error || analysisStatus.error || storageError;
+  const error = connectionStatus.error || analysisStatus.error || storageError || fetchError;
   
   // Flag for when bank is connecting
   const bankConnecting = connectionStatus.isLoading || isConnecting;
+  
+  // Manual fetch handler with error handling
+  const handleManualFetch = useCallback(async () => {
+    setFetchError(null);
+    try {
+      await manuallyFetchTransactions();
+    } catch (error) {
+      console.error("Manual fetch error in dashboard:", error);
+      setFetchError(error instanceof Error ? error.message : "Unknown error fetching transactions");
+    }
+  }, [manuallyFetchTransactions]);
   
   // Handle loading sample data
   const handleLoadSampleData = useCallback(() => {
@@ -159,6 +174,14 @@ export default function Dashboard() {
     }
   }, [user, analyzedData, hasSavedData, saveTransactions]);
   
+  // Effect to analyze transactions from the bank connection
+  useEffect(() => {
+    if (transactions && transactions.length > 0 && !analyzedData) {
+      console.log(`Analyzing ${transactions.length} transactions from bank connection`);
+      analyzeTransactions(transactions);
+    }
+  }, [transactions, analyzedData, analyzeTransactions]);
+  
   // Get the currently active view component
   const renderActiveView = () => {
     if (isLoading) {
@@ -169,7 +192,6 @@ export default function Dashboard() {
       return (
         <DashboardEmptyState 
           effectiveConnectionStatus={effectiveConnectionStatus}
-          // onDisconnectBank={disconnectBank}
           bankConnecting={bankConnecting}
           isConnecting={isConnecting}
         />
@@ -276,6 +298,15 @@ export default function Dashboard() {
                 isLoading={bankConnecting}
               />
             </div>
+          )}
+
+          {/* Manual Fetch Button - shown when connected but no data is visible */}
+          {effectiveConnectionStatus && !hasData && (
+            <ManualFetchButton
+              onFetch={handleManualFetch}
+              className="mb-6"
+              showAfterTimeout={8000} // Show after 8 seconds if no data appears
+            />
           )}
 
           {/* Main view content */}
