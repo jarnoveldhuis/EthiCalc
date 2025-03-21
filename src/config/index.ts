@@ -7,7 +7,7 @@ export const config = {
       : process.env.PLAID_SECRET_PRODUCTION,
     env: process.env.PLAID_ENV || "sandbox",
     isSandbox: process.env.PLAID_ENV === "sandbox",
-    useSampleData: process.env.USE_SAMPLE_DATA === "true" || false,
+    useSampleData: process.env.USE_SAMPLE_DATA === "false" || false,
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY,

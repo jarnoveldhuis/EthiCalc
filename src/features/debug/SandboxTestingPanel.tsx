@@ -108,7 +108,7 @@ export function SandboxTestingPanel({
       const response = await fetch("/api/banking/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ useSampleData: true }),
+        body: JSON.stringify({ useSampleData: false }),
       });
       
       if (!response.ok) {
