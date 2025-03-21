@@ -301,7 +301,7 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
         });
       }
     } 
-  }, [hasSavedData]);
+  }, []);
 
   // Handle user changes
   useEffect(() => {

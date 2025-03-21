@@ -236,7 +236,7 @@ export default function Dashboard() {
         console.log("No new transactions to save after merging");
       }
     }
-  }, [user, analyzedData, savedTransactions, saveTransactions]);
+  }, [user, analyzedData, savedTransactions, saveTransactions, hasSavedData]);
 
   // Effect to analyze transactions from the bank connection
   useEffect(() => {
