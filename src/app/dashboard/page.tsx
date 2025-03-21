@@ -17,6 +17,7 @@ import { ConsolidatedImpactView } from "@/features/analysis/ConsolidatedImpactVi
 import { CategoryExperimentView } from "@/features/analysis/CategoryExperimentView";
 import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
 import { useSampleData } from "@/features/debug/useSampleData";
+import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
 import { mergeTransactions } from "@/features/banking/transactionMapper";
 
 // Utility functions
