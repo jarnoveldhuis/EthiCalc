@@ -1,7 +1,7 @@
 // Update to your src/app/dashboard/page.tsx
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useBankConnection } from "@/features/banking/useBankConnection";
 import { useTransactionStorage } from "@/features/analysis/useTransactionStorage";
@@ -83,8 +83,14 @@ export default function Dashboard() {
     connectionStatus.isConnected || debugConnectionStatus;
 
   // Display transactions from analyzed data or saved transactions
-  const displayTransactions =
-    analyzedData?.transactions || savedTransactions || [];
+  const displayTransactions = useMemo(() => {
+    // If we have both analyzed and saved data, merge them
+    if (analyzedData?.transactions && savedTransactions) {
+      return mergeTransactions(savedTransactions, analyzedData.transactions);
+    }
+    // Otherwise fallback to whichever exists
+    return analyzedData?.transactions || savedTransactions || [];
+  }, [analyzedData, savedTransactions]);
 
   // Derived data for the UI
   const practiceDonations = calculatePracticeDonations(displayTransactions);

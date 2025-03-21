@@ -196,47 +196,39 @@ export function useBankConnection(user: User | null, firebaseLoadingComplete = t
   );
   // Check for existing connection on component mount
   useEffect(() => {
-    if (!user || !firebaseLoadingComplete) return;
+    if (!user) return;
+    
     // Check if we have a stored token
     const storedData = localStorage.getItem("plaid_access_token_info");
     if (!storedData) return;
-
+    
     try {
       // Parse the token info
       const tokenInfo = JSON.parse(storedData);
-
+      
       // Verify it belongs to current user
       if (tokenInfo.userId !== user.uid) {
-        console.warn("Stored token belongs to a different user");
+        console.log("Stored token belongs to a different user");
         localStorage.removeItem("plaid_access_token_info");
         return;
       }
-
-      // Verify token isn't too old (30 days)
-      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-      if (Date.now() - tokenInfo.timestamp > thirtyDaysMs) {
-        console.warn("Stored token has expired");
-        localStorage.removeItem("plaid_access_token_info");
-        return;
-      }
-
-      console.log("Found existing bank connection");
-
-      // Set connected state
-      setConnectionStatus({
+      
+      // Set connected state REGARDLESS of loading state
+      setConnectionStatus(prev => ({
+        ...prev,
         isConnected: true,
-        isLoading: false,
-        error: null,
-      });
-
-      // Load transactions using the stored token
-      fetchTransactions(tokenInfo.token);
+        // Don't override loading status if it's already true
+        isLoading: prev.isLoading 
+      }));
+      
+      // Only fetch transactions if we haven't loaded them yet
+      if (transactions.length === 0 && !connectionStatus.isLoading) {
+        fetchTransactions(tokenInfo.token);
+      }
     } catch (error) {
       console.error("Error checking stored token:", error);
-      // Clear invalid token
-      localStorage.removeItem("plaid_access_token_info");
     }
-  }, [user, fetchTransactions]); // Add fetchTransactions to dependency array
+  }, [user, fetchTransactions, transactions.length, connectionStatus.isLoading]);
 
   // Function to manually fetch transactions using stored token
   const manuallyFetchTransactions = useCallback(async () => {
@@ -267,7 +259,7 @@ export function useBankConnection(user: User | null, firebaseLoadingComplete = t
       console.error("Manual fetch error:", error);
       throw error; // Re-throw so the caller can handle it
     }
-  }, [user, fetchTransactions]);
+  }, [user, fetchTransactions, firebaseLoadingComplete]);
 
   // Connect bank function
   const connectBank = useCallback(

@@ -54,9 +54,9 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
     isAnalyzing.current = false;
   }, []);
 
-  const analyzeTransactions = useCallback(async (transactions: Transaction[]) => {
-    // Skip if no transactions or we're already analyzing
-    if (!transactions.length) {
+  const analyzeTransactions = useCallback(async (newTransactions: Transaction[]) => {
+    // Skip if no transactions or already analyzing
+    if (!newTransactions.length) {
       console.warn("No transactions provided for analysis");
       return;
     }
@@ -65,45 +65,50 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
       console.log("Analysis already in progress, skipping duplicate call");
       return;
     }
-
+  
     // Set analyzing flag to prevent duplicate calls
     isAnalyzing.current = true;
     setAnalysisStatus({ status: 'loading', error: null });
-
+  
     try {
-      console.log(`Starting analysis for ${transactions.length} transactions`);
+      console.log(`Starting analysis for ${newTransactions.length} transactions`);
       
       // Filter for unanalyzed transactions
-      const unanalyzedTransactions = transactions.filter(tx => !tx.analyzed);
+      const unanalyzedTransactions = newTransactions.filter(tx => !tx.analyzed);
       
-      console.log(`Found ${unanalyzedTransactions.length} unanalyzed transactions of ${transactions.length} total`);
+      console.log(`Found ${unanalyzedTransactions.length} unanalyzed transactions of ${newTransactions.length} total`);
       
       // If there are no unanalyzed transactions, we can skip the API call
       if (unanalyzedTransactions.length === 0) {
-        console.log("No unanalyzed transactions found, calculating locally");
-
+        console.log("All transactions already analyzed, skipping API call");
+        
+        // If we already have analyzedData, just leave it as is
+        if (analyzedData) {
+          isAnalyzing.current = false;
+          return;
+        }
+        
         // Calculate total societal debt from existing data
-        const totalDebt = transactions.reduce(
+        const totalDebt = newTransactions.reduce(
           (sum, tx) => {
             // If this is a credit application, it directly reduces debt
             if (tx.isCreditApplication) {
-              return sum - tx.amount; // Subtract the credit amount
+              return sum - tx.amount;
             }
-            // Otherwise use the standard societal debt
             return sum + (tx.societalDebt || 0);
           },
           0
         );
         
-        const totalSpent = transactions.reduce(
+        const totalSpent = newTransactions.reduce(
           (sum, tx) => sum + tx.amount,
           0
         );
         
         const debtPercentage = totalSpent > 0 ? (totalDebt / totalSpent) * 100 : 0;
-
+  
         setAnalyzedData({
-          transactions,
+          transactions: newTransactions,
           totalSocietalDebt: totalDebt,
           debtPercentage
         });
@@ -112,20 +117,20 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
         isAnalyzing.current = false;
         return;
       }
-
+  
       console.log(`Calling API to analyze ${unanalyzedTransactions.length} transactions`);
-
+  
       // Call the API to analyze transactions
       const response = await fetch("/api/analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transactions: unanalyzedTransactions }),
       });
-
+  
       if (!response.ok) {
         throw new Error(`Analysis API error: ${response.status}`);
       }
-
+  
       const data = await response.json() as AnalyzedTransactionData;
       console.log(`API returned ${data.transactions.length} analyzed transactions`);
       
@@ -140,29 +145,28 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
           analyzed: true // Mark as analyzed
         });
       });
-
+  
       // Merge with original transactions, preserving any that weren't sent for analysis
-      const mergedTransactions = transactions.map((tx) => {
+      const mergedTransactions = newTransactions.map((tx) => {
         const identifier = getTransactionIdentifier(tx);
         if (analyzedTransactionMap.has(identifier)) {
           return analyzedTransactionMap.get(identifier)!;
         }
         return tx;
       });
-
+  
       // Sort by societal debt (largest first)
       const sortedTransactions = [...mergedTransactions].sort(
         (a, b) => (b.societalDebt ?? 0) - (a.societalDebt ?? 0)
       );
-
+  
       // Calculate metrics
       const totalDebt = sortedTransactions.reduce(
         (sum, tx) => {
           // If this is a credit application, it directly reduces debt
           if (tx.isCreditApplication) {
-            return sum - tx.amount; // Subtract the credit amount
+            return sum - tx.amount;
           }
-          // Otherwise use the standard societal debt
           return sum + (tx.societalDebt || 0);
         },
         0
@@ -174,8 +178,7 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
       );
       
       const debtPercentage = totalSpent > 0 ? (totalDebt / totalSpent) * 100 : 0;
-
-      // Set state with the complete results
+  
       setAnalyzedData({
         transactions: sortedTransactions,
         totalSocietalDebt: totalDebt,
@@ -194,12 +197,11 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
       });
       
       // If the API fails, add a fallback local calculation
-      // This ensures we still show data even if the detailed analysis fails
       analysisTimeoutRef.current = setTimeout(() => {
         console.log("Using fallback local calculation after API error");
         
         // Mark all transactions as analyzed but with minimal details
-        const fallbackTransactions = transactions.map(tx => ({
+        const fallbackTransactions = newTransactions.map(tx => ({
           ...tx,
           analyzed: true,
           societalDebt: tx.societalDebt || 0,
@@ -209,11 +211,9 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
         
         const totalDebt = fallbackTransactions.reduce(
           (sum, tx) => {
-            // If this is a credit application, it directly reduces debt
             if (tx.isCreditApplication) {
-              return sum - tx.amount; // Subtract the credit amount
+              return sum - tx.amount;
             }
-            // Otherwise use the standard societal debt
             return sum + (tx.societalDebt || 0);
           },
           0
@@ -240,7 +240,7 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
     } finally {
       isAnalyzing.current = false;
     }
-  }, []);
+  }, [analyzedData]);
 
   return {
     analyzedData,
