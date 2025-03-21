@@ -1,0 +1,10 @@
+{
+  
+    "functions": {
+      "src/app/api/analysis/route.ts": {
+        "maxDuration": 60
+      }
+    }
+  }
+  
+  

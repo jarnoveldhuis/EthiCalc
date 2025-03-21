@@ -1,0 +1,42 @@
+{
+  "name": "mordebt",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint && tsc --noEmit",
+    "lint:strict": "eslint . --ext .js,.jsx,.ts,.tsx --max-warnings=0",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "dependencies": {
+    "@next/font": "^14.2.15",
+    "firebase": "^11.4.0",
+    "lucide-react": "^0.479.0",
+    "next": "^15.2.0",
+    "openai": "^4.86.0",
+    "plaid": "^31.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.15.1",
+    "vercel": "^41.4.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4.0.14",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@typescript-eslint/eslint-plugin": "^8.26.1",
+    "@typescript-eslint/parser": "^8.26.1",
+    "autoprefixer": "^10.4.20",
+    "browserslist": "^4.24.4",
+    "eslint": "^9.22.0",
+    "eslint-config-next": "15.2.0",
+    "lightningcss": "^1.29.1",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.0.9",
+    "typescript": "^5"
+  }
+}
