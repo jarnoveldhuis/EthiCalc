@@ -228,10 +228,10 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
     }
 
     // Skip if we've already saved this session or prevention flag is set
-    if (hasSavedData || preventAutoLoadRef.current) {
-      console.log("Skip saving - already have saved data this session or prevention flag is set");
-      return;
-    }
+    // if (hasSavedData || preventAutoLoadRef.current) {
+    //   console.log("Skip saving - already have saved data this session or prevention flag is set");
+    //   return;
+    // }
 
     console.log(`Attempting to save ${transactions.length} transactions to Firebase...`);
     
