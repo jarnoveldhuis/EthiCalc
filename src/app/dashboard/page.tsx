@@ -38,10 +38,11 @@ import {
 const isSandboxMode =
   process.env.NODE_ENV === "development" || config.plaid.isSandbox;
 
-const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState(false);
 
 
 export default function Dashboard() {
+  const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState(false);
+
   // Authentication
   const { user, loading: authLoading, logout } = useAuth();
   
