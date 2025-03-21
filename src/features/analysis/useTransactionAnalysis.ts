@@ -1,6 +1,7 @@
 // src/features/analysis/useTransactionAnalysis.ts
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Transaction, AnalyzedTransactionData } from './types';
+import { mergeTransactions } from "@/features/banking/transactionMapper";
 
 interface AnalysisStatus {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -19,7 +20,9 @@ function getTransactionIdentifier(transaction: Transaction): string {
   return `${transaction.date}-${transaction.name}-${transaction.amount}`;
 }
 
-export function useTransactionAnalysis(): UseTransactionAnalysisResult {
+export function useTransactionAnalysis(
+  savedTransactions: Transaction[] | null = null
+): UseTransactionAnalysisResult {
   const [analyzedData, setAnalyzedData] = useState<AnalyzedTransactionData | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>({
     status: 'idle',
@@ -55,76 +58,67 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
   }, []);
 
   const analyzeTransactions = useCallback(async (newTransactions: Transaction[]) => {
-    // Skip if no transactions or already analyzing
-    if (!newTransactions.length) {
-      console.warn("No transactions provided for analysis");
+    // Skip if no transactions or we're already analyzing
+    if (!newTransactions.length || isAnalyzing.current) {
       return;
     }
-    
-    if (isAnalyzing.current) {
-      console.log("Analysis already in progress, skipping duplicate call");
-      return;
-    }
-  
-    // Set analyzing flag to prevent duplicate calls
+
     isAnalyzing.current = true;
     setAnalysisStatus({ status: 'loading', error: null });
-  
+
     try {
       console.log(`Starting analysis for ${newTransactions.length} transactions`);
       
-      // Filter for unanalyzed transactions
-      const unanalyzedTransactions = newTransactions.filter(tx => !tx.analyzed);
+      // THIS IS THE CRITICAL PART - check if these transactions already exist in savedTransactions
+      const trulyUnanalyzedTransactions = newTransactions.filter(newTx => {
+        // Create a transaction identifier
+        const txId = getTransactionIdentifier(newTx);
+        
+        // Check if this transaction exists in savedTransactions and is already analyzed
+        const matchingTx = savedTransactions?.find(savedTx => 
+          getTransactionIdentifier(savedTx) === txId
+        );
+        
+        // Only include truly unanalyzed transactions
+        return !matchingTx || !matchingTx.analyzed;
+      });
       
-      console.log(`Found ${unanalyzedTransactions.length} unanalyzed transactions of ${newTransactions.length} total`);
+      console.log(`Found ${trulyUnanalyzedTransactions.length} truly unanalyzed transactions of ${newTransactions.length} total`);
       
-      // If there are no unanalyzed transactions, we can skip the API call
-      if (unanalyzedTransactions.length === 0) {
+      // If all transactions are already analyzed, skip the API call
+      if (trulyUnanalyzedTransactions.length === 0) {
         console.log("All transactions already analyzed, skipping API call");
         
-        // If we already have analyzedData, just leave it as is
-        if (analyzedData) {
-          isAnalyzing.current = false;
-          return;
+        // If we have saved transactions, merge with new ones to create a complete view
+        if (savedTransactions && savedTransactions.length > 0) {
+          const mergedTransactions = mergeTransactions(savedTransactions, newTransactions);
+          
+          // Calculate totals from merged data
+          const totalDebt = mergedTransactions.reduce(
+            (sum, tx) => sum + (tx.societalDebt || 0), 0
+          );
+          
+          setAnalyzedData({
+            transactions: mergedTransactions,
+            totalSocietalDebt: totalDebt,
+            debtPercentage: 0 // You can calculate this if needed
+          });
+          
+          setAnalysisStatus({ status: 'success', error: null });
         }
         
-        // Calculate total societal debt from existing data
-        const totalDebt = newTransactions.reduce(
-          (sum, tx) => {
-            // If this is a credit application, it directly reduces debt
-            if (tx.isCreditApplication) {
-              return sum - tx.amount;
-            }
-            return sum + (tx.societalDebt || 0);
-          },
-          0
-        );
-        
-        const totalSpent = newTransactions.reduce(
-          (sum, tx) => sum + tx.amount,
-          0
-        );
-        
-        const debtPercentage = totalSpent > 0 ? (totalDebt / totalSpent) * 100 : 0;
-  
-        setAnalyzedData({
-          transactions: newTransactions,
-          totalSocietalDebt: totalDebt,
-          debtPercentage
-        });
-        
-        setAnalysisStatus({ status: 'success', error: null });
         isAnalyzing.current = false;
         return;
       }
-  
-      console.log(`Calling API to analyze ${unanalyzedTransactions.length} transactions`);
+    
+      // Continue with API call for truly unanalyzed transactions
+      console.log(`Calling API to analyze ${trulyUnanalyzedTransactions.length} transactions`);
   
       // Call the API to analyze transactions
       const response = await fetch("/api/analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactions: unanalyzedTransactions }),
+        body: JSON.stringify({ transactions: trulyUnanalyzedTransactions }),
       });
   
       if (!response.ok) {
@@ -240,7 +234,7 @@ export function useTransactionAnalysis(): UseTransactionAnalysisResult {
     } finally {
       isAnalyzing.current = false;
     }
-  }, [analyzedData]);
+  }, [analyzedData, savedTransactions]);
 
   return {
     analyzedData,
