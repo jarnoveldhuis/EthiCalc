@@ -32,7 +32,7 @@ export function DashboardLayout({
             <div className="flex items-center">
               <span className="text-2xl">🌍</span>
               <h1 className="ml-2 text-xl font-bold bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">
-                Ethinomic Dashboard
+                EthiCalc
               </h1>
             </div>
 
