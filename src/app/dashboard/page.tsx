@@ -17,7 +17,7 @@ import { ConsolidatedImpactView } from "@/features/analysis/ConsolidatedImpactVi
 import { CategoryExperimentView } from "@/features/analysis/CategoryExperimentView";
 import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
 import { useSampleData } from "@/features/debug/useSampleData";
-import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
+import { mergeTransactions } from "@/features/banking/transactionMapper";
 
 // Utility functions
 import {
@@ -196,37 +196,40 @@ export default function Dashboard() {
     loadLatestTransactions,
   ]);
 
-  // Save analyzed transactions to storage
   useEffect(() => {
-    // Log before attempting to save
-    console.log("Save effect triggered: ", {
+    console.log("Save effect evaluation:", {
       hasUser: !!user,
       hasAnalyzedData: !!analyzedData,
-      hasTransactions: Boolean(
-        analyzedData &&
-          analyzedData.transactions &&
-          analyzedData.transactions.length > 0
-      ),
-      hasSavedData,
-      analyzedCount:
-        analyzedData && analyzedData.transactions
-          ? analyzedData.transactions.length
-          : 0,
-      savedCount: savedTransactions ? savedTransactions.length : 0,
+      analyzedCount: analyzedData?.transactions?.length || 0,
+      savedCount: savedTransactions?.length || 0,
+      hasSavedData
     });
-    
+  
     if (
-      user &&
-      analyzedData &&
-      analyzedData.transactions.length > 0 &&
-      !hasSavedData
+      user && 
+      analyzedData && 
+      analyzedData.transactions.length > 0
     ) {
-      saveTransactions(
-        analyzedData.transactions,
-        analyzedData.totalSocietalDebt
-      );
+      // Use the existing transactions or an empty array if none exist
+      const existingTx = savedTransactions || [];
+      const newTx = analyzedData.transactions;
+      
+      // Use your existing merge function to combine them
+      const mergedTransactions = mergeTransactions(existingTx, newTx);
+      
+      // Only save if we actually have new transactions
+      if (mergedTransactions.length > existingTx.length) {
+        console.log(`SAVING MERGED TRANSACTIONS: ${existingTx.length} existing + ${newTx.length} new = ${mergedTransactions.length} total`);
+        
+        saveTransactions(
+          mergedTransactions,
+          analyzedData.totalSocietalDebt  // You might need to recalculate this based on merged data
+        );
+      } else {
+        console.log("No new transactions to save after merging");
+      }
     }
-  }, [user, analyzedData, hasSavedData, saveTransactions]);
+  }, [user, analyzedData, savedTransactions, saveTransactions]);
 
   // Effect to analyze transactions from the bank connection
   useEffect(() => {
