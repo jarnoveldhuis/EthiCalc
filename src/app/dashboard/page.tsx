@@ -66,7 +66,7 @@ export default function Dashboard() {
   } = useTransactionStorage(user);
 
   const { analyzedData, analysisStatus, analyzeTransactions } =
-    useTransactionAnalysis();
+    useTransactionAnalysis(savedTransactions);
 
   // UI State
   const [activeView, setActiveView] = useState("transactions");
