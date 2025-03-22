@@ -2,8 +2,9 @@
 "use client";
 
 import { User } from "firebase/auth";
-import { useCallback, useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { DonationModal } from "@/features/charity/DonationModal";
+import { UserCreditState } from "@/features/analysis/useCreditState";
 
 interface CategoryImpact {
   name: string;
@@ -11,7 +12,7 @@ interface CategoryImpact {
 }
 
 interface DashboardSidebarProps {
-  user: User; // Keep user in props for future use
+  user: User;
   activeView: string;
   onViewChange: (view: string) => void;
   totalSocietalDebt: number;
@@ -19,58 +20,97 @@ interface DashboardSidebarProps {
   positiveImpact: number;
   topNegativeCategories: CategoryImpact[];
   hasTransactions: boolean;
-  onApplyCredit: (amount: number) => Promise<void>; // Add new prop for applying credit
+  onApplyCredit: (amount: number) => Promise<boolean>;
+  creditState: UserCreditState | null;
+  isApplyingCredit: boolean;
 }
 
 export function DashboardSidebar({
-  // user, // Commented out since it's not currently used
   activeView,
   onViewChange,
   totalSocietalDebt,
-  // offsetsThisMonth,
   positiveImpact,
   topNegativeCategories,
   hasTransactions,
   onApplyCredit,
+  creditState,
+  isApplyingCredit
 }: DashboardSidebarProps) {
-  // Get color based on societal debt
+  // Local UI state
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+  const [lastAppliedAmount, setLastAppliedAmount] = useState(0);
+
+  // Calculate effective debt (total debt minus applied credit)
+  const effectiveDebt = totalSocietalDebt - (creditState?.appliedCredit || 0);
+  
+  // Track whether the button should be disabled - critical for preventing multiple applications
+  const creditButtonDisabled = positiveImpact <= 0 || isApplyingCredit || effectiveDebt <= 0;
+  
+  // Debug log for credit state
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Credit sidebar state:', {
+        positiveImpact,
+        isApplyingCredit,
+        effectiveDebt,
+        creditState: creditState ? {
+          availableCredit: creditState.availableCredit,
+          appliedCredit: creditState.appliedCredit,
+          lastAppliedAmount: creditState.lastAppliedAmount
+        } : null,
+        buttonDisabled: creditButtonDisabled
+      });
+    }
+  }, [positiveImpact, isApplyingCredit, effectiveDebt, creditState, creditButtonDisabled]);
+  
+  // Get color based on societal debt (use effective debt for styling)
   const getDebtColor = useCallback((debt: number): string => {
     if (debt <= 0) return "from-green-500 to-teal-600";
     if (debt < 50) return "from-yellow-500 to-orange-600";
     return "from-red-500 to-pink-600";
   }, []);
 
-  // Track apply button state
-  const [isApplying, setIsApplying] = useState(false);
-  const [lastApplied, setLastApplied] = useState<number | null>(null);
-  const [showFeedback, setShowFeedback] = useState(false);
-
-  // Donation modal state
-  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
-
   // Handle applying social credit to debt
   const handleApplyCredit = async () => {
-    if (positiveImpact <= 0 || isApplying) return;
+    // Double-check button should be enabled to prevent race conditions
+    if (creditButtonDisabled) {
+      console.log('Credit button is disabled but was clicked anyway');
+      return;
+    }
 
     try {
-      setIsApplying(true);
-      const amountToApply = positiveImpact;
+      // Use the amount of positive impact available, capped by effective debt
+      const amountToApply = Math.min(positiveImpact, effectiveDebt);
+      
+      if (amountToApply <= 0) {
+        setFeedbackMessage("No debt to offset with credit");
+        setShowFeedback(true);
+        setTimeout(() => setShowFeedback(false), 3000);
+        return;
+      }
 
-      await onApplyCredit(amountToApply);
+      // Store amount locally for UI feedback
+      setLastAppliedAmount(amountToApply);
+      
+      const success = await onApplyCredit(amountToApply);
 
-      // Show feedback after successful application
-      setLastApplied(amountToApply);
-      setShowFeedback(true);
-
-      // Hide feedback after 3 seconds
-      setTimeout(() => {
-        setShowFeedback(false);
-      }, 3000);
+      if (success) {
+        // Show feedback after successful application
+        setFeedbackMessage(`Applied $${amountToApply.toFixed(2)} credit to your social debt`);
+        setShowFeedback(true);
+        
+        // Hide feedback after 3 seconds
+        setTimeout(() => {
+          setShowFeedback(false);
+        }, 3000);
+      }
     } catch (error) {
       console.error("Error applying credit:", error);
-      alert("Failed to apply credit. Please try again.");
-    } finally {
-      setIsApplying(false);
+      setFeedbackMessage("Failed to apply credit. Please try again.");
+      setShowFeedback(true);
+      setTimeout(() => setShowFeedback(false), 3000);
     }
   };
 
@@ -85,20 +125,20 @@ export function DashboardSidebar({
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
         <div
           className={`bg-gradient-to-r ${getDebtColor(
-            totalSocietalDebt
+            effectiveDebt
           )} p-6 text-white`}
         >
           <div className="text-center">
             <h2 className="text-xl font-bold mb-1">Total Social Debt</h2>
             <div className="text-5xl font-black mb-2">
-              ${Math.abs(totalSocietalDebt).toFixed(2)}
+              ${Math.abs(effectiveDebt).toFixed(2)}
             </div>
             <div className="text-sm font-medium">
-              {totalSocietalDebt <= 0 ? "Positive Impact" : "Negative Impact"}
+              {effectiveDebt <= 0 ? "Positive Impact" : "Negative Impact"}
             </div>
 
-            {/* Offset All button - shown whenever there's debt */}
-            {totalSocietalDebt > 0 && (
+            {/* Only show Offset button if there's effective debt */}
+            {effectiveDebt > 0 && (
               <button
                 onClick={handleOpenDonationModal}
                 className="mt-4 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors"
@@ -110,36 +150,64 @@ export function DashboardSidebar({
           </div>
         </div>
 
-        {/* Debt summary with Apply button */}
+        {/* Credit summary with Apply button */}
         <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-gray-600">Social Credit</span>
-              <span className="text-xs text-gray-500 block"></span>
-            </div>
-            <div className="flex items-center">
-              <span className="font-bold text-green-600 mr-2">
-                ${positiveImpact.toFixed(2)}
-              </span>
-              <button
-                onClick={handleApplyCredit}
-                disabled={positiveImpact <= 0 || isApplying}
-                className={`px-3 py-1 rounded-full text-xs text-white ${
-                  positiveImpact <= 0 || isApplying
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-green-600 hover:bg-green-700"
-                }`}
-                title="Apply credit to reduce your social debt"
-              >
-                {isApplying ? "Applying..." : "Apply"}
-              </button>
+          <div className="flex flex-col">
+            {/* Display applied credit if any */}
+            {(creditState?.appliedCredit || 0) > 0 && (
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <span className="text-gray-600">Applied Credit</span>
+                </div>
+                <div className="text-green-600 font-medium">${(creditState?.appliedCredit || 0).toFixed(2)}</div>
+              </div>
+            )}
+            
+            {/* Available Credit with Apply button */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-gray-600">Available Credit</span>
+                <span className="text-xs text-gray-500 block">From positive impact</span>
+              </div>
+              <div className="flex items-center">
+                <span className="font-bold text-green-600 mr-2">
+                  ${positiveImpact.toFixed(2)}
+                </span>
+                <button
+                  onClick={handleApplyCredit}
+                  disabled={creditButtonDisabled}
+                  className={`px-3 py-1 rounded-full text-xs text-white ${
+                    creditButtonDisabled
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700"
+                  }`}
+                  title={
+                    positiveImpact <= 0 
+                      ? "No credit available" 
+                      : effectiveDebt <= 0
+                        ? "No debt to offset"
+                        : "Apply credit to reduce your social debt"
+                  }
+                >
+                  {isApplyingCredit ? "Applying..." : "Apply"}
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Feedback message after applying credit */}
-          {showFeedback && lastApplied && (
+          {showFeedback && (
             <div className="mt-2 text-xs text-green-600 animate-fadeIn">
-              ✓ Applied ${lastApplied.toFixed(2)} credit to your social debt
+              ✓ {feedbackMessage}
+            </div>
+          )}
+          
+          {/* Debug info - only in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-400">
+              <div>Credit applied: ${creditState?.appliedCredit.toFixed(2) || "0.00"}</div>
+              <div>Last applied: ${lastAppliedAmount.toFixed(2)}</div>
+              <div>Button state: {creditButtonDisabled ? "Disabled" : "Enabled"}</div>
             </div>
           )}
         </div>
@@ -166,7 +234,6 @@ export function DashboardSidebar({
               onClick={() => onViewChange("impact")}
               disabled={!hasTransactions}
             />
-
             <NavButton
               label="Categories"
               isActive={activeView === "categories"}
@@ -198,17 +265,7 @@ export function DashboardSidebar({
                 >
                   <div className="flex items-center mb-2">
                     <div className="text-2xl mr-2">
-                      {category.name === "Climate Change"
-                        ? "🌍"
-                        : category.name === "Environmental Impact"
-                        ? "🌳"
-                        : category.name === "Social Responsibility"
-                        ? "👥"
-                        : category.name === "Labor Practices"
-                        ? "👷‍♂️"
-                        : category.name === "Digital Rights"
-                        ? "💻"
-                        : "⚖️"}
+                      {getCategoryEmoji(category.name)}
                     </div>
                     <div>
                       <h4 className="font-medium">{category.name}</h4>
@@ -224,10 +281,7 @@ export function DashboardSidebar({
                     <button
                       className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-full"
                       onClick={() => {
-                        // In a real implementation, this would trigger the donation modal
-                        alert(
-                          `This would open the donation modal for ${category.name} in a complete implementation`
-                        );
+                        setIsDonationModalOpen(true);
                       }}
                     >
                       Offset Impact
@@ -240,12 +294,6 @@ export function DashboardSidebar({
                 No negative impact categories found
               </div>
             )}
-
-            <div className="text-center">
-              <button className="text-sm text-blue-600 font-medium">
-                See all impact categories
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -254,13 +302,32 @@ export function DashboardSidebar({
       {isDonationModalOpen && (
         <DonationModal
           practice="All Societal Debt"
-          amount={totalSocietalDebt}
+          amount={effectiveDebt}
           isOpen={isDonationModalOpen}
           onClose={() => setIsDonationModalOpen(false)}
         />
       )}
     </div>
   );
+}
+
+// Helper function for category emoji
+function getCategoryEmoji(categoryName: string): string {
+  const emojiMap: Record<string, string> = {
+    "Climate Change": "🌍",
+    "Environmental Impact": "🌳",
+    "Social Responsibility": "👥",
+    "Labor Practices": "👷‍♂️",
+    "Digital Rights": "💻",
+    "Animal Welfare": "🐾",
+    "Food Insecurity": "🍽️",
+    "Poverty": "💰",
+    "Conflict": "⚔️",
+    "Inequality": "⚖️",
+    "Public Health": "🏥"
+  };
+  
+  return emojiMap[categoryName] || "⚖️";
 }
 
 // Navigation button component

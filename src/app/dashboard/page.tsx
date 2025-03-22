@@ -19,6 +19,7 @@ import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
 import { useSampleData } from "@/features/debug/useSampleData";
 import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
 import { mergeTransactions } from "@/features/banking/transactionMapper";
+import { useCreditState } from "@/features/analysis/useCreditState";
 
 // Utility functions
 import {
@@ -30,10 +31,7 @@ import {
 } from "@/features/dashboard/dashboardUtils";
 
 // Loading components
-import {
-  DashboardLoading,
-  DashboardEmptyState,
-} from "@/features/dashboard/DashboardLoading";
+import { DashboardLoading } from "@/features/dashboard/DashboardLoading";
 
 // Determine if we're in development/sandbox mode
 const isSandboxMode =
@@ -65,6 +63,14 @@ export default function Dashboard() {
     loadLatestTransactions,
   } = useTransactionStorage(user);
 
+  const {
+    creditState,
+    error: creditError,
+    applyCredit,
+    calculateAvailableCredit,
+    refreshCreditState,
+  } = useCreditState(user);
+
   const { analyzedData, analysisStatus, analyzeTransactions } =
     useTransactionAnalysis(savedTransactions);
 
@@ -94,12 +100,27 @@ export default function Dashboard() {
 
   // Derived data for the UI
   const practiceDonations = calculatePracticeDonations(displayTransactions);
-  const positiveAmount = calculatePositiveAmount(displayTransactions);
   const negativeAmount = calculateNegativeAmount(displayTransactions);
   const negativeCategories = calculateNegativeCategories(displayTransactions);
 
   // Determine if we have data to show
   const hasData = displayTransactions.length > 0;
+
+  // Add state for tracking credit application
+  const [isApplyingCredit, setIsApplyingCredit] = useState(false);
+
+  // Calculate positive impact with consideration for already applied credit
+  const positiveImpact = useMemo(() => {
+    if (!hasData) return 0;
+
+    // If we have credit state, use the hook's calculation
+    if (creditState) {
+      return calculateAvailableCredit(displayTransactions);
+    }
+
+    // Fallback to the original calculation
+    return calculatePositiveAmount(displayTransactions);
+  }, [hasData, displayTransactions, creditState, calculateAvailableCredit]);
 
   // Combined loading state
   const isLoading =
@@ -167,19 +188,32 @@ export default function Dashboard() {
 
   // Apply a credit to reduce societal debt
   const applyCreditToDebt = useCallback(
-    async (amount: number): Promise<void> => {
-      // This would be implemented with actual credit application logic
-      console.log(`Applied ${amount} credit to societal debt`);
-      // In a real implementation, you would update the debt value
+    async (amount: number): Promise<boolean> => {
+      if (!user || amount <= 0) {
+        return false;
+      }
 
-      // Simulate an async operation
-      return new Promise<void>((resolve) => {
-        setTimeout(() => {
-          resolve();
-        }, 500);
-      });
+      setIsApplyingCredit(true);
+
+      try {
+        // Apply credit using our new hook
+        const success = await applyCredit(amount);
+
+        if (success) {
+          // Refresh credit state after successful application
+          await refreshCreditState();
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        console.error(`Error applying credit: ${error}`);
+        return false;
+      } finally {
+        setIsApplyingCredit(false);
+      }
     },
-    []
+    [user, applyCredit, refreshCreditState]
   );
 
   useEffect(() => {
@@ -204,34 +238,35 @@ export default function Dashboard() {
   ]);
 
   useEffect(() => {
+    if (creditError) {
+      setFetchError(creditError);
+    }
+  }, [creditError]);
+
+  useEffect(() => {
     console.log("Save effect evaluation:", {
       hasUser: !!user,
       hasAnalyzedData: !!analyzedData,
       analyzedCount: analyzedData?.transactions?.length || 0,
       savedCount: savedTransactions?.length || 0,
-      hasSavedData
+      hasSavedData,
     });
-  
-    if (
-      user && 
-      analyzedData && 
-      analyzedData.transactions.length > 0
-    ) {
+
+    if (user && analyzedData && analyzedData.transactions.length > 0) {
       // Use the existing transactions or an empty array if none exist
       const existingTx = savedTransactions || [];
       const newTx = analyzedData.transactions;
-      
+
       // Use your existing merge function to combine them
       const mergedTransactions = mergeTransactions(existingTx, newTx);
-      
+
       // Only save if we actually have new transactions
       if (mergedTransactions.length > existingTx.length) {
-        console.log(`SAVING MERGED TRANSACTIONS: ${existingTx.length} existing + ${newTx.length} new = ${mergedTransactions.length} total`);
-        
-        saveTransactions(
-          mergedTransactions,
-          analyzedData.totalSocietalDebt  // You might need to recalculate this based on merged data
+        console.log(
+          `SAVING MERGED TRANSACTIONS: ${existingTx.length} existing + ${newTx.length} new = ${mergedTransactions.length} total`
         );
+
+        saveTransactions(mergedTransactions, analyzedData.totalSocietalDebt);
       } else {
         console.log("No new transactions to save after merging");
       }
@@ -253,17 +288,19 @@ export default function Dashboard() {
     if (isLoading) {
       return <DashboardLoading message={loadingMessage} />;
     }
-
+  
     if (!hasData) {
+      // Show empty state message instead of sidebar
       return (
-        <DashboardEmptyState
-          effectiveConnectionStatus={effectiveConnectionStatus}
-          bankConnecting={bankConnecting}
-          isConnecting={isConnecting}
-        />
+        <div className="text-center p-8 bg-white rounded-xl shadow">
+          <h3 className="text-xl font-bold text-gray-700 mb-3">No Transaction Data</h3>
+          <p className="text-gray-600 mb-4">
+            Connect your bank account or load sample data to see your societal debt analysis.
+          </p>
+        </div>
       );
     }
-
+  
     // Render appropriate view based on active tab
     switch (activeView) {
       case "impact":
@@ -305,7 +342,6 @@ export default function Dashboard() {
         );
     }
   };
-
   // Handle loading states
   if (authLoading) {
     return (
@@ -340,10 +376,12 @@ export default function Dashboard() {
           onViewChange={setActiveView}
           totalSocietalDebt={totalSocietalDebt}
           offsetsThisMonth={negativeAmount}
-          positiveImpact={positiveAmount}
+          positiveImpact={positiveImpact}
           topNegativeCategories={negativeCategories}
           hasTransactions={hasData}
           onApplyCredit={applyCreditToDebt}
+          creditState={creditState}
+          isApplyingCredit={isApplyingCredit}
         />
 
         {/* Main content */}
