@@ -1,3 +1,5 @@
+// src/features/dashboard/views/CategoryExperimentView.tsx
+
 "use client";
 
 import React, { useState, useMemo } from "react";

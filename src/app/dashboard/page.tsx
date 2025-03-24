@@ -10,17 +10,19 @@ import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { config } from "@/config";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
-import { GroupedImpactSummary } from "@/features/analysis/GroupedImpactSummary";
+import { GroupedImpactSummary } from "@/features/dashboard/views/GroupedImpactSummary";
 import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
-import { TransactionList } from "@/features/analysis/TransactionList";
-import { ConsolidatedImpactView } from "@/features/analysis/ConsolidatedImpactView";
-import { CategoryExperimentView } from "@/features/analysis/CategoryExperimentView";
+import { ConsolidatedImpactView } from "@/features/dashboard/views/ConsolidatedImpactView";
+import { CategoryExperimentView } from "@/features/dashboard/views/CategoryExperimentView";
 import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
 import { useSampleData } from "@/features/debug/useSampleData";
 import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
 import { mergeTransactions } from "@/features/banking/transactionMapper";
 import { useCreditState } from "@/features/analysis/useCreditState";
-
+import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
+import { TransactionTableView } from "@/features/dashboard/views/TransactionTableView";
+import { PremiumTransactionView } from "@/features/dashboard/views/PremiumTransactionView";
+import { TransactionList } from "@/features/dashboard/views/TransactionList";
 // Utility functions
 import {
   calculatePracticeDonations,
@@ -75,7 +77,7 @@ export default function Dashboard() {
     useTransactionAnalysis(savedTransactions);
 
   // UI State
-  const [activeView, setActiveView] = useState("transactions");
+  const [activeView, setActiveView] = useState("grouped-impact");
   const [isConnecting, setIsConnecting] = useState(false);
   const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Loading...");
@@ -288,19 +290,22 @@ export default function Dashboard() {
     if (isLoading) {
       return <DashboardLoading message={loadingMessage} />;
     }
-  
+
     if (!hasData) {
       // Show empty state message instead of sidebar
       return (
         <div className="text-center p-8 bg-white rounded-xl shadow">
-          <h3 className="text-xl font-bold text-gray-700 mb-3">No Transaction Data</h3>
+          <h3 className="text-xl font-bold text-gray-700 mb-3">
+            No Transaction Data
+          </h3>
           <p className="text-gray-600 mb-4">
-            Connect your bank account or load sample data to see your societal debt analysis.
+            Connect your bank account or load sample data to see your societal
+            debt analysis.
           </p>
         </div>
       );
     }
-  
+
     // Render appropriate view based on active tab
     switch (activeView) {
       case "impact":
@@ -310,9 +315,24 @@ export default function Dashboard() {
             totalSocietalDebt={totalSocietalDebt}
           />
         );
+      case "premium-view": // Add this new case
+        return (
+          <PremiumTransactionView
+            transactions={displayTransactions}
+            totalSocietalDebt={totalSocietalDebt}
+            getColorClass={getColorClass}
+          />
+        );
       case "categories":
         return (
           <CategoryExperimentView
+            transactions={displayTransactions}
+            totalSocietalDebt={totalSocietalDebt}
+          />
+        );
+      case "balance-sheet":
+        return (
+          <BalanceSheetView
             transactions={displayTransactions}
             totalSocietalDebt={totalSocietalDebt}
           />
@@ -332,15 +352,21 @@ export default function Dashboard() {
             totalSocietalDebt={totalSocietalDebt}
           />
         );
-      case "transactions":
-      default:
+      case "transaction-table": // Add this new case
+        return (
+          <TransactionTableView
+            transactions={displayTransactions}
+            totalSocietalDebt={totalSocietalDebt}
+          />
+        );
+        case "transaction-list": // Add this new case
         return (
           <TransactionList
             transactions={displayTransactions}
             getColorClass={getColorClass}
           />
         );
-    }
+      }
   };
   // Handle loading states
   if (authLoading) {

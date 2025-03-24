@@ -1,4 +1,5 @@
-// src/features/analysis/VendorBreakdownView.tsx
+// src/features/dashboard/views/VendorBreakdownView.tsx
+
 "use client";
 
 import React, { useState, useMemo } from "react";

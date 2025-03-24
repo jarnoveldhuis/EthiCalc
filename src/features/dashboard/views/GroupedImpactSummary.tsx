@@ -210,10 +210,9 @@ export function GroupedImpactSummary({
               </div>
               
               {/* Column Headers */}
-              <div className="grid grid-cols-10 gap-2 px-4 py-2 bg-gray-50 border-b border-t border-gray-200 text-xs font-semibold text-gray-600">
+              <div className="grid grid-cols-7 gap-2 px-4 py-2 bg-gray-50 border-b border-t border-gray-200 text-xs font-semibold text-gray-600">
                 <div className="col-span-2">Vendor</div>
-                <div className="col-span-2">Practice</div>
-                <div className="col-span-4">Details</div>
+                <div className="col-span-3">Details</div>
                 <div className="col-span-1 text-right">Impact</div>
                 <div className="col-span-1 text-center">Action</div>
               </div>
@@ -223,7 +222,7 @@ export function GroupedImpactSummary({
                 {category.practices.map((practice, pIndex) => (
                   <div 
                     key={`${practice.vendor}-${practice.practice}-${pIndex}`} 
-                    className={`grid grid-cols-10 gap-2 px-4 py-3 ${
+                    className={`grid grid-cols-7 gap-2 px-4 py-3 ${
                       practice.isPositive ? "bg-green-50" : "bg-white"
                     }`}
                   >
@@ -232,25 +231,20 @@ export function GroupedImpactSummary({
                       {practice.vendor}
                     </div>
                     
-                    {/* Practice */}
-                    <div className="col-span-2 truncate">
-                      {practice.practice}
-                    </div>
-                    
-                    {/* Information */}
-                    <div className="col-span-4 text-sm">
-                      <div className="text-gray-700 mb-1">
-                        {practice.information}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        <span className="text-xs bg-gray-200 text-gray-800 px-1 py-0.5 rounded-full">
-                          {practice.weight}% of purchase
+                    {/* Details with Practice Tag */}
+                    <div className="col-span-3 text-sm">
+                      <div className="flex flex-wrap gap-1 mb-1">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {practice.practice}
                         </span>
-                        {practice.searchTerm && (
-                          <span className="text-xs bg-blue-100 text-blue-800 px-1 py-0.5 rounded-full">
-                            #{practice.searchTerm}
+                        {practice.weight && (
+                          <span className="text-xs bg-gray-200 text-gray-800 px-1 py-0.5 rounded-full">
+                            {practice.weight}% of purchase
                           </span>
                         )}
+                      </div>
+                      <div className="text-gray-700">
+                        {practice.information}
                       </div>
                     </div>
                     

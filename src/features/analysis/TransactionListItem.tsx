@@ -1,4 +1,4 @@
-// src/features/analysis/TransactionListItem.tsx
+// src/features/dashboard/views/TransactionListItem.tsx
 import { Transaction } from "@/shared/types/transactions";
 
 interface TransactionListItemProps {

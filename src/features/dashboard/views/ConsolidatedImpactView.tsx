@@ -1,3 +1,5 @@
+// src/features/dashboard/views/ConsolidatedImpactView.tsx
+
 "use client";
 
 import React, { useState, useMemo } from "react";

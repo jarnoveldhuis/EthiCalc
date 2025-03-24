@@ -34,37 +34,48 @@ export function DashboardSidebar({
   hasTransactions,
   onApplyCredit,
   creditState,
-  isApplyingCredit
+  isApplyingCredit,
 }: DashboardSidebarProps) {
   // Local UI state
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
   const [lastAppliedAmount, setLastAppliedAmount] = useState(0);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Calculate effective debt (total debt minus applied credit)
   const effectiveDebt = totalSocietalDebt - (creditState?.appliedCredit || 0);
-  
+  console.log("totalSocietalDebt", totalSocietalDebt);
+  console.log("creditState?.appliedCredit", creditState?.appliedCredit);
   // Track whether the button should be disabled - critical for preventing multiple applications
-  const creditButtonDisabled = positiveImpact <= 0 || isApplyingCredit || effectiveDebt <= 0;
-  
+  const creditButtonDisabled =
+    positiveImpact <= 0 || isApplyingCredit || effectiveDebt <= 0;
+
   // Debug log for credit state
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Credit sidebar state:', {
+    if (process.env.NODE_ENV === "development") {
+      console.log("Credit sidebar state:", {
         positiveImpact,
         isApplyingCredit,
         effectiveDebt,
-        creditState: creditState ? {
-          availableCredit: creditState.availableCredit,
-          appliedCredit: creditState.appliedCredit,
-          lastAppliedAmount: creditState.lastAppliedAmount
-        } : null,
-        buttonDisabled: creditButtonDisabled
+        creditState: creditState
+          ? {
+              availableCredit: creditState.availableCredit,
+              appliedCredit: creditState.appliedCredit,
+              lastAppliedAmount: creditState.lastAppliedAmount,
+            }
+          : null,
+        buttonDisabled: creditButtonDisabled,
       });
     }
-  }, [positiveImpact, isApplyingCredit, effectiveDebt, creditState, creditButtonDisabled]);
-  
+  }, [
+    positiveImpact,
+    isApplyingCredit,
+    effectiveDebt,
+    creditState,
+    creditButtonDisabled,
+  ]);
+
   // Get color based on societal debt (use effective debt for styling)
   const getDebtColor = useCallback((debt: number): string => {
     if (debt <= 0) return "from-green-500 to-teal-600";
@@ -76,14 +87,14 @@ export function DashboardSidebar({
   const handleApplyCredit = async () => {
     // Double-check button should be enabled to prevent race conditions
     if (creditButtonDisabled) {
-      console.log('Credit button is disabled but was clicked anyway');
+      console.log("Credit button is disabled but was clicked anyway");
       return;
     }
 
     try {
       // Use the amount of positive impact available, capped by effective debt
       const amountToApply = Math.min(positiveImpact, effectiveDebt);
-      
+
       if (amountToApply <= 0) {
         setFeedbackMessage("No debt to offset with credit");
         setShowFeedback(true);
@@ -93,14 +104,16 @@ export function DashboardSidebar({
 
       // Store amount locally for UI feedback
       setLastAppliedAmount(amountToApply);
-      
+
       const success = await onApplyCredit(amountToApply);
 
       if (success) {
         // Show feedback after successful application
-        setFeedbackMessage(`Applied $${amountToApply.toFixed(2)} credit to your social debt`);
+        setFeedbackMessage(
+          `Applied $${amountToApply.toFixed(2)} credit to your social debt`
+        );
         setShowFeedback(true);
-        
+
         // Hide feedback after 3 seconds
         setTimeout(() => {
           setShowFeedback(false);
@@ -119,18 +132,23 @@ export function DashboardSidebar({
     setIsDonationModalOpen(true);
   };
 
+  // Toggle mobile menu
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
+  };
+
   return (
-    <div className="lg:col-span-1">
+    <div className="w-full lg:col-span-1">
       {/* Societal Credit Score */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
         <div
           className={`bg-gradient-to-r ${getDebtColor(
             effectiveDebt
-          )} p-6 text-white`}
+          )} p-4 sm:p-6 text-white`}
         >
           <div className="text-center">
-            <h2 className="text-xl font-bold mb-1">Total Social Debt</h2>
-            <div className="text-5xl font-black mb-2">
+            <h2 className="text-lg sm:text-xl font-bold mb-1">Total Social Debt</h2>
+            <div className="text-4xl sm:text-5xl font-black mb-2">
               ${Math.abs(effectiveDebt).toFixed(2)}
             </div>
             <div className="text-sm font-medium">
@@ -141,7 +159,7 @@ export function DashboardSidebar({
             {effectiveDebt > 0 && (
               <button
                 onClick={handleOpenDonationModal}
-                className="mt-4 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors"
+                className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 py-2 rounded-lg font-bold shadow transition-colors text-sm sm:text-base"
                 title="Offset your social debt through donations"
               >
                 Offset All
@@ -157,20 +175,24 @@ export function DashboardSidebar({
             {(creditState?.appliedCredit || 0) > 0 && (
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <span className="text-gray-600">Applied Credit</span>
+                  <span className="text-gray-600 text-sm sm:text-base">Applied Credit</span>
                 </div>
-                <div className="text-green-600 font-medium">${(creditState?.appliedCredit || 0).toFixed(2)}</div>
+                <div className="text-green-600 font-medium text-sm sm:text-base">
+                  ${(creditState?.appliedCredit || 0).toFixed(2)}
+                </div>
               </div>
             )}
-            
+
             {/* Available Credit with Apply button */}
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-gray-600">Available Credit</span>
-                <span className="text-xs text-gray-500 block">From positive impact</span>
+                <span className="text-gray-600 text-sm sm:text-base">Available Credit</span>
+                <span className="text-xs text-gray-500 block">
+                  From positive impact
+                </span>
               </div>
               <div className="flex items-center">
-                <span className="font-bold text-green-600 mr-2">
+                <span className="font-bold text-green-600 mr-2 text-sm sm:text-base">
                   ${positiveImpact.toFixed(2)}
                 </span>
                 <button
@@ -182,11 +204,11 @@ export function DashboardSidebar({
                       : "bg-green-600 hover:bg-green-700"
                   }`}
                   title={
-                    positiveImpact <= 0 
-                      ? "No credit available" 
+                    positiveImpact <= 0
+                      ? "No credit available"
                       : effectiveDebt <= 0
-                        ? "No debt to offset"
-                        : "Apply credit to reduce your social debt"
+                      ? "No debt to offset"
+                      : "Apply credit to reduce your social debt"
                   }
                 >
                   {isApplyingCredit ? "Applying..." : "Apply"}
@@ -201,49 +223,79 @@ export function DashboardSidebar({
               ✓ {feedbackMessage}
             </div>
           )}
-          
+
           {/* Debug info - only in development */}
-          {process.env.NODE_ENV === 'development' && (
+          {process.env.NODE_ENV === "development" && (
             <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-400">
-              <div>Credit applied: ${creditState?.appliedCredit.toFixed(2) || "0.00"}</div>
+              <div>
+                Credit applied: $
+                {creditState?.appliedCredit.toFixed(2) || "0.00"}
+              </div>
               <div>Last applied: ${lastAppliedAmount.toFixed(2)}</div>
-              <div>Button state: {creditButtonDisabled ? "Disabled" : "Enabled"}</div>
+              <div>
+                Button state: {creditButtonDisabled ? "Disabled" : "Enabled"}
+              </div>
             </div>
           )}
         </div>
 
+        {/* Mobile menu toggle */}
+        <div className="block sm:hidden p-4 border-b border-gray-200">
+          <button 
+            onClick={toggleMenu}
+            className="w-full flex items-center justify-between py-2 px-3 bg-blue-50 rounded-lg"
+          >
+            <span className="font-medium">Dashboard Views</span>
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className={`h-5 w-5 transition-transform ${isMenuOpen ? "transform rotate-180" : ""}`} 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
+
         {/* Navigation */}
-        <div className="p-4">
-          <h3 className="font-medium mb-2">Dashboard Views</h3>
+        <div className={`p-4 ${!isMenuOpen && "hidden sm:block"}`}>
+          <h3 className="font-medium mb-2 hidden sm:block">Dashboard Views</h3>
           <nav className="space-y-1">
             <NavButton
               label="Transactions"
-              isActive={activeView === "transactions"}
-              onClick={() => onViewChange("transactions")}
+              isActive={activeView === "transaction-table"}
+              onClick={() => {
+                onViewChange("transaction-table");
+                setIsMenuOpen(false);
+              }}
+              disabled={!hasTransactions}
+            />
+            <NavButton
+              label="Premium View"
+              isActive={activeView === "premium-view"}
+              onClick={() => {
+                onViewChange("premium-view");
+                setIsMenuOpen(false);
+              }}
+              disabled={!hasTransactions}
+            />
+            <NavButton
+              label="Balance Sheet"
+              isActive={activeView === "balance-sheet"}
+              onClick={() => {
+                onViewChange("balance-sheet");
+                setIsMenuOpen(false);
+              }}
               disabled={!hasTransactions}
             />
             <NavButton
               label="Impact by Category"
               isActive={activeView === "grouped-impact"}
-              onClick={() => onViewChange("grouped-impact")}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Impact Summary"
-              isActive={activeView === "impact"}
-              onClick={() => onViewChange("impact")}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Categories"
-              isActive={activeView === "categories"}
-              onClick={() => onViewChange("categories")}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Practice Breakdown"
-              isActive={activeView === "practices"}
-              onClick={() => onViewChange("practices")}
+              onClick={() => {
+                onViewChange("grouped-impact");
+                setIsMenuOpen(false);
+              }}
               disabled={!hasTransactions}
             />
           </nav>
@@ -254,32 +306,32 @@ export function DashboardSidebar({
       {hasTransactions && (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-200">
-            <h3 className="font-bold">Top Negative Impact Categories</h3>
+            <h3 className="font-bold text-sm sm:text-base">Top Negative Impact Categories</h3>
           </div>
-          <div className="p-4 space-y-3">
+          <div className="p-3 sm:p-4 space-y-3">
             {topNegativeCategories.length > 0 ? (
               topNegativeCategories.map((category, index) => (
                 <div
                   key={index}
-                  className="border border-gray-200 rounded-lg p-3"
+                  className="border border-gray-200 rounded-lg p-2 sm:p-3"
                 >
                   <div className="flex items-center mb-2">
-                    <div className="text-2xl mr-2">
+                    <div className="text-xl sm:text-2xl mr-2">
                       {getCategoryEmoji(category.name)}
                     </div>
                     <div>
-                      <h4 className="font-medium">{category.name}</h4>
+                      <h4 className="font-medium text-sm sm:text-base">{category.name}</h4>
                       <span className="text-xs text-gray-500">
                         Impact Category
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between mt-2">
-                    <span className="text-red-600 font-medium">
+                    <span className="text-red-600 font-medium text-sm sm:text-base">
                       ${category.amount.toFixed(2)}
                     </span>
                     <button
-                      className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-full"
+                      className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-full"
                       onClick={() => {
                         setIsDonationModalOpen(true);
                       }}
@@ -321,12 +373,12 @@ function getCategoryEmoji(categoryName: string): string {
     "Digital Rights": "💻",
     "Animal Welfare": "🐾",
     "Food Insecurity": "🍽️",
-    "Poverty": "💰",
-    "Conflict": "⚔️",
-    "Inequality": "⚖️",
-    "Public Health": "🏥"
+    Poverty: "💰",
+    Conflict: "⚔️",
+    Inequality: "⚖️",
+    "Public Health": "🏥",
   };
-  
+
   return emojiMap[categoryName] || "⚖️";
 }
 
@@ -348,7 +400,7 @@ function NavButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full px-3 py-2 rounded-lg transition-colors flex items-center ${
+      className={`w-full px-3 py-2 sm:py-2 rounded-lg transition-colors flex items-center text-sm sm:text-base ${
         isActive
           ? "bg-blue-50 border-blue-200 text-blue-800"
           : disabled
