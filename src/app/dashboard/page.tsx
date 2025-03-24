@@ -6,7 +6,7 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { useBankConnection } from "@/features/banking/useBankConnection";
 import { useTransactionStorage } from "@/features/analysis/useTransactionStorage";
 import { useTransactionAnalysis } from "@/features/analysis/useTransactionAnalysis";
-import { ErrorAlert } from "@/shared/components/ui/ErrorAlert";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
 import { config } from "@/config";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";

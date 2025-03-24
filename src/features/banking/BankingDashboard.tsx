@@ -2,8 +2,8 @@
 import { useCallback } from 'react';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { useBankConnection } from './useBankConnection';
-import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
-import { Header } from '@/shared/components/Header';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Header } from '@/components/Header';
 import PlaidLink from './PlaidLink';
 
 export function BankingDashboard() {

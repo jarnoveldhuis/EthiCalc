@@ -10,7 +10,7 @@ import {
 } from "./charityService";
 import { CharitySearch } from "./CharitySearch";
 import { CharityImage } from "./CharityImage";
-import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
 interface DonationModalProps {
   practice: string;

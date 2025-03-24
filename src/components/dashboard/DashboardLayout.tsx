@@ -3,7 +3,7 @@
 
 import { User } from "firebase/auth";
 import { ReactNode } from "react";
-import { Header } from "@/shared/components/Header";
+import { Header } from "@/components/Header";
 
 interface DashboardLayoutProps {
   children: ReactNode;

@@ -6,8 +6,8 @@ import { useBankConnection } from './useBankConnection';
 import { useTransactionAnalysis } from '@/features/analysis/useTransactionAnalysis';
 import { useTransactionStorage } from '@/features/analysis/useTransactionStorage';
 import PlaidLink from './PlaidLink';
-import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
-import { ErrorAlert } from '@/shared/components/ui/ErrorAlert';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { ErrorAlert } from '@/components/ui/ErrorAlert';
 import { User } from 'firebase/auth';
 import { Transaction } from '@/shared/types/transactions';
 

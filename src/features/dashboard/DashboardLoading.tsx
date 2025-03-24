@@ -1,4 +1,4 @@
-import { LoadingSpinner } from "@/shared/components/ui/LoadingSpinner";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
 interface DashboardLoadingProps {
   message: string;

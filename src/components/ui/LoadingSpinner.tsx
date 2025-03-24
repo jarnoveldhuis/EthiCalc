@@ -1,4 +1,4 @@
-// src/shared/components/ui/LoadingSpinner.tsx
+// src/components/ui/LoadingSpinner.tsx
 interface LoadingSpinnerProps {
   message?: string;
   className?: string;
