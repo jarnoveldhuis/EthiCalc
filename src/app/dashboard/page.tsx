@@ -301,7 +301,7 @@ export default function Dashboard() {
             getColorClass={getColorClass}
             totalPositiveImpact={analyzedData?.totalPositiveImpact || 0}
             totalNegativeImpact={analyzedData?.totalNegativeImpact || 0}
-            debtPercentage={analyzedData?.debtPercentage || 0}
+            // debtPercentage={analyzedData?.debtPercentage || 0}
           />
         );
       case "categories":
