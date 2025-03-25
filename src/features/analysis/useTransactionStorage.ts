@@ -414,6 +414,8 @@ export function useTransactionStorage(user: User | null): UseTransactionStorageR
     enableDebug: firebaseDebug.enable,
     disableDebug: firebaseDebug.disable,
     setTotalSocietalDebt: setTotalSocietalDebt,
-    setSavedTransactions: setSavedTransactions
+    setSavedTransactions: setSavedTransactions,
+    totalPositiveImpact: 0,
+    totalNegativeImpact: 0
   };
 }

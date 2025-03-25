@@ -115,14 +115,14 @@ export default function Dashboard() {
   const positiveImpact = useMemo(() => {
     if (!hasData) return 0;
 
-    // If we have credit state, use the hook's calculation
-    if (creditState) {
-      return calculateAvailableCredit(displayTransactions);
+    // If we have credit state, use the hook's calculation with totalPositiveImpact
+    if (creditState && analyzedData) {
+      return calculateAvailableCredit(displayTransactions, analyzedData.totalPositiveImpact);
     }
 
     // Fallback to the original calculation
     return calculatePositiveAmount(displayTransactions);
-  }, [hasData, displayTransactions, creditState, calculateAvailableCredit]);
+  }, [hasData, displayTransactions, creditState, calculateAvailableCredit, analyzedData]);
 
   // Combined loading state
   const isLoading =
@@ -283,7 +283,7 @@ export default function Dashboard() {
         </div>
       );
     }
-
+    console.log("totalPositiveImpact", analyzedData?.totalPositiveImpact);
     // Render appropriate view based on active tab
     switch (activeView) {
       case "impact":
@@ -293,12 +293,15 @@ export default function Dashboard() {
             totalSocietalDebt={totalSocietalDebt}
           />
         );
-      case "premium-view": // Add this new case
+      case "premium-view":
         return (
           <PremiumTransactionView
             transactions={displayTransactions}
             totalSocietalDebt={totalSocietalDebt}
             getColorClass={getColorClass}
+            totalPositiveImpact={analyzedData?.totalPositiveImpact || 0}
+            totalNegativeImpact={analyzedData?.totalNegativeImpact || 0}
+            debtPercentage={analyzedData?.debtPercentage || 0}
           />
         );
       case "categories":

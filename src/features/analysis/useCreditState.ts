@@ -28,7 +28,7 @@ interface UseCreditStateResult {
   isLoading: boolean;
   error: string | null;
   applyCredit: (amount: number) => Promise<boolean>;
-  calculateAvailableCredit: (transactions: Transaction[]) => number;
+  calculateAvailableCredit: (transactions: Transaction[], totalPositiveImpact: number) => number;
   refreshCreditState: () => Promise<void>;
 }
 
@@ -100,7 +100,7 @@ export function useCreditState(user: User | null): UseCreditStateResult {
 
   // Calculate available credit from transactions
   const calculateAvailableCredit = useCallback(
-    (transactions: Transaction[]): number => {
+    (transactions: Transaction[], totalPositiveImpact: number): number => {
       if (!transactions?.length) return 0;
 
       // Save transactions to ref for use in apply credit
@@ -114,36 +114,27 @@ export function useCreditState(user: User | null): UseCreditStateResult {
         creditState.creditTransactionIds || []
       );
 
-      // Debug log counts for development
-      if (process.env.NODE_ENV === "development") {
-        console.log("Calculate Credit:", {
-          totalTransactions: transactions.length,
-          usedTransactionIds: usedTransactionIds.size,
-        });
-      }
+      // Calculate available credit by subtracting used transactions from total positive impact
+      let availableCredit = totalPositiveImpact;
 
-      // Sum positive impact from transactions that haven't been used
-      let availableCredit = 0;
-
+      // Subtract credit from used transactions
       transactions.forEach((tx) => {
         const txId = getTransactionId(tx);
-
-        // Skip transactions that are already used for credit
         if (tx.creditApplied || usedTransactionIds.has(txId)) {
-          return;
-        }
-
-        // Only count true net positive impacts:
-        if (tx.societalDebt && tx.societalDebt < 0) {
-          availableCredit += Math.abs(tx.societalDebt);
+          // Calculate credit for this transaction
+          const creditPractices = (tx.ethicalPractices || []).map(practice => {
+            const weight = tx.practiceWeights?.[practice] || 0;
+            return tx.amount * (weight / 100);
+          });
+          const totalCredit = creditPractices.reduce((sum, amount) => sum + amount, 0);
+          availableCredit -= totalCredit;
         }
       });
 
       if (process.env.NODE_ENV === "development") {
         console.log(`Available credit: $${availableCredit.toFixed(2)}`);
       }
-
-      return availableCredit;
+      return Math.max(0, availableCredit);
     },
     [creditState]
   );

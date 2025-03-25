@@ -8,6 +8,9 @@ interface PremiumTransactionViewProps {
   transactions: Transaction[];
   totalSocietalDebt: number;
   getColorClass: (value: number) => string;
+  totalPositiveImpact: number;
+  totalNegativeImpact: number;
+  debtPercentage: number;
 }
 
 // Define enhanced transaction type with additional properties
@@ -33,7 +36,10 @@ interface EnhancedTransaction extends Transaction {
 export function PremiumTransactionView({
   transactions,
   totalSocietalDebt,
-  getColorClass
+  getColorClass,
+  totalPositiveImpact,
+  totalNegativeImpact,
+  debtPercentage
 }: PremiumTransactionViewProps) {
   // State for expanded items, sorting, and donation modal
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
@@ -120,16 +126,12 @@ export function PremiumTransactionView({
     });
   }, [transactions, sortKey, sortDirection]);
   
-  // Calculate totals
-  const totals = useMemo(() => {
-    return processedTransactions.reduce((acc, tx) => {
-      return {
-        debt: acc.debt + tx.totaldebt,
-        credit: acc.credit + tx.totalCredit,
-        net: acc.net + tx.netImpact
-      };
-    }, { debt: 0, credit: 0, net: 0 });
-  }, [processedTransactions]);
+  // Use the passed totals instead of calculating them
+  const totals = {
+    debt: totalNegativeImpact,
+    credit: totalPositiveImpact,
+    net: totalNegativeImpact - totalPositiveImpact
+  };
   
   // Toggle expanded state for a transaction
   const toggleExpanded = (id: string) => {
