@@ -23,7 +23,7 @@ interface UseBankConnectionResult {
   manuallyFetchTransactions: () => Promise<void>;
 }
 
-export function useBankConnection(user: User | null, firebaseLoadingComplete = true): UseBankConnectionResult {
+export function useBankConnection(user: User | null): UseBankConnectionResult {
   
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
@@ -259,7 +259,7 @@ export function useBankConnection(user: User | null, firebaseLoadingComplete = t
       console.error("Manual fetch error:", error);
       throw error; // Re-throw so the caller can handle it
     }
-  }, [user, fetchTransactions, firebaseLoadingComplete]);
+  }, [user, fetchTransactions]);
 
   // Connect bank function
   const connectBank = useCallback(

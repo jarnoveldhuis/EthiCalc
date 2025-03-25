@@ -87,7 +87,7 @@ export function TransactionTableView({
         ? (aValue as number) - (bValue as number) 
         : (bValue as number) - (aValue as number);
     });
-  }, [transactions, sortConfig]);
+  }, [transactions, sortConfig, getValue]);
 
   // Calculate totals
   const { totalDebt, totalCredit } = useMemo(() => {

@@ -10,7 +10,6 @@ interface PremiumTransactionViewProps {
   getColorClass: (value: number) => string;
   totalPositiveImpact: number;
   totalNegativeImpact: number;
-  debtPercentage: number;
 }
 
 // Define enhanced transaction type with additional properties
@@ -38,8 +37,7 @@ export function PremiumTransactionView({
   totalSocietalDebt,
   getColorClass,
   totalPositiveImpact,
-  totalNegativeImpact,
-  debtPercentage
+  totalNegativeImpact
 }: PremiumTransactionViewProps) {
   // State for expanded items, sorting, and donation modal
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});

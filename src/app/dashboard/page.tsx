@@ -52,7 +52,7 @@ export default function Dashboard() {
     connectBank,
     disconnectBank,
     manuallyFetchTransactions,
-  } = useBankConnection(user, firebaseLoadingComplete);
+  } = useBankConnection(user);
   
   // Transaction storage and analysis
   const {
@@ -218,7 +218,7 @@ export default function Dashboard() {
     if (user && !firebaseLoadingComplete && !hasSavedData && !storageLoading) {
       // Try to load from Firebase first
       loadLatestTransactions()
-        .then((hasData) => {
+        .then(() => {
           setFirebaseLoadingComplete(true);
         })
         .catch((err) => {
