@@ -12,7 +12,7 @@ interface PremiumTransactionViewProps {
 
 // Define enhanced transaction type with additional properties
 interface EnhancedTransaction extends Transaction {
-  debitPractices: Array<{
+  debtPractices: Array<{
     name: string;
     amount: number;
     isEthical: boolean;
@@ -24,7 +24,7 @@ interface EnhancedTransaction extends Transaction {
     isEthical: boolean;
     info: string;
   }>;
-  totalDebit: number;
+  totaldebt: number;
   totalCredit: number;
   netImpact: number;
   id: string;
@@ -48,7 +48,7 @@ export function PremiumTransactionView({
       case 'date': return tx.date;
       case 'name': return tx.name;
       case 'amount': return tx.amount;
-      case 'debit': return tx.totalDebit;
+      case 'debt': return tx.totaldebt;
       case 'credit': return tx.totalCredit;
       case 'net': return tx.netImpact;
       default: return '';
@@ -59,8 +59,8 @@ export function PremiumTransactionView({
   const processedTransactions = useMemo(() => {
     // Deep copy and add calculated fields to transactions
     const processed = transactions.map(tx => {
-      // Calculate debits (unethical practices)
-      const debitPractices = (tx.unethicalPractices || []).map(practice => {
+      // Calculate debts (unethical practices)
+      const debtPractices = (tx.unethicalPractices || []).map(practice => {
         const weight = tx.practiceWeights?.[practice] || 0;
         const amount = tx.amount * (weight / 100);
         return {
@@ -84,16 +84,16 @@ export function PremiumTransactionView({
       });
       
       // Calculate totals
-      const totalDebit = debitPractices.reduce((sum, p) => sum + p.amount, 0);
+      const totaldebt = debtPractices.reduce((sum, p) => sum + p.amount, 0);
       const totalCredit = creditPractices.reduce((sum, p) => sum + p.amount, 0);
-      const netImpact = totalDebit - totalCredit;
+      const netImpact = totaldebt - totalCredit;
       
       // Create expanded transaction object
       return {
         ...tx,
-        debitPractices,
+        debtPractices,
         creditPractices,
-        totalDebit,
+        totaldebt,
         totalCredit,
         netImpact,
         // Create unique ID for expanded state tracking
@@ -124,11 +124,11 @@ export function PremiumTransactionView({
   const totals = useMemo(() => {
     return processedTransactions.reduce((acc, tx) => {
       return {
-        debit: acc.debit + tx.totalDebit,
+        debt: acc.debt + tx.totaldebt,
         credit: acc.credit + tx.totalCredit,
         net: acc.net + tx.netImpact
       };
-    }, { debit: 0, credit: 0, net: 0 });
+    }, { debt: 0, credit: 0, net: 0 });
   }, [processedTransactions]);
   
   // Toggle expanded state for a transaction
@@ -178,7 +178,7 @@ export function PremiumTransactionView({
       {/* Sort Controls */}
       <div className="mb-4 flex flex-wrap gap-2">
         <div className="text-sm text-gray-700">Sort by:</div>
-        {['date', 'name', 'amount', 'debit', 'credit', 'net'].map(key => (
+        {['date', 'name', 'amount', 'debt', 'credit', 'net'].map(key => (
           <button
             key={key}
             onClick={() => handleSort(key)}
@@ -221,9 +221,9 @@ export function PremiumTransactionView({
                   <div className="text-right">
                     <div className="text-sm font-medium text-gray-800">${tx.amount.toFixed(2)}</div>
                     <div className="flex gap-1 items-center justify-end">
-                      {tx.totalDebit > 0 && (
+                      {tx.totaldebt > 0 && (
                         <span className="text-xs bg-red-100 text-red-700 rounded px-1 py-0.5 mr-1">
-                          -${tx.totalDebit.toFixed(2)}
+                          -${tx.totaldebt.toFixed(2)}
                         </span>
                       )}
                       {tx.totalCredit > 0 && (
@@ -252,12 +252,12 @@ export function PremiumTransactionView({
             {/* Expanded Content */}
             {expandedItems[tx.id] && (
               <div className="p-3 bg-gray-50">
-                {/* Debit Practices */}
-                {tx.debitPractices.length > 0 && (
+                {/* debt Practices */}
+                {tx.debtPractices.length > 0 && (
                   <div className="mb-3">
                     <h4 className="text-sm font-medium text-gray-700 mb-1">Negative Impact</h4>
                     <div className="space-y-2">
-                      {tx.debitPractices.map((practice, idx) => (
+                      {tx.debtPractices.map((practice, idx) => (
                         <div key={idx} className="bg-white border border-red-200 rounded p-2">
                           <div className="flex justify-between items-center mb-1">
                             <div className="flex items-center">
@@ -316,7 +316,7 @@ export function PremiumTransactionView({
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-red-50 rounded-lg p-3 text-center">
               <div className="text-sm text-gray-700 mb-1">Negative Impact</div>
-              <div className="text-xl font-bold text-red-600">${totals.debit.toFixed(2)}</div>
+              <div className="text-xl font-bold text-red-600">${totals.debt.toFixed(2)}</div>
             </div>
             
             <div className="bg-green-50 rounded-lg p-3 text-center">

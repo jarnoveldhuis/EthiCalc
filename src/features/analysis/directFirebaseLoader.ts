@@ -10,12 +10,14 @@ import { Transaction } from '@/shared/types/transactions';
 export async function loadUserTransactions(userId: string): Promise<{
   transactions: Transaction[] | null;
   totalSocietalDebt: number;
+  totalNegativeImpact: number;
   error: string | null;
 }> {
   if (!userId) {
     return {
       transactions: null,
       totalSocietalDebt: 0,
+      totalNegativeImpact: 0,
       error: "No user ID provided"
     };
   }
@@ -37,6 +39,7 @@ export async function loadUserTransactions(userId: string): Promise<{
       return {
         transactions: null,
         totalSocietalDebt: 0,
+        totalNegativeImpact: 0,
         error: null // Not an error, just no data
       };
     }
@@ -50,6 +53,7 @@ export async function loadUserTransactions(userId: string): Promise<{
     return {
       transactions: data.transactions || [],
       totalSocietalDebt: data.totalSocietalDebt || 0,
+      totalNegativeImpact: data.totalNegativeImpact || 0,
       error: null
     };
   } catch (error) {
@@ -57,6 +61,7 @@ export async function loadUserTransactions(userId: string): Promise<{
     return {
       transactions: null,
       totalSocietalDebt: 0,
+      totalNegativeImpact: 0,
       error: error instanceof Error ? error.message : 'Unknown error loading data'
     };
   }

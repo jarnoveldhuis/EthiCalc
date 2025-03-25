@@ -19,6 +19,8 @@ interface TransactionBatch {
 interface UseTransactionStorageResult {
   savedTransactions: Transaction[] | null;
   totalSocietalDebt: number;
+  totalPositiveImpact: number;
+  totalNegativeImpact: number;
   isLoading: boolean;
   error: string | null;
   saveTransactions: (transactions: Transaction[], totalDebt: number) => Promise<void>;

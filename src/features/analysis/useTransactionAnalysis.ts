@@ -67,28 +67,17 @@ export function useTransactionAnalysis(
     setAnalysisStatus({ status: 'loading', error: null });
 
     try {
-      console.log(`Starting analysis for ${newTransactions.length} transactions`);
-      
-      // THIS IS THE CRITICAL PART - check if these transactions already exist in savedTransactions
+      // Check if these transactions already exist in savedTransactions
       const trulyUnanalyzedTransactions = newTransactions.filter(newTx => {
-        // Create a transaction identifier
         const txId = getTransactionIdentifier(newTx);
-        
-        // Check if this transaction exists in savedTransactions and is already analyzed
         const matchingTx = savedTransactions?.find(savedTx => 
           getTransactionIdentifier(savedTx) === txId
         );
-        
-        // Only include truly unanalyzed transactions
         return !matchingTx || !matchingTx.analyzed;
       });
       
-      console.log(`Found ${trulyUnanalyzedTransactions.length} truly unanalyzed transactions of ${newTransactions.length} total`);
-      
       // If all transactions are already analyzed, skip the API call
       if (trulyUnanalyzedTransactions.length === 0) {
-        console.log("All transactions already analyzed, skipping API call");
-        
         // If we have saved transactions, merge with new ones to create a complete view
         if (savedTransactions && savedTransactions.length > 0) {
           const mergedTransactions = mergeTransactions(savedTransactions, newTransactions);
@@ -98,23 +87,45 @@ export function useTransactionAnalysis(
             (sum, tx) => sum + (tx.societalDebt || 0), 0
           );
           
+          // Calculate positive and negative impact using the same logic as PremiumTransactionView
+          const { totalPositiveImpact, totalNegativeImpact } = mergedTransactions.reduce((acc, tx) => {
+            // Calculate debts (unethical practices)
+            const debtPractices = (tx.unethicalPractices || []).map(practice => {
+              const weight = tx.practiceWeights?.[practice] || 0;
+              return tx.amount * (weight / 100);
+            });
+            
+            // Calculate credits (ethical practices)
+            const creditPractices = (tx.ethicalPractices || []).map(practice => {
+              const weight = tx.practiceWeights?.[practice] || 0;
+              return tx.amount * (weight / 100);
+            });
+            
+            // Sum up the totals
+            const totaldebt = debtPractices.reduce((sum, amount) => sum + amount, 0);
+            const totalCredit = creditPractices.reduce((sum, amount) => sum + amount, 0);
+            
+            return {
+              totalPositiveImpact: acc.totalPositiveImpact + totalCredit,
+              totalNegativeImpact: acc.totalNegativeImpact + totaldebt
+            };
+          }, { totalPositiveImpact: 0, totalNegativeImpact: 0 });
+          
           setAnalyzedData({
             transactions: mergedTransactions,
             totalSocietalDebt: totalDebt,
-            debtPercentage: 0 // You can calculate this if needed
+            debtPercentage: 0,
+            totalPositiveImpact,
+            totalNegativeImpact
           });
-          
-          setAnalysisStatus({ status: 'success', error: null });
         }
         
+        setAnalysisStatus({ status: 'success', error: null });
         isAnalyzing.current = false;
         return;
       }
     
       // Continue with API call for truly unanalyzed transactions
-      console.log(`Calling API to analyze ${trulyUnanalyzedTransactions.length} transactions`);
-  
-      // Call the API to analyze transactions
       const response = await fetch("/api/analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -126,7 +137,6 @@ export function useTransactionAnalysis(
       }
   
       const data = await response.json() as AnalyzedTransactionData;
-      console.log(`API returned ${data.transactions.length} analyzed transactions`);
       
       // Create a map of analyzed transactions keyed by transaction identifier
       const analyzedTransactionMap = new Map<string, Transaction>();
@@ -172,70 +182,60 @@ export function useTransactionAnalysis(
       );
       
       const debtPercentage = totalSpent > 0 ? (totalDebt / totalSpent) * 100 : 0;
-  
+      
+      // Calculate positive and negative impact using the same logic as PremiumTransactionView
+      const { totalPositiveImpact, totalNegativeImpact } = sortedTransactions.reduce((acc, tx) => {
+        // Calculate debts (unethical practices)
+        const debtPractices = (tx.unethicalPractices || []).map(practice => {
+          const weight = tx.practiceWeights?.[practice] || 0;
+          return tx.amount * (weight / 100);
+        });
+        
+        // Calculate credits (ethical practices)
+        const creditPractices = (tx.ethicalPractices || []).map(practice => {
+          const weight = tx.practiceWeights?.[practice] || 0;
+          return tx.amount * (weight / 100);
+        });
+        
+        // Sum up the totals
+        const totaldebt = debtPractices.reduce((sum, amount) => sum + amount, 0);
+        const totalCredit = creditPractices.reduce((sum, amount) => sum + amount, 0);
+        
+        return {
+          totalPositiveImpact: acc.totalPositiveImpact + totalCredit,
+          totalNegativeImpact: acc.totalNegativeImpact + totaldebt
+        };
+      }, { totalPositiveImpact: 0, totalNegativeImpact: 0 });
+      
       setAnalyzedData({
         transactions: sortedTransactions,
         totalSocietalDebt: totalDebt,
-        debtPercentage
+        debtPercentage,
+        totalPositiveImpact,
+        totalNegativeImpact
       });
       
       setAnalysisStatus({ status: 'success', error: null });
-      console.log("Analysis completed successfully");
-      
-    } catch (error) {
-      console.error("Analysis error:", error);
-      
+    } catch (err) {
+      console.error('Error analyzing transactions:', err);
       setAnalysisStatus({ 
         status: 'error', 
-        error: error instanceof Error ? error.message : "Analysis failed" 
+        error: err instanceof Error ? err.message : 'Failed to analyze transactions' 
       });
-      
-      // If the API fails, add a fallback local calculation
-      analysisTimeoutRef.current = setTimeout(() => {
-        console.log("Using fallback local calculation after API error");
-        
-        // Mark all transactions as analyzed but with minimal details
-        const fallbackTransactions = newTransactions.map(tx => ({
-          ...tx,
-          analyzed: true,
-          societalDebt: tx.societalDebt || 0,
-          unethicalPractices: tx.unethicalPractices || [],
-          ethicalPractices: tx.ethicalPractices || []
-        }));
-        
-        const totalDebt = fallbackTransactions.reduce(
-          (sum, tx) => {
-            if (tx.isCreditApplication) {
-              return sum - tx.amount;
-            }
-            return sum + (tx.societalDebt || 0);
-          },
-          0
-        );
-        
-        const totalSpent = fallbackTransactions.reduce(
-          (sum, tx) => sum + tx.amount,
-          0
-        );
-        
-        const debtPercentage = totalSpent > 0 ? (totalDebt / totalSpent) * 100 : 0;
-        
-        setAnalyzedData({
-          transactions: fallbackTransactions,
-          totalSocietalDebt: totalDebt,
-          debtPercentage
-        });
-        
-        setAnalysisStatus({
-          status: 'success',
-          error: 'Analysis completed with limited details'
-        });
-      }, 1000);
     } finally {
       isAnalyzing.current = false;
     }
-  }, [analyzedData, savedTransactions]);
+  }, [savedTransactions]);
 
+  useEffect(() => {
+    if (analyzedData) {
+      console.log("analyzedData metrics:", {
+        totalSocietalDebt: analyzedData.totalSocietalDebt,
+        totalPositiveImpact: analyzedData.totalPositiveImpact,
+        totalNegativeImpact: analyzedData.totalNegativeImpact
+      });
+    }
+  }, [analyzedData]);
   return {
     analyzedData,
     analysisStatus,

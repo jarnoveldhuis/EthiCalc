@@ -16,6 +16,7 @@ interface DashboardSidebarProps {
   activeView: string;
   onViewChange: (view: string) => void;
   totalSocietalDebt: number;
+  totalNegativeImpact: number;
   offsetsThisMonth: number;
   positiveImpact: number;
   topNegativeCategories: CategoryImpact[];
@@ -29,6 +30,7 @@ export function DashboardSidebar({
   activeView,
   onViewChange,
   totalSocietalDebt,
+  totalNegativeImpact,
   positiveImpact,
   topNegativeCategories,
   hasTransactions,
@@ -44,12 +46,20 @@ export function DashboardSidebar({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Calculate effective debt (total debt minus applied credit)
-  const effectiveDebt = totalSocietalDebt - (creditState?.appliedCredit || 0);
-  console.log("totalSocietalDebt", totalSocietalDebt);
-  console.log("creditState?.appliedCredit", creditState?.appliedCredit);
+  const effectiveDebt = (totalNegativeImpact || 0) - (creditState?.appliedCredit || 0);
+
   // Track whether the button should be disabled - critical for preventing multiple applications
   const creditButtonDisabled =
     positiveImpact <= 0 || isApplyingCredit || effectiveDebt <= 0;
+
+  useEffect(() => {
+    console.log("Credit DEBUG:", {
+      totalSocietalDebt,
+      totalNegativeImpact: totalNegativeImpact || 0,
+      appliedCredit: creditState?.appliedCredit || 0,
+      effectiveDebt,
+    });
+  }, [totalSocietalDebt, totalNegativeImpact, creditState?.appliedCredit, effectiveDebt]);
 
   // Debug log for credit state
   useEffect(() => {
@@ -136,7 +146,7 @@ export function DashboardSidebar({
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
   };
-
+  console.log("effectiveDebt", effectiveDebt);
   return (
     <div className="w-full lg:col-span-1">
       {/* Societal Credit Score */}
@@ -147,7 +157,9 @@ export function DashboardSidebar({
           )} p-4 sm:p-6 text-white`}
         >
           <div className="text-center">
-            <h2 className="text-lg sm:text-xl font-bold mb-1">Total Social Debt</h2>
+            <h2 className="text-lg sm:text-xl font-bold mb-1">
+              Total Social Debt
+            </h2>
             <div className="text-4xl sm:text-5xl font-black mb-2">
               ${Math.abs(effectiveDebt).toFixed(2)}
             </div>
@@ -175,7 +187,9 @@ export function DashboardSidebar({
             {(creditState?.appliedCredit || 0) > 0 && (
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <span className="text-gray-600 text-sm sm:text-base">Applied Credit</span>
+                  <span className="text-gray-600 text-sm sm:text-base">
+                    Applied Credit
+                  </span>
                 </div>
                 <div className="text-green-600 font-medium text-sm sm:text-base">
                   ${(creditState?.appliedCredit || 0).toFixed(2)}
@@ -186,7 +200,9 @@ export function DashboardSidebar({
             {/* Available Credit with Apply button */}
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-gray-600 text-sm sm:text-base">Available Credit</span>
+                <span className="text-gray-600 text-sm sm:text-base">
+                  Available Credit
+                </span>
                 <span className="text-xs text-gray-500 block">
                   From positive impact
                 </span>
@@ -241,19 +257,26 @@ export function DashboardSidebar({
 
         {/* Mobile menu toggle */}
         <div className="block sm:hidden p-4 border-b border-gray-200">
-          <button 
+          <button
             onClick={toggleMenu}
             className="w-full flex items-center justify-between py-2 px-3 bg-blue-50 rounded-lg"
           >
             <span className="font-medium">Dashboard Views</span>
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className={`h-5 w-5 transition-transform ${isMenuOpen ? "transform rotate-180" : ""}`} 
-              fill="none" 
-              viewBox="0 0 24 24" 
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-5 w-5 transition-transform ${
+                isMenuOpen ? "transform rotate-180" : ""
+              }`}
+              fill="none"
+              viewBox="0 0 24 24"
               stroke="currentColor"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </button>
         </div>
@@ -306,7 +329,9 @@ export function DashboardSidebar({
       {hasTransactions && (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-200">
-            <h3 className="font-bold text-sm sm:text-base">Top Negative Impact Categories</h3>
+            <h3 className="font-bold text-sm sm:text-base">
+              Top Negative Impact Categories
+            </h3>
           </div>
           <div className="p-3 sm:p-4 space-y-3">
             {topNegativeCategories.length > 0 ? (
@@ -320,7 +345,9 @@ export function DashboardSidebar({
                       {getCategoryEmoji(category.name)}
                     </div>
                     <div>
-                      <h4 className="font-medium text-sm sm:text-base">{category.name}</h4>
+                      <h4 className="font-medium text-sm sm:text-base">
+                        {category.name}
+                      </h4>
                       <span className="text-xs text-gray-500">
                         Impact Category
                       </span>

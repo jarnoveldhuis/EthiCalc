@@ -24,6 +24,8 @@ export interface Transaction {
 
 export interface AnalyzedTransactionData {
   transactions: Transaction[];
+  totalPositiveImpact: number;
+  totalNegativeImpact: number;
   totalSocietalDebt: number;
   debtPercentage: number;
 }

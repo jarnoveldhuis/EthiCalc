@@ -107,11 +107,7 @@ export async function getTransactions(
 
     // Log the raw response for debugging
     console.log(`Received ${response.data.transactions.length} transactions from Plaid`);
-    
-    // Log a sample transaction for debugging if available
-    if (response.data.transactions.length > 0) {
-      console.log("Sample transaction:", JSON.stringify(response.data.transactions[0]));
-    }
+  
 
     return response.data.transactions;
   } catch (error) {

@@ -22,7 +22,7 @@ import { useCreditState } from "@/features/analysis/useCreditState";
 import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
 import { TransactionTableView } from "@/features/dashboard/views/TransactionTableView";
 import { PremiumTransactionView } from "@/features/dashboard/views/PremiumTransactionView";
-import { TransactionList } from "@/features/dashboard/views/TransactionList";
+// import { TransactionList } from "@/features/dashboard/views/TransactionList";
 // Utility functions
 import {
   calculatePracticeDonations,
@@ -53,7 +53,7 @@ export default function Dashboard() {
     disconnectBank,
     manuallyFetchTransactions,
   } = useBankConnection(user, firebaseLoadingComplete);
-
+  
   // Transaction storage and analysis
   const {
     savedTransactions,
@@ -77,7 +77,7 @@ export default function Dashboard() {
     useTransactionAnalysis(savedTransactions);
 
   // UI State
-  const [activeView, setActiveView] = useState("grouped-impact");
+  const [activeView, setActiveView] = useState("premium-view");
   const [isConnecting, setIsConnecting] = useState(false);
   const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Loading...");
@@ -198,18 +198,14 @@ export default function Dashboard() {
       setIsApplyingCredit(true);
 
       try {
-        // Apply credit using our new hook
         const success = await applyCredit(amount);
-
         if (success) {
           // Refresh credit state after successful application
           await refreshCreditState();
-          return true;
         }
-
-        return false;
+        return success;
       } catch (error) {
-        console.error(`Error applying credit: ${error}`);
+        console.error("Error applying credit:", error);
         return false;
       } finally {
         setIsApplyingCredit(false);
@@ -223,7 +219,6 @@ export default function Dashboard() {
       // Try to load from Firebase first
       loadLatestTransactions()
         .then((hasData) => {
-          console.log(`Firebase load complete, found data: ${hasData}`);
           setFirebaseLoadingComplete(true);
         })
         .catch((err) => {
@@ -246,14 +241,6 @@ export default function Dashboard() {
   }, [creditError]);
 
   useEffect(() => {
-    console.log("Save effect evaluation:", {
-      hasUser: !!user,
-      hasAnalyzedData: !!analyzedData,
-      analyzedCount: analyzedData?.transactions?.length || 0,
-      savedCount: savedTransactions?.length || 0,
-      hasSavedData,
-    });
-
     if (user && analyzedData && analyzedData.transactions.length > 0) {
       // Use the existing transactions or an empty array if none exist
       const existingTx = savedTransactions || [];
@@ -264,13 +251,7 @@ export default function Dashboard() {
 
       // Only save if we actually have new transactions
       if (mergedTransactions.length > existingTx.length) {
-        console.log(
-          `SAVING MERGED TRANSACTIONS: ${existingTx.length} existing + ${newTx.length} new = ${mergedTransactions.length} total`
-        );
-
         saveTransactions(mergedTransactions, analyzedData.totalSocietalDebt);
-      } else {
-        console.log("No new transactions to save after merging");
       }
     }
   }, [user, analyzedData, savedTransactions, saveTransactions, hasSavedData]);
@@ -278,9 +259,6 @@ export default function Dashboard() {
   // Effect to analyze transactions from the bank connection
   useEffect(() => {
     if (transactions && transactions.length > 0 && !analyzedData) {
-      console.log(
-        `Analyzing ${transactions.length} transactions from bank connection`
-      );
       analyzeTransactions(transactions);
     }
   }, [transactions, analyzedData, analyzeTransactions]);
@@ -359,13 +337,13 @@ export default function Dashboard() {
             totalSocietalDebt={totalSocietalDebt}
           />
         );
-        case "transaction-list": // Add this new case
-        return (
-          <TransactionList
-            transactions={displayTransactions}
-            getColorClass={getColorClass}
-          />
-        );
+        // case "transaction-list": // Add this new case
+        // return (
+        //   <TransactionList
+        //     transactions={displayTransactions}
+        //     getColorClass={getColorClass}
+        //   />
+        // );
       }
   };
   // Handle loading states
@@ -399,8 +377,9 @@ export default function Dashboard() {
         <DashboardSidebar
           user={user}
           activeView={activeView}
-          onViewChange={setActiveView}
           totalSocietalDebt={totalSocietalDebt}
+          onViewChange={setActiveView}
+          totalNegativeImpact={analyzedData?.totalNegativeImpact || 0}
           offsetsThisMonth={negativeAmount}
           positiveImpact={positiveImpact}
           topNegativeCategories={negativeCategories}

@@ -524,10 +524,35 @@ export function processAnalyzedTransactions(
   });
 
   // Calculate metrics
-  const totalSocietalDebt = updatedTransactions.reduce(
-    (sum, tx) => sum + (tx.societalDebt ?? 0),
+
+  const totalPositiveImpact = updatedTransactions.reduce(
+    (sum, tx) => sum + (tx.societalDebt && tx.societalDebt < 0 ? Math.abs(tx.societalDebt) : 0),
     0
   );
+  
+  const totalNegativeImpact = updatedTransactions.reduce(
+    (sum, tx) => sum + (tx.societalDebt && tx.societalDebt > 0 ? tx.societalDebt : 0),
+    0
+  );
+
+// Calculate ONLY the negative impact (actual debt)
+  const totalSocietalDebt = 1
+  // updatedTransactions.reduce(
+  //   (sum, tx) => sum + (tx.societalDebt && tx.societalDebt > 0 ? tx.societalDebt : 0),
+  //   0
+  // );
+  
+  
+  // updatedTransactions.reduce(
+  //   (sum, tx) => {
+  //     // Only add POSITIVE societal debt values (the bad shit)
+  //     // Ignore the negative values (the good shit)
+  //     const debtToAdd = (tx.societalDebt ?? 0) > 0 ? (tx.societalDebt ?? 0) : 0;
+  //     return sum + debtToAdd;
+  //   },
+  //   0
+  // );
+
   const totalSpent = updatedTransactions.reduce(
     (sum, tx) => sum + (tx.amount ?? 0),
     0
@@ -537,6 +562,8 @@ export function processAnalyzedTransactions(
 
   return {
     transactions: updatedTransactions,
+    totalPositiveImpact,
+    totalNegativeImpact,
     totalSocietalDebt,
     debtPercentage,
   };

@@ -11,7 +11,8 @@ export function TransactionList({ transactions, getColorClass }: TransactionList
   if (transactions.length === 0) return null;
   
   // Calculate total spent and total societal debt
-  const totalSocietalDebt = transactions.reduce((sum, tx) => sum + (tx.societalDebt || 0), 0);
+  const totalSocietalDebt = 2
+  // transactions.reduce((sum, tx) => sum + (tx.societalDebt || 0), 0);
   
   return (
     <div className="p-2 sm:p-6">

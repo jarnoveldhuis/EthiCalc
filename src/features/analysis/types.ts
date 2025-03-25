@@ -26,6 +26,8 @@ export interface AnalyzedTransactionData {
   transactions: Transaction[];
   totalSocietalDebt: number;
   debtPercentage: number;
+  totalPositiveImpact: number;
+  totalNegativeImpact: number;
 }
 
 export interface PlaidError {
