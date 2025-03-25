@@ -3,13 +3,12 @@
 import React, { useState, useMemo } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
+import { ImpactAnalysis } from "@/shared/types/calculations";
+import { getColorClass } from "@/shared/utils/calculationService";
 
 interface PremiumTransactionViewProps {
   transactions: Transaction[];
-  totalSocietalDebt: number;
-  getColorClass: (value: number) => string;
-  totalPositiveImpact: number;
-  totalNegativeImpact: number;
+  impactAnalysis: ImpactAnalysis | null;
 }
 
 // Define enhanced transaction type with additional properties
@@ -34,10 +33,7 @@ interface EnhancedTransaction extends Transaction {
 
 export function PremiumTransactionView({
   transactions,
-  totalSocietalDebt,
-  getColorClass,
-  totalPositiveImpact,
-  totalNegativeImpact
+  impactAnalysis
 }: PremiumTransactionViewProps) {
   // State for expanded items, sorting, and donation modal
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
@@ -46,7 +42,7 @@ export function PremiumTransactionView({
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<EnhancedTransaction | null>(null);
 
-  // Helper to get value for sorting - DEFINED BEFORE BEING USED, LIKE A SANE FUCKING PERSON
+  // Helper to get value for sorting
   const getValue = (tx: EnhancedTransaction, key: string): string | number => {
     switch (key) {
       case 'date': return tx.date;
@@ -123,13 +119,6 @@ export function PremiumTransactionView({
         : Number(bValue) - Number(aValue);
     });
   }, [transactions, sortKey, sortDirection]);
-  
-  // Use the passed totals instead of calculating them
-  const totals = {
-    debt: totalNegativeImpact,
-    credit: totalPositiveImpact,
-    net: totalNegativeImpact - totalPositiveImpact
-  };
   
   // Toggle expanded state for a transaction
   const toggleExpanded = (id: string) => {
@@ -316,29 +305,29 @@ export function PremiumTransactionView({
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-red-50 rounded-lg p-3 text-center">
               <div className="text-sm text-gray-700 mb-1">Negative Impact</div>
-              <div className="text-xl font-bold text-red-600">${totals.debt.toFixed(2)}</div>
+              <div className="text-xl font-bold text-red-600">${(impactAnalysis?.negativeImpact || 0).toFixed(2)}</div>
             </div>
             
             <div className="bg-green-50 rounded-lg p-3 text-center">
               <div className="text-sm text-gray-700 mb-1">Positive Impact</div>
-              <div className="text-xl font-bold text-green-600">${totals.credit.toFixed(2)}</div>
+              <div className="text-xl font-bold text-green-600">${(impactAnalysis?.positiveImpact || 0).toFixed(2)}</div>
             </div>
             
             <div className="bg-blue-50 rounded-lg p-3 text-center">
               <div className="text-sm text-gray-700 mb-1">Net Impact</div>
-              <div className={`text-xl font-bold ${getColorClass(totals.net)}`}>
-                ${Math.abs(totals.net).toFixed(2)}
+              <div className={`text-xl font-bold ${getColorClass(impactAnalysis?.netSocietalDebt || 0)}`}>
+                ${Math.abs(impactAnalysis?.netSocietalDebt || 0).toFixed(2)}
               </div>
             </div>
           </div>
           
-          {totals.net > 0 && (
+          {(impactAnalysis?.effectiveDebt || 0) > 0 && (
             <div className="mt-4 text-center">
               <button
                 onClick={handleOffsetAll}
                 className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded shadow transition-colors"
               >
-                Offset All (${totals.net.toFixed(2)})
+                Offset All (${(impactAnalysis?.effectiveDebt || 0).toFixed(2)})
               </button>
             </div>
           )}
@@ -353,7 +342,7 @@ export function PremiumTransactionView({
             : "All Societal Debt"}
           amount={selectedTransaction 
             ? selectedTransaction.netImpact 
-            : totalSocietalDebt}
+            : impactAnalysis?.effectiveDebt || 0}
           isOpen={isDonationModalOpen}
           onClose={() => {
             setIsDonationModalOpen(false);

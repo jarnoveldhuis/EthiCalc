@@ -1,4 +1,3 @@
-// Update to your src/app/dashboard/page.tsx
 "use client";
 
 import { useCallback, useState, useEffect, useMemo } from "react";
@@ -7,30 +6,20 @@ import { useBankConnection } from "@/features/banking/useBankConnection";
 import { useTransactionStorage } from "@/features/analysis/useTransactionStorage";
 import { useTransactionAnalysis } from "@/features/analysis/useTransactionAnalysis";
 import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { calculationService } from "@/shared/utils/calculationService";
+import { ImpactAnalysis } from "@/shared/types/calculations";
 import { config } from "@/config";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
-import { GroupedImpactSummary } from "@/features/dashboard/views/GroupedImpactSummary";
 import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
-import { ConsolidatedImpactView } from "@/features/dashboard/views/ConsolidatedImpactView";
-import { CategoryExperimentView } from "@/features/dashboard/views/CategoryExperimentView";
-import { PracticeDebtTable } from "@/features/analysis/PracticeDebtTable";
-import { useSampleData } from "@/features/debug/useSampleData";
+import { PremiumTransactionView } from "@/features/dashboard/views/PremiumTransactionView";
+// import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
+// import { GroupedImpactSummary } from "@/features/dashboard/views/GroupedImpactSummary";
+// import { TransactionTableView } from "@/features/dashboard/views/TransactionTableView";
 import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
 import { mergeTransactions } from "@/features/banking/transactionMapper";
 import { useCreditState } from "@/features/analysis/useCreditState";
-import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
-import { TransactionTableView } from "@/features/dashboard/views/TransactionTableView";
-import { PremiumTransactionView } from "@/features/dashboard/views/PremiumTransactionView";
-// import { TransactionList } from "@/features/dashboard/views/TransactionList";
-// Utility functions
-import {
-  calculatePracticeDonations,
-  calculatePositiveAmount,
-  calculateNegativeAmount,
-  calculateNegativeCategories,
-  getColorClass,
-} from "@/features/dashboard/dashboardUtils";
+import { useSampleData } from "@/features/debug/useSampleData";
 
 // Loading components
 import { DashboardLoading } from "@/features/dashboard/DashboardLoading";
@@ -41,6 +30,7 @@ const isSandboxMode =
 
 export default function Dashboard() {
   const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState(false);
+  const [impactAnalysis, setImpactAnalysis] = useState<ImpactAnalysis | null>(null);
 
   // Authentication
   const { user, loading: authLoading, logout } = useAuth();
@@ -57,7 +47,6 @@ export default function Dashboard() {
   // Transaction storage and analysis
   const {
     savedTransactions,
-    totalSocietalDebt,
     isLoading: storageLoading,
     error: storageError,
     saveTransactions,
@@ -69,7 +58,6 @@ export default function Dashboard() {
     creditState,
     error: creditError,
     applyCredit,
-    calculateAvailableCredit,
     refreshCreditState,
   } = useCreditState(user);
 
@@ -82,6 +70,7 @@ export default function Dashboard() {
   const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Loading...");
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isApplyingCredit, setIsApplyingCredit] = useState(false);
 
   // Sample data utility
   const { generateSampleTransactions } = useSampleData();
@@ -100,29 +89,8 @@ export default function Dashboard() {
     return analyzedData?.transactions || savedTransactions || [];
   }, [analyzedData, savedTransactions]);
 
-  // Derived data for the UI
-  const practiceDonations = calculatePracticeDonations(displayTransactions);
-  const negativeAmount = calculateNegativeAmount(displayTransactions);
-  const negativeCategories = calculateNegativeCategories(displayTransactions);
-
   // Determine if we have data to show
   const hasData = displayTransactions.length > 0;
-
-  // Add state for tracking credit application
-  const [isApplyingCredit, setIsApplyingCredit] = useState(false);
-
-  // Calculate positive impact with consideration for already applied credit
-  const positiveImpact = useMemo(() => {
-    if (!hasData) return 0;
-
-    // If we have credit state, use the hook's calculation with totalPositiveImpact
-    if (creditState && analyzedData) {
-      return calculateAvailableCredit(displayTransactions, analyzedData.totalPositiveImpact);
-    }
-
-    // Fallback to the original calculation
-    return calculatePositiveAmount(displayTransactions);
-  }, [hasData, displayTransactions, creditState, calculateAvailableCredit, analyzedData]);
 
   // Combined loading state
   const isLoading =
@@ -139,6 +107,30 @@ export default function Dashboard() {
 
   // Flag for when bank is connecting
   const bankConnecting = connectionStatus.isLoading || isConnecting;
+
+  // Calculate impact analysis when transactions or credit state changes
+  useEffect(() => {
+    if (displayTransactions.length === 0) {
+      setImpactAnalysis(null);
+      return;
+    }
+    
+    // Get applied credit from credit state
+    const appliedCredit = creditState?.appliedCredit || 0;
+    
+    // Calculate comprehensive impact analysis
+    const analysis = calculationService.calculateImpactAnalysis(
+      displayTransactions,
+      appliedCredit
+    );
+    
+    setImpactAnalysis(analysis);
+    
+    // Debug log the analysis
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Impact Analysis:', analysis);
+    }
+  }, [displayTransactions, creditState?.appliedCredit]);
 
   // Manual fetch handler with error handling
   const handleManualFetch = useCallback(async () => {
@@ -283,72 +275,47 @@ export default function Dashboard() {
         </div>
       );
     }
-    console.log("totalPositiveImpact", analyzedData?.totalPositiveImpact);
+
     // Render appropriate view based on active tab
     switch (activeView) {
-      case "impact":
-        return (
-          <ConsolidatedImpactView
-            transactions={displayTransactions}
-            totalSocietalDebt={totalSocietalDebt}
-          />
-        );
       case "premium-view":
         return (
           <PremiumTransactionView
             transactions={displayTransactions}
-            totalSocietalDebt={totalSocietalDebt}
-            getColorClass={getColorClass}
-            totalPositiveImpact={analyzedData?.totalPositiveImpact || 0}
-            totalNegativeImpact={analyzedData?.totalNegativeImpact || 0}
-            // debtPercentage={analyzedData?.debtPercentage || 0}
+            impactAnalysis={impactAnalysis}
           />
         );
-      case "categories":
-        return (
-          <CategoryExperimentView
-            transactions={displayTransactions}
-            totalSocietalDebt={totalSocietalDebt}
-          />
-        );
-      case "balance-sheet":
-        return (
-          <BalanceSheetView
-            transactions={displayTransactions}
-            totalSocietalDebt={totalSocietalDebt}
-          />
-        );
-      case "practices":
-        return (
-          <PracticeDebtTable
-            practiceDonations={practiceDonations}
-            transactions={displayTransactions}
-            totalSocietalDebt={totalSocietalDebt}
-          />
-        );
-      case "grouped-impact":
-        return (
-          <GroupedImpactSummary
-            transactions={displayTransactions}
-            totalSocietalDebt={totalSocietalDebt}
-          />
-        );
-      case "transaction-table": // Add this new case
-        return (
-          <TransactionTableView
-            transactions={displayTransactions}
-            totalSocietalDebt={totalSocietalDebt}
-          />
-        );
-        // case "transaction-list": // Add this new case
-        // return (
-        //   <TransactionList
-        //     transactions={displayTransactions}
-        //     getColorClass={getColorClass}
-        //   />
-        // );
-      }
+      // case "balance-sheet":
+      //   return (
+      //     <BalanceSheetView
+      //       transactions={displayTransactions}
+      //       impactAnalysis={impactAnalysis}
+      //     />
+      //   );
+      // case "grouped-impact":
+      //   return (
+      //     <GroupedImpactSummary
+      //       transactions={displayTransactions}
+      //       impactAnalysis={impactAnalysis}
+      //     />
+      //   );
+      // case "transaction-table":
+      //   return (
+      //     <TransactionTableView
+      //       transactions={displayTransactions}
+      //       impactAnalysis={impactAnalysis}
+      //     />
+      //   );
+      // default:
+      //   return (
+      //     <PremiumTransactionView
+      //       transactions={displayTransactions}
+      //       impactAnalysis={impactAnalysis}
+      //     />
+      //   );
+    }
   };
+
   // Handle loading states
   if (authLoading) {
     return (
@@ -378,18 +345,14 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar */}
         <DashboardSidebar
-          user={user}
+          impactAnalysis={impactAnalysis}
           activeView={activeView}
-          totalSocietalDebt={totalSocietalDebt}
           onViewChange={setActiveView}
-          totalNegativeImpact={analyzedData?.totalNegativeImpact || 0}
-          offsetsThisMonth={negativeAmount}
-          positiveImpact={positiveImpact}
-          topNegativeCategories={negativeCategories}
-          hasTransactions={hasData}
           onApplyCredit={applyCreditToDebt}
           creditState={creditState}
           isApplyingCredit={isApplyingCredit}
+          hasTransactions={hasData}
+          negativeCategories={calculationService.calculateNegativeCategories(displayTransactions)}
         />
 
         {/* Main content */}
