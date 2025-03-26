@@ -2,12 +2,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from 'react';
-import { useBankConnection } from './useBankConnection';
-import { useTransactionAnalysis } from '@/features/analysis/useTransactionAnalysis';
-import { useTransactionStorage } from '@/features/analysis/useTransactionStorage';
+import { useBankConnection } from '../../hooks/useBankConnection';
+// import { useTransactionAnalysis } from '../../../Deprecate/useTransactionAnalysis';
+import { useTransactionStorage } from '@/hooks/useTransactionStorage';
 import PlaidLink from './PlaidLink';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { ErrorAlert } from '@/components/ui/ErrorAlert';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
+import { ErrorAlert } from '@/shared/ui/ErrorAlert';
 import { User } from 'firebase/auth';
 import { Transaction } from '@/shared/types/transactions';
 

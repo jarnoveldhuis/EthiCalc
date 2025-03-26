@@ -1,5 +1,5 @@
 // src/features/analysis/directFirebaseLoader.ts
-import { db } from '@/shared/firebase/firebase';
+import { db } from '@/core/firebase/firebase';
 import { collection, query, where, orderBy, getDocs, limit, writeBatch } from 'firebase/firestore';
 import { Transaction } from '@/shared/types/transactions';
 

@@ -1,7 +1,8 @@
 // src/features/analysis/useTransactionAnalysis.ts
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Transaction, AnalyzedTransactionData } from './types';
-import { mergeTransactions } from "@/features/banking/transactionMapper";
+import { Transaction, AnalyzedTransactionData } from '../features/analysis/types';
+import { calculationService } from "@/core/calculations/impactService";
+import { mergeTransactions } from "@/core/plaid/transactionMapper";
 
 interface AnalysisStatus {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -82,39 +83,16 @@ export function useTransactionAnalysis(
         if (savedTransactions && savedTransactions.length > 0) {
           const mergedTransactions = mergeTransactions(savedTransactions, newTransactions);
           
-          // Calculate totals from merged data
-          const totalDebt = mergedTransactions.reduce(
-            (sum, tx) => sum + (tx.societalDebt || 0), 0
-          );
-          
-          // Calculate positive and negative impact using the same logic as PremiumTransactionView
-          const { totalPositiveImpact, totalNegativeImpact } = mergedTransactions.reduce((acc, tx) => {
-            // Calculate debts (unethical practices)
-            const debtPractices = (tx.unethicalPractices || []).map(practice => {
-              const weight = tx.practiceWeights?.[practice] || 0;
-              return tx.amount * (weight / 100);
-            });
-            
-            // Calculate credits (ethical practices)
-            const creditPractices = (tx.ethicalPractices || []).map(practice => {
-              const weight = tx.practiceWeights?.[practice] || 0;
-              return tx.amount * (weight / 100);
-            });
-            
-            // Sum up the totals
-            const totaldebt = debtPractices.reduce((sum, amount) => sum + amount, 0);
-            const totalCredit = creditPractices.reduce((sum, amount) => sum + amount, 0);
-            
-            return {
-              totalPositiveImpact: acc.totalPositiveImpact + totalCredit,
-              totalNegativeImpact: acc.totalNegativeImpact + totaldebt
-            };
-          }, { totalPositiveImpact: 0, totalNegativeImpact: 0 });
+          // Use calculationService for all calculations
+          const totalSocietalDebt = calculationService.calculateNetSocietalDebt(mergedTransactions);
+          const totalPositiveImpact = calculationService.calculatePositiveImpact(mergedTransactions);
+          const totalNegativeImpact = calculationService.calculateNegativeImpact(mergedTransactions);
+          const debtPercentage = calculationService.calculateDebtPercentage(mergedTransactions);
           
           setAnalyzedData({
             transactions: mergedTransactions,
-            totalSocietalDebt: totalDebt,
-            debtPercentage: 0,
+            totalSocietalDebt,
+            debtPercentage,
             totalPositiveImpact,
             totalNegativeImpact
           });
@@ -159,57 +137,21 @@ export function useTransactionAnalysis(
         return tx;
       });
   
-      // Sort by societal debt (largest first)
-      const sortedTransactions = [...mergedTransactions].sort(
-        (a, b) => (b.societalDebt ?? 0) - (a.societalDebt ?? 0)
-      );
+      // Use calculationService for all calculations after merging with any saved transactions
+      const finalTransactions = savedTransactions 
+        ? mergeTransactions(savedTransactions, mergedTransactions)
+        : mergedTransactions;
+        
+      // Recalculate all metrics using the service
+      const totalSocietalDebt = calculationService.calculateNetSocietalDebt(finalTransactions);
+      const totalPositiveImpact = calculationService.calculatePositiveImpact(finalTransactions);
+      const totalNegativeImpact = calculationService.calculateNegativeImpact(finalTransactions);
+      const debtPercentage = calculationService.calculateDebtPercentage(finalTransactions);
   
-      // Calculate metrics
-      const totalDebt = sortedTransactions.reduce(
-        (sum, tx) => {
-          // If this is a credit application, it directly reduces debt
-          if (tx.isCreditApplication) {
-            return sum - tx.amount;
-          }
-          return sum + (tx.societalDebt || 0);
-        },
-        0
-      );
-      
-      const totalSpent = sortedTransactions.reduce(
-        (sum, tx) => sum + tx.amount,
-        0
-      );
-      
-      const debtPercentage = totalSpent > 0 ? (totalDebt / totalSpent) * 100 : 0;
-      
-      // Calculate positive and negative impact using the same logic as PremiumTransactionView
-      const { totalPositiveImpact, totalNegativeImpact } = sortedTransactions.reduce((acc, tx) => {
-        // Calculate debts (unethical practices)
-        const debtPractices = (tx.unethicalPractices || []).map(practice => {
-          const weight = tx.practiceWeights?.[practice] || 0;
-          return tx.amount * (weight / 100);
-        });
-        
-        // Calculate credits (ethical practices)
-        const creditPractices = (tx.ethicalPractices || []).map(practice => {
-          const weight = tx.practiceWeights?.[practice] || 0;
-          return tx.amount * (weight / 100);
-        });
-        
-        // Sum up the totals
-        const totaldebt = debtPractices.reduce((sum, amount) => sum + amount, 0);
-        const totalCredit = creditPractices.reduce((sum, amount) => sum + amount, 0);
-        
-        return {
-          totalPositiveImpact: acc.totalPositiveImpact + totalCredit,
-          totalNegativeImpact: acc.totalNegativeImpact + totaldebt
-        };
-      }, { totalPositiveImpact: 0, totalNegativeImpact: 0 });
-      
+      // Set the analyzed data with all metrics calculated by the service
       setAnalyzedData({
-        transactions: sortedTransactions,
-        totalSocietalDebt: totalDebt,
+        transactions: finalTransactions,
+        totalSocietalDebt,
         debtPercentage,
         totalPositiveImpact,
         totalNegativeImpact
@@ -227,15 +169,6 @@ export function useTransactionAnalysis(
     }
   }, [savedTransactions]);
 
-  useEffect(() => {
-    if (analyzedData) {
-      console.log("analyzedData metrics:", {
-        totalSocietalDebt: analyzedData.totalSocietalDebt,
-        totalPositiveImpact: analyzedData.totalPositiveImpact,
-        totalNegativeImpact: analyzedData.totalNegativeImpact
-      });
-    }
-  }, [analyzedData]);
   return {
     analyzedData,
     analysisStatus,

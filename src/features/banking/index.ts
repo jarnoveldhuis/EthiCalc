@@ -4,7 +4,7 @@
 // export { bankConnectionService, type DisconnectionOptions } from './bankConnectionService';
 
 // Hooks
-export { useBankConnection } from './useBankConnection';
+export { useBankConnection } from '../../hooks/useBankConnection';
 
 // Components
 export { PlaidConnectionSection } from './PlaidConnectionSection';

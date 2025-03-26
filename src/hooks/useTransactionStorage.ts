@@ -1,10 +1,10 @@
 // src/features/analysis/useTransactionStorage.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { db } from '@/shared/firebase/firebase';
+import { db } from '@/core/firebase/firebase';
 import { collection, addDoc, query, where, orderBy, getDocs, limit, Timestamp, DocumentData } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { Transaction } from '@/shared/types/transactions';
-import { firebaseDebug } from '@/shared/utils/firebase-debug';
+import { firebaseDebug } from '@/core/firebase/debugUtils';
 
 interface TransactionBatch {
   userId: string;

@@ -3,8 +3,8 @@
 
 import { useState, useCallback } from "react";
 import { DonationModal } from "@/features/charity/DonationModal";
-import { UserCreditState } from "@/features/analysis/useCreditState";
-import { ImpactAnalysis } from "@/shared/types/calculations";
+import { UserCreditState } from "@/hooks/useCreditState";
+import { ImpactAnalysis } from "@/core/calculations/type";
 
 interface DashboardSidebarProps {
   impactAnalysis: ImpactAnalysis | null;

@@ -1,16 +1,19 @@
+// src/shared/types/calculations.ts
+
 /**
  * The grand taxonomy of ethical accounting
  * Because categorizing guilt makes it more manageable
  */
-
 export interface ImpactAnalysis {
     negativeImpact: number;       // The collective weight of your ethical failures
     positiveImpact: number;       // Your pathetic attempts at redemption
-    netSocietalDebt: number;      // The final judgment (negative - positive - applied)
-    effectiveDebt: number;        // What you still owe to society
+    netSocietalDebt: number;      // The final judgment (negative - positive)
+    effectiveDebt: number;        // What you still owe to society (after credit applied)
     debtPercentage: number;       // Your guilt as a percentage of consumption
     appliedCredit: number;        // How much you've already atoned for
     availableCredit: number;      // How much more you could atone for if you tried
+    
+    // Statistics
     totalTransactions: number;    // Total spending decisions judged
     transactionsWithDebt: number; // How many times you ethically failed
     transactionsWithCredit: number; // Your occasional moments of virtue

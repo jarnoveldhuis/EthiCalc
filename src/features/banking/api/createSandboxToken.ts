@@ -1,7 +1,7 @@
 // src/features/banking/api/createSandboxToken.ts
 
 import { NextResponse } from "next/server";
-import { createSandboxToken } from "@/features/banking/plaidService";
+import { createSandboxToken } from "@/core/plaid/plaidService";
 
 export async function createSandboxTokenHandler() {
   try {

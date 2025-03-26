@@ -1,8 +1,8 @@
 // src/features/analysis/api/analyzeTransactionsHandler.ts
 // API-specific logic for handling HTTP requests and responses
 import { NextRequest, NextResponse } from "next/server";
-import { analyzeTransactionsCore } from "../transactionAnalysisService";
-import { AnalysisRequest } from "../types";
+import { analyzeTransactionsCore } from "@/features/analysis/transactionAnalysisService";
+import { AnalysisRequest } from "@/features/analysis/types";
 
 export async function analyzeTransactionsHandler(req: NextRequest) {
   try {

@@ -2,6 +2,8 @@
 import { useState, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { Transaction } from '@/shared/types/transactions';
+import { db } from '@/core/firebase/firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
 
 interface SandboxTestingPanelProps {
   user: User | null;
@@ -148,26 +150,32 @@ export function SandboxTestingPanel({
   const resetUserTransactions = useCallback(async () => {
     if (!user || isResetting || isLoading) return;
     
-    if (!confirm("This will delete ALL your transaction data from Firebase. Are you sure?")) {
+    if (!confirm("This will delete ALL your transaction data and credit state from Firebase. Are you sure?")) {
       return;
     }
     
     setIsResetting(true);
     
     try {
+      // Clear transaction data
       await onClearData();
+      
+      // Clear credit state
+      const creditDocRef = doc(db, "creditState", user.uid);
+      await deleteDoc(creditDocRef);
+      console.log("✅ Cleared credit state");
       
       // Also reset fake connection status if available
       if (setFakeConnectionStatus) {
         setFakeConnectionStatus(false);
       }
       
-      alert("Successfully cleared all transaction data!");
+      alert("Successfully cleared all transaction data and credit state!");
       // Force page reload to reset all state
       window.location.reload();
     } catch (error) {
-      console.error("Failed to reset transactions:", error);
-      alert(`Error clearing transaction data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Failed to reset data:", error);
+      alert(`Error clearing data: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsResetting(false);
     }
@@ -211,7 +219,7 @@ export function SandboxTestingPanel({
           disabled={isLoading || loadingSandbox || loadingSample || isResetting}
           className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded font-medium text-sm disabled:bg-red-300"
         >
-          {isResetting ? "Clearing Data..." : "Clear All My Transaction Data"}
+          {isResetting ? "Clearing Data..." : "Clear All Transaction Data & Credit State"}
         </button>
       </div>
       

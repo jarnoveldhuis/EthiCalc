@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { UserCreditState } from "./useCreditState";
+import { UserCreditState } from "../../hooks/useCreditState";
 import { Transaction } from "@/shared/types/transactions";
 
 interface CreditHistoryViewProps {

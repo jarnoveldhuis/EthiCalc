@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useCallback } from 'react';
-import { db } from '@/shared/firebase/firebase';
+import { db } from '@/core/firebase/firebase';
 import { collection, getDocs, query, where, orderBy, limit, DocumentData } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 

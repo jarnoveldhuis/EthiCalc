@@ -1,10 +1,10 @@
 // src/features/analysis/TabView.tsx
 import React, { useState, useEffect } from "react";
 import { Transaction } from "@/shared/types/transactions";
-import { ConsolidatedImpactView } from "../dashboard/views/ConsolidatedImpactView";
-import { TransactionList } from "../dashboard/views/TransactionList";
-import { CategoryExperimentView } from "../dashboard/views/CategoryExperimentView";
-import { VendorBreakdownView } from "../dashboard/views/VendorBreakdownView";
+import { ConsolidatedImpactView } from "./views/ConsolidatedImpactView";
+import { TransactionList } from "./views/TransactionList";
+import { CategoryExperimentView } from "./views/CategoryExperimentView";
+import { VendorBreakdownView } from "./views/VendorBreakdownView";
 
 interface TabViewProps {
   transactions: Transaction[];

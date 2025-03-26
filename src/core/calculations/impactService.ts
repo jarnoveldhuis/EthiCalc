@@ -1,8 +1,9 @@
+// src/shared/utils/calculationService.ts
 import { Transaction } from '@/shared/types/transactions';
+import { ImpactAnalysis } from '@/core/calculations/type';
 
 /**
  * A consolidated service for all ethical calculations
- * Because apparently calculating guilt once wasn't traumatic enough
  */
 export const calculationService = {
   /**
@@ -62,13 +63,13 @@ export const calculationService = {
   },
 
   /**
-   * Calculate net societal debt (negative - positive - applied)
+   * Calculate net societal debt (negative - positive)
+   * Note: This doesn't account for applied credit
    */
   calculateNetSocietalDebt(transactions: Transaction[]): number {
     const negativeImpact = this.calculateNegativeImpact(transactions);
     const positiveImpact = this.calculatePositiveImpact(transactions);
     
-    // Applied credit reduces the debt
     return negativeImpact - positiveImpact;
   },
 
@@ -147,7 +148,7 @@ export const calculationService = {
   /**
    * Generate a complete impact analysis
    */
-  calculateImpactAnalysis(transactions: Transaction[], appliedCredit: number = 0) {
+  calculateImpactAnalysis(transactions: Transaction[], appliedCredit: number = 0): ImpactAnalysis {
     const negativeImpact = this.calculateNegativeImpact(transactions);
     const positiveImpact = this.calculatePositiveImpact(transactions);
     const netSocietalDebt = negativeImpact - positiveImpact;

@@ -1,9 +1,9 @@
 // src/features/banking/BankingDashboard.tsx
 import { useCallback } from 'react';
-import { useAuth } from '@/shared/hooks/useAuth';
-import { useBankConnection } from './useBankConnection';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { Header } from '@/components/Header';
+import { useAuth } from '@/hooks/useAuth';
+import { useBankConnection } from '../../hooks/useBankConnection';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
+import { Header } from '@/shared/components/Header';
 import PlaidLink from './PlaidLink';
 
 export function BankingDashboard() {

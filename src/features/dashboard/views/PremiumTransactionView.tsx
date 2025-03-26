@@ -3,8 +3,8 @@
 import React, { useState, useMemo } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
-import { ImpactAnalysis } from "@/shared/types/calculations";
-import { getColorClass } from "@/shared/utils/calculationService";
+import { ImpactAnalysis } from "@/core/calculations/type";
+import { getColorClass } from "@/core/calculations/impactService";
 
 interface PremiumTransactionViewProps {
   transactions: Transaction[];

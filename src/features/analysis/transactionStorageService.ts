@@ -1,7 +1,7 @@
 // src/features/transactions/transactionStorageService.ts
 // Domain logic for storing and retrieving transactions - no HTTP concerns
 
-import { db } from "@/shared/firebase/firebase";
+import { db } from "@/core/firebase/firebase";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, limit, DocumentData } from "firebase/firestore";
 import { Transaction, AnalyzedTransactionData } from "./types";
 

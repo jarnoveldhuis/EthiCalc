@@ -1,6 +1,9 @@
-// /src/features/dashboard/views/TransactionList.tsx
+// src/features/dashboard/views/TransactionList.tsx
 import { Transaction } from "@/shared/types/transactions";
 import { TransactionListItem } from "../../analysis/TransactionListItem";
+import { calculationService } from "@/core/calculations/impactService";
+import { DonationModal } from "@/features/charity/DonationModal";
+import { useState } from "react";
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -8,11 +11,16 @@ interface TransactionListProps {
 }
 
 export function TransactionList({ transactions, getColorClass }: TransactionListProps) {
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+  
   if (transactions.length === 0) return null;
   
-  // Calculate total spent and total societal debt
-  const totalSocietalDebt = 2
-  // transactions.reduce((sum, tx) => sum + (tx.societalDebt || 0), 0);
+  // Calculate total societal debt using the calculation service
+  const totalSocietalDebt = calculationService.calculateNetSocietalDebt(transactions);
+  
+  const handleOffsetAll = () => {
+    setIsDonationModalOpen(true);
+  };
   
   return (
     <div className="p-2 sm:p-6">
@@ -48,6 +56,7 @@ export function TransactionList({ transactions, getColorClass }: TransactionList
                 
                 {totalSocietalDebt > 0 && (
                   <button
+                    onClick={handleOffsetAll}
                     className="mt-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors"
                   >
                     Offset All (${totalSocietalDebt.toFixed(2)})
@@ -56,6 +65,16 @@ export function TransactionList({ transactions, getColorClass }: TransactionList
               </div>
             </div>
           </div>
+          
+          {/* Donation Modal */}
+          {isDonationModalOpen && (
+            <DonationModal
+              practice="All Societal Debt"
+              amount={totalSocietalDebt}
+              isOpen={isDonationModalOpen}
+              onClose={() => setIsDonationModalOpen(false)}
+            />
+          )}
         </>
       )}
     </div>

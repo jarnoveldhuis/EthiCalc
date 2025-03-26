@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
 
+
 interface GroupedImpactSummaryProps {
   transactions: Transaction[];
   totalSocietalDebt: number;

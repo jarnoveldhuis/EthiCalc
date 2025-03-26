@@ -1,7 +1,7 @@
 // src/features/banking/api/exchangeToken.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { exchangePublicToken } from '@/features/banking/plaidService';
+import { exchangePublicToken } from '@/core/plaid/plaidService';
 
 export async function exchangeTokenHandler(req: NextRequest) {
   try {

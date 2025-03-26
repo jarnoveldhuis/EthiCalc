@@ -1,27 +1,21 @@
 "use client";
 
 import { useCallback, useState, useEffect, useMemo } from "react";
-import { useAuth } from "@/shared/hooks/useAuth";
-import { useBankConnection } from "@/features/banking/useBankConnection";
-import { useTransactionStorage } from "@/features/analysis/useTransactionStorage";
-import { useTransactionAnalysis } from "@/features/analysis/useTransactionAnalysis";
-import { ErrorAlert } from "@/components/ui/ErrorAlert";
-import { calculationService } from "@/shared/utils/calculationService";
-import { ImpactAnalysis } from "@/shared/types/calculations";
+import { useAuth } from "@/hooks/useAuth";
+import { useBankConnection } from "@/hooks/useBankConnection";
+import { useTransactionStorage } from "@/hooks/useTransactionStorage";
+import { useTransactionAnalysis } from "@/hooks/useTransactionAnalysis";
+import { useImpactAnalysis } from "@/hooks/useImpactAnalysis";
+import { ErrorAlert } from "@/shared/ui/ErrorAlert";
 import { config } from "@/config";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { DashboardLayout } from "@/features/dashboard/DashboardLayout";
+import { DashboardSidebar } from "@/features/dashboard/DashboardSidebar";
 import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
 import { PremiumTransactionView } from "@/features/dashboard/views/PremiumTransactionView";
-// import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
-// import { GroupedImpactSummary } from "@/features/dashboard/views/GroupedImpactSummary";
-// import { TransactionTableView } from "@/features/dashboard/views/TransactionTableView";
 import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
-import { mergeTransactions } from "@/features/banking/transactionMapper";
-import { useCreditState } from "@/features/analysis/useCreditState";
+import { DebugPanel } from "@/features/dashboard/DebugPanel";
+import { mergeTransactions } from "@/core/plaid/transactionMapper";
 import { useSampleData } from "@/features/debug/useSampleData";
-
-// Loading components
 import { DashboardLoading } from "@/features/dashboard/DashboardLoading";
 
 // Determine if we're in development/sandbox mode
@@ -30,8 +24,8 @@ const isSandboxMode =
 
 export default function Dashboard() {
   const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState(false);
-  const [impactAnalysis, setImpactAnalysis] = useState<ImpactAnalysis | null>(null);
-
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  
   // Authentication
   const { user, loading: authLoading, logout } = useAuth();
 
@@ -52,14 +46,8 @@ export default function Dashboard() {
     saveTransactions,
     hasSavedData,
     loadLatestTransactions,
+    resetStorage,
   } = useTransactionStorage(user);
-
-  const {
-    creditState,
-    error: creditError,
-    applyCredit,
-    refreshCreditState,
-  } = useCreditState(user);
 
   const { analyzedData, analysisStatus, analyzeTransactions } =
     useTransactionAnalysis(savedTransactions);
@@ -70,7 +58,6 @@ export default function Dashboard() {
   const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Loading...");
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [isApplyingCredit, setIsApplyingCredit] = useState(false);
 
   // Sample data utility
   const { generateSampleTransactions } = useSampleData();
@@ -88,6 +75,14 @@ export default function Dashboard() {
     // Otherwise fallback to whichever exists
     return analyzedData?.transactions || savedTransactions || [];
   }, [analyzedData, savedTransactions]);
+
+  // Use the new hook for impact analysis calculations
+  const {
+    impactAnalysis,
+    applyCredit: applyCreditToDebt,
+    isApplyingCredit,
+    negativeCategories
+  } = useImpactAnalysis(displayTransactions, user);
 
   // Determine if we have data to show
   const hasData = displayTransactions.length > 0;
@@ -107,30 +102,6 @@ export default function Dashboard() {
 
   // Flag for when bank is connecting
   const bankConnecting = connectionStatus.isLoading || isConnecting;
-
-  // Calculate impact analysis when transactions or credit state changes
-  useEffect(() => {
-    if (displayTransactions.length === 0) {
-      setImpactAnalysis(null);
-      return;
-    }
-    
-    // Get applied credit from credit state
-    const appliedCredit = creditState?.appliedCredit || 0;
-    
-    // Calculate comprehensive impact analysis
-    const analysis = calculationService.calculateImpactAnalysis(
-      displayTransactions,
-      appliedCredit
-    );
-    
-    setImpactAnalysis(analysis);
-    
-    // Debug log the analysis
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Impact Analysis:', analysis);
-    }
-  }, [displayTransactions, creditState?.appliedCredit]);
 
   // Manual fetch handler with error handling
   const handleManualFetch = useCallback(async () => {
@@ -158,6 +129,28 @@ export default function Dashboard() {
     setDebugConnectionStatus(true);
   }, [generateSampleTransactions, analyzeTransactions]);
 
+  // Handle resetting transactions
+  const handleResetTransactions = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      // Reset the storage
+      await resetStorage();
+      
+      // Clear the analyzed data
+      analyzeTransactions([]);
+      
+      // Reset connection status
+      setDebugConnectionStatus(false);
+      
+      // Force a page reload to clear all state
+      window.location.reload();
+    } catch (error) {
+      console.error("Error resetting transactions:", error);
+      alert("Failed to reset transactions. See console for details.");
+    }
+  }, [user, resetStorage, analyzeTransactions]);
+
   // Handle Plaid success
   const handlePlaidSuccess = useCallback(
     async (publicToken: string | null) => {
@@ -180,32 +173,7 @@ export default function Dashboard() {
     [connectBank, handleLoadSampleData]
   );
 
-  // Apply a credit to reduce societal debt
-  const applyCreditToDebt = useCallback(
-    async (amount: number): Promise<boolean> => {
-      if (!user || amount <= 0) {
-        return false;
-      }
-
-      setIsApplyingCredit(true);
-
-      try {
-        const success = await applyCredit(amount);
-        if (success) {
-          // Refresh credit state after successful application
-          await refreshCreditState();
-        }
-        return success;
-      } catch (error) {
-        console.error("Error applying credit:", error);
-        return false;
-      } finally {
-        setIsApplyingCredit(false);
-      }
-    },
-    [user, applyCredit, refreshCreditState]
-  );
-
+  // Load data from Firebase on mount
   useEffect(() => {
     if (user && !firebaseLoadingComplete && !hasSavedData && !storageLoading) {
       // Try to load from Firebase first
@@ -226,12 +194,7 @@ export default function Dashboard() {
     loadLatestTransactions,
   ]);
 
-  useEffect(() => {
-    if (creditError) {
-      setFetchError(creditError);
-    }
-  }, [creditError]);
-
+  // Save analyzed data to Firebase
   useEffect(() => {
     if (user && analyzedData && analyzedData.transactions.length > 0) {
       // Use the existing transactions or an empty array if none exist
@@ -248,7 +211,7 @@ export default function Dashboard() {
     }
   }, [user, analyzedData, savedTransactions, saveTransactions, hasSavedData]);
 
-  // Effect to analyze transactions from the bank connection
+  // Analyze transactions from the bank connection
   useEffect(() => {
     if (transactions && transactions.length > 0 && !analyzedData) {
       analyzeTransactions(transactions);
@@ -261,59 +224,25 @@ export default function Dashboard() {
       return <DashboardLoading message={loadingMessage} />;
     }
 
-    if (!hasData) {
-      // Show empty state message instead of sidebar
-      return (
-        <div className="text-center p-8 bg-white rounded-xl shadow">
-          <h3 className="text-xl font-bold text-gray-700 mb-3">
-            No Transaction Data
-          </h3>
-          <p className="text-gray-600 mb-4">
-            Connect your bank account or load sample data to see your societal
-            debt analysis.
-          </p>
-        </div>
-      );
-    }
-
-    // Render appropriate view based on active tab
-    switch (activeView) {
-      case "premium-view":
-        return (
-          <PremiumTransactionView
-            transactions={displayTransactions}
-            impactAnalysis={impactAnalysis}
+    return (
+      <>
+        <PremiumTransactionView
+          transactions={displayTransactions}
+          impactAnalysis={impactAnalysis}
+        />
+        
+        {isSandboxMode && (
+          <DebugPanel
+            user={user}
+            isSandboxMode={isSandboxMode}
+            showDebugPanel={showDebugPanel}
+            onToggleDebugPanel={() => setShowDebugPanel(!showDebugPanel)}
+            onLoadSampleData={handleLoadSampleData}
+            onResetTransactions={handleResetTransactions}
           />
-        );
-      // case "balance-sheet":
-      //   return (
-      //     <BalanceSheetView
-      //       transactions={displayTransactions}
-      //       impactAnalysis={impactAnalysis}
-      //     />
-      //   );
-      // case "grouped-impact":
-      //   return (
-      //     <GroupedImpactSummary
-      //       transactions={displayTransactions}
-      //       impactAnalysis={impactAnalysis}
-      //     />
-      //   );
-      // case "transaction-table":
-      //   return (
-      //     <TransactionTableView
-      //       transactions={displayTransactions}
-      //       impactAnalysis={impactAnalysis}
-      //     />
-      //   );
-      // default:
-      //   return (
-      //     <PremiumTransactionView
-      //       transactions={displayTransactions}
-      //       impactAnalysis={impactAnalysis}
-      //     />
-      //   );
-    }
+        )}
+      </>
+    );
   };
 
   // Handle loading states
@@ -349,23 +278,22 @@ export default function Dashboard() {
           activeView={activeView}
           onViewChange={setActiveView}
           onApplyCredit={applyCreditToDebt}
-          creditState={creditState}
+          creditState={null} // No longer needed with the improved hook
           isApplyingCredit={isApplyingCredit}
           hasTransactions={hasData}
-          negativeCategories={calculationService.calculateNegativeCategories(displayTransactions)}
+          negativeCategories={negativeCategories}
         />
 
-        {/* Main content */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Bank Connection Section - Only shown when not connected */}
+        {/* Main view content */}
+        <div className="lg:col-span-3">
+          {/* Bank Connection section (only show if not connected) */}
           {!effectiveConnectionStatus && (
-            <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="bg-white rounded-xl shadow-md p-6 mb-6">
               <h2 className="text-lg font-semibold text-blue-800 mb-2">
                 Connect Your Bank
               </h2>
-              <p className="text-sm text-blue-700 mb-4">
-                Connect your bank account to analyze your transactions and
-                calculate your societal debt.
+              <p className="text-gray-700 mb-4">
+                Connect your bank account to analyze your spending's ethical impact.
               </p>
               <PlaidConnectionSection
                 onSuccess={handlePlaidSuccess}

@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { searchCharities, CharitySearchResult, cleanPracticeName } from "./charityService";
 import { CharityImage } from "./CharityImage";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
 
 interface CharitySearchProps {
   practice: string;

@@ -1,7 +1,7 @@
 // src/features/analysis/transactionAnalysisService.ts
 import OpenAI from "openai";
 import { Transaction, AnalyzedTransactionData } from "./types";
-import { transactionAnalysisPrompt } from "./prompts";
+import { transactionAnalysisPrompt } from "./promptTemplates";
 import { config } from "@/config";
 import type { ChatCompletion } from "openai/resources/chat";
 

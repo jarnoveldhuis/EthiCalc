@@ -1,7 +1,7 @@
 // src/features/banking/api/getTransactions.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getTransactions } from '@/features/banking/plaidService';
+import { getTransactions } from '@/core/plaid/plaidService';
 
 export async function getTransactionsHandler(req: NextRequest) {
   try {

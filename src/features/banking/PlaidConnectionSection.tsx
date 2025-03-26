@@ -5,7 +5,7 @@ import { useState } from 'react';
 import PlaidLink from "@/features/banking/PlaidLink";
 import { useSampleData } from '@/features/debug/useSampleData';
 import { config } from '@/config';
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
 
 // Determine if we're in development/sandbox mode
 const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;

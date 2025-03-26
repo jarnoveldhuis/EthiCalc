@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { auth } from '@/shared/firebase/firebase';
+import { auth } from '@/core/firebase/firebase';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);

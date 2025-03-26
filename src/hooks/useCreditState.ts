@@ -1,6 +1,6 @@
 // src/features/analysis/useCreditState.ts
 import { useState, useEffect, useCallback, useRef } from "react";
-import { db } from "@/shared/firebase/firebase";
+import { db } from "@/core/firebase/firebase";
 import {
   doc,
   getDoc,
