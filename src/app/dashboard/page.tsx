@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useState, useEffect, useMemo } from "react";
+import { ClearFirestoreButton } from "@/features/debug/ClearFirestoreButton";
+import { SandboxTestingPanel } from "@/features/debug/SandboxTestingPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useBankConnection } from "@/hooks/useBankConnection";
 import { useTransactionStorage } from "@/hooks/useTransactionStorage";
@@ -25,7 +27,7 @@ const isSandboxMode =
 export default function Dashboard() {
   const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
-  
+
   // Authentication
   const { user, loading: authLoading, logout } = useAuth();
 
@@ -37,7 +39,7 @@ export default function Dashboard() {
     disconnectBank,
     manuallyFetchTransactions,
   } = useBankConnection(user);
-  
+
   // Transaction storage and analysis
   const {
     savedTransactions,
@@ -81,7 +83,7 @@ export default function Dashboard() {
     impactAnalysis,
     applyCredit: applyCreditToDebt,
     isApplyingCredit,
-    negativeCategories
+    negativeCategories,
   } = useImpactAnalysis(displayTransactions, user);
 
   // Determine if we have data to show
@@ -132,17 +134,17 @@ export default function Dashboard() {
   // Handle resetting transactions
   const handleResetTransactions = useCallback(async () => {
     if (!user) return;
-    
+
     try {
       // Reset the storage
       await resetStorage();
-      
+
       // Clear the analyzed data
       analyzeTransactions([]);
-      
+
       // Reset connection status
       setDebugConnectionStatus(false);
-      
+
       // Force a page reload to clear all state
       window.location.reload();
     } catch (error) {
@@ -230,7 +232,7 @@ export default function Dashboard() {
           transactions={displayTransactions}
           impactAnalysis={impactAnalysis}
         />
-        
+
         {isSandboxMode && (
           <DebugPanel
             user={user}
@@ -258,6 +260,9 @@ export default function Dashboard() {
   if (!user) {
     return <div className="text-center mt-10">Redirecting to login...</div>;
   }
+
+
+  
 
   // Main render
   return (
@@ -289,11 +294,17 @@ export default function Dashboard() {
           {/* Bank Connection section (only show if not connected) */}
           {!effectiveConnectionStatus && (
             <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+              {isSandboxMode && (
+                <div className="mt-6">
+
+                </div>
+              )}
               <h2 className="text-lg font-semibold text-blue-800 mb-2">
                 Connect Your Bank
               </h2>
               <p className="text-gray-700 mb-4">
-                Connect your bank account to analyze your spending's ethical impact.
+                Connect your bank account to analyze your spending's ethical
+                impact.
               </p>
               <PlaidConnectionSection
                 onSuccess={handlePlaidSuccess}

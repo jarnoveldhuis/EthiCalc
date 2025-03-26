@@ -2,8 +2,7 @@
 import { useState, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { Transaction } from '@/shared/types/transactions';
-import { db } from '@/core/firebase/firebase';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { FirebaseDataCleaner } from './ClearFirestoreButton';
 
 interface SandboxTestingPanelProps {
   user: User | null;
@@ -20,7 +19,6 @@ export function SandboxTestingPanel({
   isLoading,
   setFakeConnectionStatus
 }: SandboxTestingPanelProps) {
-  const [isResetting, setIsResetting] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
   const [loadingSandbox, setLoadingSandbox] = useState(false);
 
@@ -146,40 +144,18 @@ export function SandboxTestingPanel({
     }
   }, [isLoading, loadingSample, onLoadSampleData, setFakeConnectionStatus]);
   
-  // Clear all user data
-  const resetUserTransactions = useCallback(async () => {
-    if (!user || isResetting || isLoading) return;
+  // Handle data reset delegate to FirebaseDataCleaner
+  const handleDataCleared = useCallback(() => {
+    // Call the parent's onClearData callback
+    onClearData().catch(error => {
+      console.error("Error in onClearData callback:", error);
+    });
     
-    if (!confirm("This will delete ALL your transaction data and credit state from Firebase. Are you sure?")) {
-      return;
+    // Reset fake connection status if available
+    if (setFakeConnectionStatus) {
+      setFakeConnectionStatus(false);
     }
-    
-    setIsResetting(true);
-    
-    try {
-      // Clear transaction data
-      await onClearData();
-      
-      // Clear credit state
-      const creditDocRef = doc(db, "creditState", user.uid);
-      await deleteDoc(creditDocRef);
-      console.log("✅ Cleared credit state");
-      
-      // Also reset fake connection status if available
-      if (setFakeConnectionStatus) {
-        setFakeConnectionStatus(false);
-      }
-      
-      alert("Successfully cleared all transaction data and credit state!");
-      // Force page reload to reset all state
-      window.location.reload();
-    } catch (error) {
-      console.error("Failed to reset data:", error);
-      alert(`Error clearing data: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsResetting(false);
-    }
-  }, [user, isResetting, isLoading, onClearData, setFakeConnectionStatus]);
+  }, [onClearData, setFakeConnectionStatus]);
   
   return (
     <div className="p-4 border-2 border-yellow-400 rounded-lg bg-yellow-50 my-4">
@@ -193,7 +169,7 @@ export function SandboxTestingPanel({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
         <button
           onClick={fetchFromSandboxAPI}
-          disabled={isLoading || loadingSandbox || loadingSample || isResetting}
+          disabled={isLoading || loadingSandbox || loadingSample}
           className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded font-medium text-sm disabled:bg-blue-300"
         >
           {loadingSandbox ? "Loading..." : "1. Fetch from Plaid Sandbox API"}
@@ -201,7 +177,7 @@ export function SandboxTestingPanel({
         
         <button
           onClick={fetchLocalSampleData}
-          disabled={isLoading || loadingSandbox || loadingSample || isResetting}
+          disabled={isLoading || loadingSandbox || loadingSample}
           className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded font-medium text-sm disabled:bg-green-300"
         >
           {loadingSample ? "Loading..." : "2. Load Local Sample Data"}
@@ -214,13 +190,11 @@ export function SandboxTestingPanel({
           <h3 className="text-sm font-semibold text-red-800">Danger Zone</h3>
         </div>
         
-        <button
-          onClick={resetUserTransactions}
-          disabled={isLoading || loadingSandbox || loadingSample || isResetting}
-          className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded font-medium text-sm disabled:bg-red-300"
-        >
-          {isResetting ? "Clearing Data..." : "Clear All Transaction Data & Credit State"}
-        </button>
+        {/* Replace the reset button with our new FirebaseDataCleaner */}
+        <FirebaseDataCleaner 
+          user={user} 
+          onDataCleared={handleDataCleared}
+        />
       </div>
       
       <div className="mt-3 text-xs text-gray-600">

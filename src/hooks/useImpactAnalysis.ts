@@ -24,7 +24,7 @@ export function useImpactAnalysis(
 ): UseImpactAnalysisResult {
   const [impactAnalysis, setImpactAnalysis] = useState<ImpactAnalysis | null>(null);
   const [isApplyingCredit, setIsApplyingCredit] = useState(false);
-  const { creditState, applyCredit, refreshCreditState } = useCreditState(user);
+  const { creditState, applyCredit, refreshCreditState } = useCreditState(user, transactions);
 
   // Calculate negative categories for offset recommendations
   const negativeCategories = useMemo(() => {

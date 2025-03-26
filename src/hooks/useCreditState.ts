@@ -37,7 +37,7 @@ function getTransactionId(tx: Transaction): string {
   return `${tx.date}-${tx.name}-${tx.amount}`;
 }
 
-export function useCreditState(user: User | null): UseCreditStateResult {
+export function useCreditState(user: User | null, transactions: Transaction[] | null): UseCreditStateResult {
   const [creditState, setCreditState] = useState<UserCreditState | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +46,13 @@ export function useCreditState(user: User | null): UseCreditStateResult {
   const mountedRef = useRef(true);
   // Cache the current transactions for credit calculation
   const transactionsRef = useRef<Transaction[]>([]);
+
+  // Update transactionsRef when transactions change
+  useEffect(() => {
+    if (transactions) {
+      transactionsRef.current = transactions;
+    }
+  }, [transactions]);
 
   // Load credit state
   const loadCreditState =
@@ -102,10 +109,11 @@ export function useCreditState(user: User | null): UseCreditStateResult {
   const calculateAvailableCredit = useCallback(
     (transactions: Transaction[], totalPositiveImpact: number): number => {
       if (!transactions?.length) return 0;
+      console.log("transactionsRef.current", transactionsRef.current);
 
       // Save transactions to ref for use in apply credit
       transactionsRef.current = transactions;
-
+      
       // If we don't have creditState yet, return 0
       if (!creditState) return 0;
 
