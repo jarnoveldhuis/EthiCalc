@@ -12,6 +12,7 @@ interface UseImpactAnalysisResult {
   isApplyingCredit: boolean;
   applyCredit: (amount: number) => Promise<boolean>;
   negativeCategories: Array<{ name: string; amount: number }>;
+  positiveCategories: Array<{ name: string; amount: number }>;
 }
 
 /**
@@ -26,10 +27,13 @@ export function useImpactAnalysis(
   const [isApplyingCredit, setIsApplyingCredit] = useState(false);
   const { creditState, applyCredit, refreshCreditState } = useCreditState(user, transactions);
 
-  // Calculate negative categories for offset recommendations
-  const negativeCategories = useMemo(() => {
-    if (!transactions || transactions.length === 0) return [];
-    return calculationService.calculateNegativeCategories(transactions);
+  // Calculate categories for recommendations
+  const { negativeCategories, positiveCategories } = useMemo(() => {
+    if (!transactions || transactions.length === 0) return { negativeCategories: [], positiveCategories: [] };
+    return {
+      negativeCategories: calculationService.calculateNegativeCategories(transactions),
+      positiveCategories: calculationService.calculatePositiveCategories(transactions)
+    };
   }, [transactions]);
 
   // Force recalculation of impact
@@ -80,6 +84,7 @@ export function useImpactAnalysis(
     recalculateImpact,
     isApplyingCredit,
     applyCredit: handleApplyCredit,
-    negativeCategories
+    negativeCategories,
+    positiveCategories
   };
 }

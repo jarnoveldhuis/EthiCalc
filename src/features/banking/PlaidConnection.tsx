@@ -10,6 +10,7 @@ import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { ErrorAlert } from '@/shared/ui/ErrorAlert';
 import { User } from 'firebase/auth';
 import { Transaction } from '@/shared/types/transactions';
+import { useTransactionAnalysis } from '@/hooks/useTransactionAnalysis';
 
 interface PlaidConnectionProps {
   user: User | null;

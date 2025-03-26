@@ -4,6 +4,7 @@
 import { User } from "firebase/auth";
 import { ReactNode } from "react";
 import { Header } from "@/shared/components/Header";
+import Image from "next/image";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -30,9 +31,9 @@ export function DashboardLayout({
           <div className="flex justify-between items-center h-16">
             {/* Logo and title */}
             <div className="flex items-center">
-              <span className="text-2xl">🌍</span>
-              <h1 className="ml-2 text-xl font-bold bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">
-                EthiCalc
+              <Image src="/cashLogo.png" alt="KarmaBalance Logo" width={60} height={60} className="mr-2" />
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">
+                KarmaBalance
               </h1>
             </div>
 

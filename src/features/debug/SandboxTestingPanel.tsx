@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { Transaction } from '@/shared/types/transactions';
-import { FirebaseDataCleaner } from './ClearFirestoreButton';
+// import { FirebaseDataCleaner } from './ClearFirestoreButton';
 
 interface SandboxTestingPanelProps {
   user: User | null;
@@ -15,7 +15,7 @@ interface SandboxTestingPanelProps {
 export function SandboxTestingPanel({
   user,
   onLoadSampleData,
-  onClearData,
+  // onClearData,
   isLoading,
   setFakeConnectionStatus
 }: SandboxTestingPanelProps) {
@@ -144,18 +144,18 @@ export function SandboxTestingPanel({
     }
   }, [isLoading, loadingSample, onLoadSampleData, setFakeConnectionStatus]);
   
-  // Handle data reset delegate to FirebaseDataCleaner
-  const handleDataCleared = useCallback(() => {
-    // Call the parent's onClearData callback
-    onClearData().catch(error => {
-      console.error("Error in onClearData callback:", error);
-    });
+  // // Handle data reset delegate to FirebaseDataCleaner
+  // const handleDataCleared = useCallback(() => {
+  //   // Call the parent's onClearData callback
+  //   onClearData().catch(error => {
+  //     console.error("Error in onClearData callback:", error);
+  //   });
     
-    // Reset fake connection status if available
-    if (setFakeConnectionStatus) {
-      setFakeConnectionStatus(false);
-    }
-  }, [onClearData, setFakeConnectionStatus]);
+  //   // Reset fake connection status if available
+  //   if (setFakeConnectionStatus) {
+  //     setFakeConnectionStatus(false);
+  //   }
+  // }, [onClearData, setFakeConnectionStatus]);
   
   return (
     <div className="p-4 border-2 border-yellow-400 rounded-lg bg-yellow-50 my-4">
@@ -191,10 +191,10 @@ export function SandboxTestingPanel({
         </div>
         
         {/* Replace the reset button with our new FirebaseDataCleaner */}
-        <FirebaseDataCleaner 
+        {/* <FirebaseDataCleaner 
           user={user} 
           onDataCleared={handleDataCleared}
-        />
+        /> */}
       </div>
       
       <div className="mt-3 text-xs text-gray-600">

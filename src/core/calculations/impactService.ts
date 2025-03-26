@@ -207,6 +207,38 @@ export const calculationService = {
       .map(([name, amount]) => ({ name, amount }))
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 3); // Top 3 categories
+  },
+
+  /**
+   * Calculate top positive categories for credit recommendations
+   */
+  calculatePositiveCategories(transactions: Transaction[]): Array<{ name: string; amount: number }> {
+    const categories: Record<string, number> = {};
+
+    // Group by category
+    transactions.forEach((tx) => {
+      // Skip if no ethical practices or no practice categories
+      if (!tx.ethicalPractices || !tx.practiceCategories) return;
+
+      // Group by category
+      tx.ethicalPractices.forEach((practice) => {
+        const category = tx.practiceCategories?.[practice];
+        if (category) {
+          // Get practice weight or default to 10%
+          const weight = tx.practiceWeights?.[practice] || 10;
+          const impact = (tx.amount || 0) * (weight / 100);
+
+          // Add to category total
+          categories[category] = (categories[category] || 0) + impact;
+        }
+      });
+    });
+
+    // Convert to array and sort
+    return Object.entries(categories)
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 3); // Top 3 categories
   }
 };
 

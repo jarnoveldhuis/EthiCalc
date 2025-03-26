@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useState, useEffect, useMemo } from "react";
-import { ClearFirestoreButton } from "@/features/debug/ClearFirestoreButton";
-import { SandboxTestingPanel } from "@/features/debug/SandboxTestingPanel";
+// import { ClearFirestoreButton } from "@/features/debug/ClearFirestoreButton";
+// import { SandboxTestingPanel } from "@/features/debug/SandboxTestingPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useBankConnection } from "@/hooks/useBankConnection";
 import { useTransactionStorage } from "@/hooks/useTransactionStorage";
@@ -14,8 +14,13 @@ import { DashboardLayout } from "@/features/dashboard/DashboardLayout";
 import { DashboardSidebar } from "@/features/dashboard/DashboardSidebar";
 import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
 import { PremiumTransactionView } from "@/features/dashboard/views/PremiumTransactionView";
+import { TransactionTableView } from "@/features/dashboard/views/TransactionTableView";
+import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
+import { VendorBreakdownView } from "@/features/dashboard/views/VendorBreakdownView";
+import { GroupedImpactSummary } from "@/features/dashboard/views/GroupedImpactSummary";
+import { getColorClass } from "@/core/calculations/impactService";
 import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
-import { DebugPanel } from "@/features/dashboard/DebugPanel";
+// import { DebugPanel } from "@/features/dashboard/DebugPanel";
 import { mergeTransactions } from "@/core/plaid/transactionMapper";
 import { useSampleData } from "@/features/debug/useSampleData";
 import { DashboardLoading } from "@/features/dashboard/DashboardLoading";
@@ -26,7 +31,7 @@ const isSandboxMode =
 
 export default function Dashboard() {
   const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState(false);
-  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  // const [showDebugPanel, setShowDebugPanel] = useState(false);
 
   // Authentication
   const { user, loading: authLoading, logout } = useAuth();
@@ -48,14 +53,14 @@ export default function Dashboard() {
     saveTransactions,
     hasSavedData,
     loadLatestTransactions,
-    resetStorage,
+    // resetStorage,
   } = useTransactionStorage(user);
 
   const { analyzedData, analysisStatus, analyzeTransactions } =
     useTransactionAnalysis(savedTransactions);
 
   // UI State
-  const [activeView, setActiveView] = useState("premium-view");
+  const [activeView, setActiveView] = useState("grouped-impact");
   const [isConnecting, setIsConnecting] = useState(false);
   const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Loading...");
@@ -84,6 +89,7 @@ export default function Dashboard() {
     applyCredit: applyCreditToDebt,
     isApplyingCredit,
     negativeCategories,
+    positiveCategories,
   } = useImpactAnalysis(displayTransactions, user);
 
   // Determine if we have data to show
@@ -132,26 +138,26 @@ export default function Dashboard() {
   }, [generateSampleTransactions, analyzeTransactions]);
 
   // Handle resetting transactions
-  const handleResetTransactions = useCallback(async () => {
-    if (!user) return;
+  // const handleResetTransactions = useCallback(async () => {
+  //   if (!user) return;
 
-    try {
-      // Reset the storage
-      await resetStorage();
+  //   try {
+  //     // Reset the storage
+  //     await resetStorage();
 
-      // Clear the analyzed data
-      analyzeTransactions([]);
+  //     // Clear the analyzed data
+  //     analyzeTransactions([]);
 
-      // Reset connection status
-      setDebugConnectionStatus(false);
+  //     // Reset connection status
+  //     setDebugConnectionStatus(false);
 
-      // Force a page reload to clear all state
-      window.location.reload();
-    } catch (error) {
-      console.error("Error resetting transactions:", error);
-      alert("Failed to reset transactions. See console for details.");
-    }
-  }, [user, resetStorage, analyzeTransactions]);
+  //     // Force a page reload to clear all state
+  //     window.location.reload();
+  //   } catch (error) {
+  //     console.error("Error resetting transactions:", error);
+  //     alert("Failed to reset transactions. See console for details.");
+  //   }
+  // }, [user, resetStorage, analyzeTransactions]);
 
   // Handle Plaid success
   const handlePlaidSuccess = useCallback(
@@ -226,25 +232,36 @@ export default function Dashboard() {
       return <DashboardLoading message={loadingMessage} />;
     }
 
-    return (
-      <>
-        <PremiumTransactionView
-          transactions={displayTransactions}
-          impactAnalysis={impactAnalysis}
-        />
+    const commonProps = {
+      transactions: displayTransactions,
+      totalSocietalDebt: impactAnalysis?.netSocietalDebt || 0,
+      getColorClass,
+    };
 
-        {isSandboxMode && (
-          <DebugPanel
-            user={user}
-            isSandboxMode={isSandboxMode}
-            showDebugPanel={showDebugPanel}
-            onToggleDebugPanel={() => setShowDebugPanel(!showDebugPanel)}
-            onLoadSampleData={handleLoadSampleData}
-            onResetTransactions={handleResetTransactions}
+    switch (activeView) {
+      case "premium-view":
+        return (
+          <PremiumTransactionView
+            transactions={displayTransactions}
+            impactAnalysis={impactAnalysis}
           />
-        )}
-      </>
-    );
+        );
+      case "transaction-table":
+        return (
+          <TransactionTableView
+            transactions={displayTransactions}
+            totalSocietalDebt={impactAnalysis?.netSocietalDebt || 0}
+          />
+        );
+      case "balance-sheet":
+        return <BalanceSheetView {...commonProps} />;
+      case "vendor-breakdown":
+        return <VendorBreakdownView {...commonProps} />;
+      case "grouped-impact":
+        return <GroupedImpactSummary {...commonProps} />;
+      default:
+        return <GroupedImpactSummary {...commonProps} />;
+    }
   };
 
   // Handle loading states
@@ -260,9 +277,6 @@ export default function Dashboard() {
   if (!user) {
     return <div className="text-center mt-10">Redirecting to login...</div>;
   }
-
-
-  
 
   // Main render
   return (
@@ -287,6 +301,7 @@ export default function Dashboard() {
           isApplyingCredit={isApplyingCredit}
           hasTransactions={hasData}
           negativeCategories={negativeCategories}
+          positiveCategories={positiveCategories}
         />
 
         {/* Main view content */}
@@ -294,17 +309,13 @@ export default function Dashboard() {
           {/* Bank Connection section (only show if not connected) */}
           {!effectiveConnectionStatus && (
             <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-              {isSandboxMode && (
-                <div className="mt-6">
-
-                </div>
-              )}
+              {isSandboxMode && <div className="mt-6"></div>}
               <h2 className="text-lg font-semibold text-blue-800 mb-2">
                 Connect Your Bank
               </h2>
               <p className="text-gray-700 mb-4">
-                Connect your bank account to analyze your spending's ethical
-                impact.
+                Connect your bank account to analyze the ethical impact of your
+                spending.
               </p>
               <PlaidConnectionSection
                 onSuccess={handlePlaidSuccess}
