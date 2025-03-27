@@ -5,18 +5,24 @@ import { useState, useCallback } from "react";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { UserCreditState } from "@/hooks/useCreditState";
 import { ImpactAnalysis } from "@/core/calculations/type";
-import { useUIStore } from "@/store/uiStore";
+// import { useUIStore } from "@/store/uiStore";
 
 interface DashboardSidebarProps {
   impactAnalysis: ImpactAnalysis | null;
   activeView: string;
   onViewChange: (view: string) => void;
   onApplyCredit: (amount: number) => Promise<boolean>;
-  creditState: UserCreditState | null;
+  creditState?: UserCreditState | null;
   isApplyingCredit: boolean;
   hasTransactions: boolean;
   negativeCategories: Array<{name: string; amount: number}>;
   positiveCategories: Array<{name: string; amount: number}>;
+  isBankConnected?: boolean;
+  connectBankProps?: {
+    onSuccess: (publicToken: string | null) => Promise<void>;
+    isLoading: boolean;
+    isSandboxMode: boolean;
+  };
 }
 
 export function DashboardSidebar({
@@ -29,12 +35,13 @@ export function DashboardSidebar({
   hasTransactions,
   // negativeCategories,
   // positiveCategories
+  isBankConnected,
+  connectBankProps
 }: DashboardSidebarProps) {
   // Local UI state
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
-  const { lastAppliedAmount, setLastAppliedAmount } = useUIStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Credit button should be disabled if:
@@ -71,9 +78,6 @@ export function DashboardSidebar({
         setTimeout(() => setShowFeedback(false), 3000);
         return;
       }
-
-      // Store amount locally for UI feedback
-      setLastAppliedAmount(amountToApply);
 
       const success = await onApplyCredit(amountToApply);
 
@@ -156,9 +160,6 @@ export function DashboardSidebar({
                 <span className="text-gray-600 text-sm sm:text-base">
                   Available Credit
                 </span>
-                <span className="text-xs text-gray-500 block">
-                  From positive impact
-                </span>
               </div>
               <div className="flex items-center">
                 <span className="font-bold text-green-600 mr-2 text-sm sm:text-base">
@@ -192,14 +193,6 @@ export function DashboardSidebar({
               ✓ {feedbackMessage}
             </div>
           )}
-
-          {/* Debug info - only in development */}
-          {process.env.NODE_ENV === "development" && (
-            <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-400">
-
-              <div>Last applied: ${lastAppliedAmount.toFixed(2)}</div>
-            </div>
-          )}
         </div>
 
         {/* Mobile menu toggle */}
@@ -229,54 +222,51 @@ export function DashboardSidebar({
         </div>
 
         {/* Navigation */}
-        <div className={`p-4 ${!isMenuOpen && "hidden sm:block"}`}>
-          <h3 className="font-medium mb-2 hidden sm:block">Dashboard Views</h3>
+        <div className={`p-4 ${!isMenuOpen && "hidden"}`}>
+
+          
+          {/* Mobile: vertical menu (only visible when isMenuOpen) */}
           <nav className="space-y-1">
-            {/* <NavButton
-              label="Premium View"
-              isActive={activeView === "premium-view"}
-              onClick={() => {
-                onViewChange("premium-view");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            /> */}
-            <NavButton
-              label="Transaction Table"
-              isActive={activeView === "transaction-table"}
-              onClick={() => {
-                onViewChange("transaction-table");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Balance Sheet"
-              isActive={activeView === "balance-sheet"}
-              onClick={() => {
-                onViewChange("balance-sheet");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Vendor Breakdown"
-              isActive={activeView === "vendor-breakdown"}
-              onClick={() => {
-                onViewChange("vendor-breakdown");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Impact by Category"
-              isActive={activeView === "grouped-impact"}
-              onClick={() => {
-                onViewChange("grouped-impact");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            />
+            {isMenuOpen && (
+              <>
+                <NavButton
+                  label="Transaction Table"
+                  isActive={activeView === "transaction-table"}
+                  onClick={() => {
+                    onViewChange("transaction-table");
+                    setIsMenuOpen(false);
+                  }}
+                  disabled={!hasTransactions}
+                />
+                <NavButton
+                  label="Balance Sheet"
+                  isActive={activeView === "balance-sheet"}
+                  onClick={() => {
+                    onViewChange("balance-sheet");
+                    setIsMenuOpen(false);
+                  }}
+                  disabled={!hasTransactions}
+                />
+                <NavButton
+                  label="Vendor Breakdown"
+                  isActive={activeView === "vendor-breakdown"}
+                  onClick={() => {
+                    onViewChange("vendor-breakdown");
+                    setIsMenuOpen(false);
+                  }}
+                  disabled={!hasTransactions}
+                />
+                <NavButton
+                  label="Impact by Category"
+                  isActive={activeView === "grouped-impact"}
+                  onClick={() => {
+                    onViewChange("grouped-impact");
+                    setIsMenuOpen(false);
+                  }}
+                  disabled={!hasTransactions}
+                />
+              </>
+            )}
           </nav>
         </div>
       </div>

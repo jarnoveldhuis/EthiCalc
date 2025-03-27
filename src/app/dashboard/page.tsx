@@ -302,11 +302,17 @@ export default function Dashboard() {
           activeView={activeView}
           onViewChange={setActiveView}
           onApplyCredit={applyCreditToDebt}
-          creditState={null} // No longer needed with the improved hook
           isApplyingCredit={isApplyingCredit}
           hasTransactions={hasData}
           negativeCategories={negativeCategories}
           positiveCategories={positiveCategories}
+          // Remove bank connection props since we're moving this functionality
+          // isBankConnected={effectiveConnectionStatus}
+          // connectBankProps={{
+          //   onSuccess: handlePlaidSuccess,
+          //   isLoading: bankConnecting,
+          //   isSandboxMode: isSandboxMode
+          // }}
         />
 
         {/* Main view content */}
@@ -314,11 +320,6 @@ export default function Dashboard() {
           {/* Bank Connection section (only show if not connected) */}
           {!effectiveConnectionStatus && (
             <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-              {isSandboxMode && (
-                <div className="mt-6">
-
-                </div>
-              )}
               <h2 className="text-lg font-semibold text-blue-800 mb-2">
                 Connect Your Bank
               </h2>
@@ -330,9 +331,14 @@ export default function Dashboard() {
                 isConnected={effectiveConnectionStatus}
                 isLoading={bankConnecting}
               />
+              {isSandboxMode && (
+                <div className="mt-4 text-xs text-gray-500">
+                  <p>Sandbox mode: You can use test credentials</p>
+                </div>
+              )}
             </div>
           )}
-
+          
           {/* Manual Fetch Button - shown when connected but no data is visible */}
           {effectiveConnectionStatus && !hasData && (
             <ManualFetchButton
@@ -342,12 +348,67 @@ export default function Dashboard() {
             />
           )}
 
+          {/* Add tab navigation here - only visible on desktop and when we have data */}
+          {hasData && (
+            <div className="hidden sm:block bg-white rounded-t-xl shadow-md pt-4 pb-0">
+              <nav className="flex">
+                <TabButton
+                  label="Transactions"
+                  isActive={activeView === "transaction-table"}
+                  onClick={() => setActiveView("transaction-table")}
+                />
+                <TabButton
+                  label="Balance"
+                  isActive={activeView === "balance-sheet"}
+                  onClick={() => setActiveView("balance-sheet")}
+                />
+                <TabButton
+                  label="Vendors"
+                  isActive={activeView === "vendor-breakdown"}
+                  onClick={() => setActiveView("vendor-breakdown")}
+                />
+                <TabButton
+                  label="Impact"
+                  isActive={activeView === "grouped-impact"}
+                  onClick={() => setActiveView("grouped-impact")}
+                />
+              </nav>
+            </div>
+          )}
+
           {/* Main view content */}
-          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          <div className={`bg-white ${hasData ? "rounded-b-xl" : "rounded-xl"} shadow-md overflow-hidden ${hasData ? "mt-0" : ""}`}>
             {renderActiveView()}
           </div>
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+// Updated TabButton component
+function TabButton({
+  label,
+  isActive,
+  onClick,
+}: {
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 py-2 px-4 text-sm font-medium transition-all duration-200 relative
+      ${isActive 
+        ? "text-blue-600"
+        : "text-gray-500 hover:text-blue-500"
+      }`}
+    >
+      {label}
+      {isActive && (
+        <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-full"></div>
+      )}
+    </button>
   );
 }

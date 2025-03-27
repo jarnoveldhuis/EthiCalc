@@ -35,14 +35,6 @@ export function Header({
 
   return (
     <div className="flex items-center space-x-4">
-      {/* Bank Connection Status */}
-      <div className="flex items-center space-x-2">
-        <div className={`w-2 h-2 rounded-full ${isBankConnected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-        <span className="text-sm text-gray-600">
-          {isBankConnected ? 'Bank Connected' : 'No Bank Connected'}
-        </span>
-      </div>
-
       {/* User Menu */}
       <div className="relative" ref={dropdownRef}>
         <button 
@@ -53,7 +45,7 @@ export function Header({
             {user?.email?.charAt(0).toUpperCase() || "U"}
           </div>
           <span className="text-sm text-gray-700 max-w-[150px] truncate">
-            {user?.email || "User"}
+          {/* {user?.email || "User"} */}
           </span>
           <svg 
             className={`w-4 h-4 text-gray-500 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
@@ -68,6 +60,17 @@ export function Header({
         {/* Dropdown menu */}
         {dropdownOpen && (
           <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg overflow-hidden z-10 border border-gray-200">
+            {/* Add Connection status here */}
+            <div className="px-4 py-3 border-b border-gray-100">
+              <div className="text-sm font-medium text-gray-700">Connection Status</div>
+              <div className="flex items-center mt-1">
+                <div className={`w-2 h-2 rounded-full mr-2 ${isBankConnected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                <span className="text-xs text-gray-600">
+                  {isBankConnected ? 'Bank Connected' : 'No Bank Connected'}
+                </span>
+              </div>
+            </div>
+            
             {/* Disconnect bank option - only show if connected */}
             {isBankConnected && onDisconnectBank && (
               <div className="px-4 py-2 border-b border-gray-100">
