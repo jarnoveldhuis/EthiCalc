@@ -45,13 +45,15 @@ export function useImpactAnalysis(
 
     const appliedCredit = creditState?.appliedCredit || 0;
     
-    // Calculate analysis with latest credit state
+    // Use the service to calculate analysis
     const analysis = calculationService.calculateImpactAnalysis(transactions, appliedCredit);
     
-    // No need for manual calculation - use the existing service
+    // Ensure the analysis has the latest availableCredit from Firestore
     if (creditState) {
-      // The calculateImpactAnalysis already includes availableCredit calculation
-      // If you need to adjust with additional business logic, you can do it here
+      // Override the calculated availableCredit with the one from Firestore if it exists
+      if (creditState.availableCredit !== undefined) {
+        analysis.availableCredit = creditState.availableCredit;
+      }
     }
     
     setImpactAnalysis(analysis);
@@ -59,14 +61,15 @@ export function useImpactAnalysis(
 
   // Apply credit to reduce societal debt
   const handleApplyCredit = async (amount: number): Promise<boolean> => {
-    if (!user || amount <= 0) {
+    if (!user || amount <= 0 || !impactAnalysis || impactAnalysis.availableCredit < amount) {
+      // Don't allow applying more credit than is available
+      console.log(`Cannot apply ${amount} credit - only ${impactAnalysis?.availableCredit || 0} available`);
       return false;
     }
 
     setIsApplyingCredit(true);
 
     try {
-      
       const success = await applyCredit(amount);
       if (success) {
         // Refresh credit state after successful application
