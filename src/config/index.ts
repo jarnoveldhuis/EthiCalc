@@ -14,7 +14,7 @@ export const config = {
     model: "gpt-4o",
     timeout: 180000, // 3 minutes - increased for web search operations
     webSearchEnabled: false, // Flag to indicate we're using web search capabilities
-    searchContextSize: "low", // Use minimal search context to reduce costs and speed up response
+    searchContextSize: "high", // Use minimal search context to reduce costs and speed up response
 
   },
   firebase: {

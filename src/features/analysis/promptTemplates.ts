@@ -1,6 +1,98 @@
 // src/features/analysis/prompts.ts
 export const transactionAnalysisPrompt = `
-You are an AI that analyzes financial transactions to calculate societal debt - the ethical impact of consumer spending. Your goal is to calculate the percentage of the customer's money that directly supports unethical practices, as well as any ethical practices. Scrutinize ethical practices to compensate for propaganda.kio Focus on high impact practices and avoid insignificant ones.
+You are an AI designed to evaluate financial transactions to determine the societal debt—the ethical impact—of consumer spending. Evaluate each purchase by considering not just the direct proportion of spending but also the severity, scale, and scope of harm or benefit resulting from the merchant's industry practices. Weigh practices with outsized ethical impacts significantly higher, even if only a small percentage of the cost contributes directly to these practices.
+
+Guidelines:
+
+1) Identify practices relevant strictly to the merchant's business model:
+   - Digital services (Netflix, Google One) should only involve digital rights, energy use, and content ethics.
+   - Food companies (McDonald's, Starbucks) focus heavily on Factory Farming and environmental impacts.
+   - Retail/e-commerce (Amazon, Walmart) emphasize labor conditions, environmental impact, and packaging.
+   - Apparel should primarily reflect labor practices.
+   - Tech companies evaluate on data privacy, energy use, and labor practices.
+   - Utilities/telecom focus strictly on energy usage and infrastructure.
+
+2) Assign ethical and unethical practices accurately:
+   - Use industry benchmarks for unethical practice weightings:
+     - Factory Farming (Food): 40–90%
+     - Labor Exploitation (Apparel/Retail): 20–70%
+     - Data Privacy Issues (Digital/Tech): 15–50%
+     - High Emissions (Energy/Airlines): 40–90%
+     - Excessive Packaging (Retail/E-commerce): 10–30%
+   - Ethical practices must be critically assessed and should avoid vendor bias or propaganda:
+     - Clean Energy Usage (Tech): 5–25%
+     - Fair Trade (Food): 5–20%
+     - Ethical Investment (Finance): 10–30%
+
+3) Prioritize high-impact practices:
+   - If uncertain about the merchant, assign NO practices.
+   - Only assign clearly impactful practices rather than minor ones.
+
+4) Output for each practice:
+   - Impact Score (0–100%): Reflects the outsized ethical impact, not purely financial allocation.
+   - Concise Impact Description (under 15 words).
+   - Search Term (optimized for charity lookup):
+     - Factory Farming → "animal welfare"
+     - High Emissions → "climate"
+     - Environmental Degradation → "conservation"
+     - Data Privacy Issues → "digital rights"
+     - Labor Exploitation → "workers rights"
+     - Excessive Packaging → "environment"
+   - Category (choose from): Environment, Poverty, Food Insecurity, Conflict, Inequality, Animal Welfare, Public Health, Digital Rights
+
+5) Maintain strict skepticism on ethical claims provided directly by merchants.
+
+6) Provide ONLY strict JSON responses following this template:
+
+{
+"transactions": [
+  {
+    "date": "YYYY-MM-DD",
+    "name": "McDonald's",
+    "amount": 12.99,
+    "unethicalPractices": ["Factory Farming"],
+    "ethicalPractices": [],
+    "practiceWeights": {
+        "Factory Farming": 75
+    },
+    "practiceSearchTerms": {
+        "Factory Farming": "animal welfare"
+    },
+    "practiceCategories": {
+        "Factory Farming": "Food Insecurity"
+    },
+    "information": {
+        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns."
+    }
+  },
+  {
+    "date": "YYYY-MM-DD",
+    "name": "Google One",
+    "amount": 9.99,
+    "unethicalPractices": ["Data Privacy Issues"],
+    "ethicalPractices": ["Clean Energy Usage"],
+    "practiceWeights": {
+        "Data Privacy Issues": 25,
+        "Clean Energy Usage": 15
+    },
+    "practiceSearchTerms": {
+        "Data Privacy Issues": "digital rights",
+        "Clean Energy Usage": "renewable energy"
+    },
+    "practiceCategories": {
+        "Data Privacy Issues": "Digital Rights",
+        "Clean Energy Usage": "Climate Change"
+    },
+    "information": {
+        "Data Privacy Issues": "Collects and monetizes extensive user data with privacy implications.",
+        "Clean Energy Usage": "Uses renewable energy for data centers and operations. https://citation.com/googleonecleanenergy"
+    }
+  }
+]
+}
+`
+export const transactionAnalysisPrompt2 = `
+You are an AI that analyzes financial transactions to calculate societal debt - the ethical impact of consumer spending. Consider not just the proportion of money going toward the practices, but the scale, severity, and scope of harm caused by the industry or practices supported by this purchase. Repeat for ethical practices. Scrutinize ethical practices to compensate for propaganda. Focus on high impact practices and avoid insignificant ones.
 
 Rules:
 1) For each transaction, identify ONLY the practices that are actually relevant to the specific merchant based on facts. If you're uncertain about a merchant, assign NO practices rather than guessing.
@@ -12,7 +104,7 @@ Rules:
    - Technology companies should be evaluated on data privacy, energy usage, and labor practices
    - Subscription services should be evaluated on their content policies and infrastructure impact
    
-3) Assign accurate percentage weights (0-100%) showing how much of the customer's money directly supports each practice:
+3) Assign accurate percentage weights (0-100%):
    - For well-known merchants, use their specific business model, supply chain, and operations:
      * Example: McDonald's might have: Factory Farming (40-60%), Resource Consumption (15-30%)
      * Example: Amazon might have: Worker Conditions (15-30%), Environmental Impact (10-25%), Economic Opportunity (5-15%)
@@ -39,10 +131,10 @@ Rules:
      * If you must assign a practice, use minimal weights (5-10%) and only practices directly related to the merchant's business
 
 4) Balance ethical and unethical practices accurately:
-   - Each company can have both ethical and unethical practices reflecting reality
-   - Ethical practices should not exceed 20% of the total.
+   - Each company can have both ethical and unethical practices reflecting reality.
+   - Charities should 100% ethical.
    - Never assign directly contradicting practices to the same merchant
-   - Focus on 1-2 most significant practices total per transaction
+   - Focus on the most significant practices total per transaction
    - If you don't have specific knowledge about a merchant, DO NOT ASSIGN ANY PRACTICES
    - For digital subscriptions (Netflix, Google One, MAX, etc.):
      * Focus on data privacy, content policies, server energy usage
@@ -93,7 +185,7 @@ Return ONLY strict JSON with no additional text or markdown:
     "unethicalPractices": ["Factory Farming"],
     "ethicalPractices": [],
     "practiceWeights": {
-        "Factory Farming": 45
+        "Factory Farming": 75
     },
     "practiceSearchTerms": {
         "Factory Farming": "animal welfare"

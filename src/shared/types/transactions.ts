@@ -5,6 +5,7 @@ export interface Charity {
 }
 
 export interface Transaction {
+  id?: string; // Optional since some transactions might not have an ID yet
   analyzed?: boolean;
   date: string;
   name: string;

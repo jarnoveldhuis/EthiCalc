@@ -5,6 +5,7 @@ import { useState, useCallback } from "react";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { UserCreditState } from "@/hooks/useCreditState";
 import { ImpactAnalysis } from "@/core/calculations/type";
+import { useUIStore } from "@/store/uiStore";
 
 interface DashboardSidebarProps {
   impactAnalysis: ImpactAnalysis | null;
@@ -33,7 +34,7 @@ export function DashboardSidebar({
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
-  const [lastAppliedAmount, setLastAppliedAmount] = useState(0);
+  const { lastAppliedAmount, setLastAppliedAmount } = useUIStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Credit button should be disabled if:
@@ -62,10 +63,7 @@ export function DashboardSidebar({
 
     try {
       // Use the amount of positive impact available, capped by effective debt
-      const amountToApply = Math.min(
-        impactAnalysis?.availableCredit || 0, 
-        impactAnalysis?.effectiveDebt || 0
-      );
+      const amountToApply = impactAnalysis?.availableCredit || 0;
 
       if (amountToApply <= 0) {
         setFeedbackMessage("No debt to offset with credit");
@@ -147,15 +145,25 @@ export function DashboardSidebar({
         <div className="p-4 border-b border-gray-200">
           <div className="flex flex-col">
             {/* Display applied credit if any */}
-            {/* {(impactAnalysis?.appliedCredit || 0) > 0 && (
+            {(impactAnalysis?.appliedCredit || 0) > 0 && (
               <div className="flex items-center justify-between mb-2">
               </div>
-            )} */}
+            )}
 
             {/* Available Credit with Apply button */}
             <div className="flex items-center justify-between">
-
-              <div className="flex items-center space-x-1">
+              <div>
+                <span className="text-gray-600 text-sm sm:text-base">
+                  Available Credit
+                </span>
+                <span className="text-xs text-gray-500 block">
+                  From positive impact
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="font-bold text-green-600 mr-2 text-sm sm:text-base">
+                  ${(impactAnalysis?.availableCredit || 0).toFixed(2)}
+                </span>
                 <button
                   onClick={handleApplyCredit}
                   disabled={creditButtonDisabled}
@@ -174,12 +182,6 @@ export function DashboardSidebar({
                 >
                   {isApplyingCredit ? "Applying..." : "Apply"}
                 </button>
-                <span className="font-bold text-green-600 text-sm sm:text-base">
-                  ${(impactAnalysis?.availableCredit || 0).toFixed(2)}
-                </span>
-                <span className="text-gray-600 text-sm sm:text-base">
-                  Credit
-                </span>
               </div>
             </div>
           </div>

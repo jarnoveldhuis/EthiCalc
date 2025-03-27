@@ -1,5 +1,5 @@
 // src/features/analysis/useImpactAnalysis.ts
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Transaction } from '@/shared/types/transactions';
 import { ImpactAnalysis } from '@/core/calculations/type';
 import { calculationService } from '@/core/calculations/impactService';
@@ -37,16 +37,25 @@ export function useImpactAnalysis(
   }, [transactions]);
 
   // Force recalculation of impact
-  const recalculateImpact = () => {
+  const recalculateImpact = useCallback(() => {
     if (!transactions || transactions.length === 0) {
       setImpactAnalysis(null);
       return;
     }
 
     const appliedCredit = creditState?.appliedCredit || 0;
+    
+    // Calculate analysis with latest credit state
     const analysis = calculationService.calculateImpactAnalysis(transactions, appliedCredit);
+    
+    // No need for manual calculation - use the existing service
+    if (creditState) {
+      // The calculateImpactAnalysis already includes availableCredit calculation
+      // If you need to adjust with additional business logic, you can do it here
+    }
+    
     setImpactAnalysis(analysis);
-  };
+  }, [transactions, creditState]);
 
   // Apply credit to reduce societal debt
   const handleApplyCredit = async (amount: number): Promise<boolean> => {
@@ -57,6 +66,7 @@ export function useImpactAnalysis(
     setIsApplyingCredit(true);
 
     try {
+      
       const success = await applyCredit(amount);
       if (success) {
         // Refresh credit state after successful application
@@ -77,7 +87,7 @@ export function useImpactAnalysis(
   // Calculate impact analysis on transactions or credit state change
   useEffect(() => {
     recalculateImpact();
-  }, [transactions, creditState?.appliedCredit]);
+  }, [transactions, creditState, recalculateImpact]);
 
   return {
     impactAnalysis,

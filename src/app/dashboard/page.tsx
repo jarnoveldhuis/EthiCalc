@@ -60,7 +60,7 @@ export default function Dashboard() {
     useTransactionAnalysis(savedTransactions);
 
   // UI State
-  const [activeView, setActiveView] = useState("grouped-impact");
+  const [activeView, setActiveView] = useState("premium-view");
   const [isConnecting, setIsConnecting] = useState(false);
   const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Loading...");
@@ -260,7 +260,12 @@ export default function Dashboard() {
       case "grouped-impact":
         return <GroupedImpactSummary {...commonProps} />;
       default:
-        return <GroupedImpactSummary {...commonProps} />;
+        return (
+          <TransactionTableView
+          transactions={displayTransactions}
+          totalSocietalDebt={impactAnalysis?.netSocietalDebt || 0}
+          />
+        );
     }
   };
 
@@ -309,13 +314,16 @@ export default function Dashboard() {
           {/* Bank Connection section (only show if not connected) */}
           {!effectiveConnectionStatus && (
             <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-              {isSandboxMode && <div className="mt-6"></div>}
+              {isSandboxMode && (
+                <div className="mt-6">
+
+                </div>
+              )}
               <h2 className="text-lg font-semibold text-blue-800 mb-2">
                 Connect Your Bank
               </h2>
               <p className="text-gray-700 mb-4">
-                Connect your bank account to analyze the ethical impact of your
-                spending.
+                Connect your bank account to analyze the ethical impact of your spending.
               </p>
               <PlaidConnectionSection
                 onSuccess={handlePlaidSuccess}

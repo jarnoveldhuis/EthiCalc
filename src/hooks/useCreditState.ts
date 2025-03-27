@@ -5,7 +5,7 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc,
+  // updateDoc,
   Timestamp,
   DocumentData,
 } from "firebase/firestore";
@@ -71,7 +71,8 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
           // We have existing credit state
           const data = docSnap.data() as DocumentData;
 
-          return {
+          // Ensure we preserve all fields, including lastAppliedAmount
+          const state: UserCreditState = {
             userId: user.uid,
             availableCredit: data.availableCredit || 0,
             appliedCredit: data.appliedCredit || 0,
@@ -79,6 +80,17 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
             lastAppliedAt: data.lastAppliedAt || Timestamp.now(),
             creditTransactionIds: data.creditTransactionIds || [],
           };
+
+          // Debug logging
+          if (process.env.NODE_ENV === "development") {
+            console.log("Loading credit state from Firestore:", {
+              lastAppliedAmount: state.lastAppliedAmount,
+              appliedCredit: state.appliedCredit,
+              availableCredit: state.availableCredit,
+            });
+          }
+
+          return state;
         } else {
           // Initialize new credit state
           const initialState: UserCreditState = {
@@ -139,10 +151,16 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
         }
       });
 
+      // Ensure we don't return negative credit
+      availableCredit = Math.max(0, availableCredit);
+
       if (process.env.NODE_ENV === "development") {
         console.log(`Available credit: $${availableCredit.toFixed(2)}`);
+        console.log(`Total positive impact: $${totalPositiveImpact.toFixed(2)}`);
+        console.log(`Applied credit: $${creditState.appliedCredit.toFixed(2)}`);
+        console.log(`Used transaction IDs:`, Array.from(usedTransactionIds));
       }
-      return Math.max(0, availableCredit);
+      return availableCredit;
     },
     [creditState]
   );
@@ -167,6 +185,25 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
           throw new Error("No transactions available to apply credit from");
         }
 
+        // Calculate current total societal debt
+        const currentDebt = transactions.reduce((total, tx) => {
+          let transactionDebt = 0;
+          if (tx.unethicalPractices && tx.unethicalPractices.length > 0) {
+            tx.unethicalPractices.forEach(practice => {
+              const weight = tx.practiceWeights?.[practice] || 0;
+              transactionDebt += tx.amount * (weight / 100);
+            });
+          } else if (tx.societalDebt && tx.societalDebt > 0) {
+            transactionDebt = tx.societalDebt;
+          }
+          return total + transactionDebt;
+        }, 0);
+
+        // Calculate how much credit we actually need to apply
+        // Only apply enough to reduce debt to 0, keep the rest available
+        const creditNeeded = Math.min(amount, currentDebt);
+        let creditToApply = creditNeeded;
+
         // Get IDs of transactions that have already been used for credit
         const usedTransactionIds = new Set(
           creditState.creditTransactionIds || []
@@ -175,7 +212,6 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
         // Track transactions to use for this credit application
         const transactionsToUse: Transaction[] = [];
         const newTransactionIds: string[] = [];
-        let creditToApply = amount;
 
         // Find positive impact transactions that haven't been used yet
         for (const tx of transactions) {
@@ -191,14 +227,23 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
             (tx.ethicalPractices && tx.ethicalPractices.length > 0) ||
             (tx.societalDebt && tx.societalDebt < 0)
           ) {
-            const positiveAmount = Math.abs(tx.societalDebt || 0);
+            // Calculate the credit amount for this transaction
+            let transactionCredit = 0;
+            if (tx.ethicalPractices && tx.ethicalPractices.length > 0) {
+              tx.ethicalPractices.forEach(practice => {
+                const weight = tx.practiceWeights?.[practice] || 0;
+                transactionCredit += tx.amount * (weight / 100);
+              });
+            } else if (tx.societalDebt && tx.societalDebt < 0) {
+              transactionCredit = Math.abs(tx.societalDebt);
+            }
 
             // Add this transaction to the used list
             transactionsToUse.push(tx);
             newTransactionIds.push(txId);
 
             // Subtract its contribution from the remaining credit to apply
-            creditToApply -= positiveAmount;
+            creditToApply -= transactionCredit;
 
             // If we've found enough transactions, stop looking
             if (creditToApply <= 0) {
@@ -211,18 +256,23 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
         if (creditToApply > 0) {
           console.warn(
             `Could only find ${
-              amount - creditToApply
-            } of ${amount} credit to apply`
+              creditNeeded - creditToApply
+            } of ${creditNeeded} credit to apply`
           );
         }
+
+        const actualCreditApplied = creditNeeded - Math.max(0, creditToApply);
 
         // Debug logging
         if (process.env.NODE_ENV === "development") {
           console.log("Applying credit:", {
             requestedAmount: amount,
-            foundAmount: amount - Math.max(0, creditToApply),
+            creditNeeded,
+            foundAmount: actualCreditApplied,
             transactionsUsed: transactionsToUse.length,
             newTransactionIds,
+            currentLastAppliedAmount: creditState.lastAppliedAmount,
+            currentDebt,
           });
         }
 
@@ -244,10 +294,10 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
         // Update the credit state
         const creditDocRef = doc(db, "creditState", user.uid);
 
-        const updatedState: Partial<UserCreditState> = {
-          appliedCredit:
-            creditState.appliedCredit + (amount - Math.max(0, creditToApply)),
-          lastAppliedAmount: amount - Math.max(0, creditToApply),
+        const updatedState: UserCreditState = {
+          ...creditState,
+          appliedCredit: creditState.appliedCredit + actualCreditApplied,
+          lastAppliedAmount: actualCreditApplied,
           lastAppliedAt: Timestamp.now(),
           creditTransactionIds: [
             ...creditState.creditTransactionIds,
@@ -255,26 +305,46 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
           ],
         };
 
-        // Update document in Firestore
-        await updateDoc(creditDocRef, updatedState);
-
-        // Update local state
+        // Update local state immediately
         if (mountedRef.current) {
-          setCreditState((prev) => {
-            if (!prev) return null;
+          setCreditState(updatedState);
+        }
 
-            return {
-              ...prev,
-              appliedCredit:
-                prev.appliedCredit + (amount - Math.max(0, creditToApply)),
-              lastAppliedAmount: amount - Math.max(0, creditToApply),
-              lastAppliedAt: Timestamp.now(),
-              creditTransactionIds: [
-                ...prev.creditTransactionIds,
-                ...newTransactionIds,
-              ],
-            };
+        // Debug logging before Firestore update
+        if (process.env.NODE_ENV === "development") {
+          console.log("Updating Firestore with state:", {
+            lastAppliedAmount: updatedState.lastAppliedAmount,
+            appliedCredit: updatedState.appliedCredit,
+            availableCredit: updatedState.availableCredit,
           });
+        }
+
+        // Update Firestore in the background
+        try {
+          let retryCount = 0;
+          const maxRetries = 3;
+          let success = false;
+
+          while (!success && retryCount < maxRetries) {
+            try {
+              await setDoc(creditDocRef, updatedState);
+              success = true;
+            } catch (err) {
+              retryCount++;
+              if (retryCount === maxRetries) {
+                console.error("Error updating Firestore after retries:", err);
+                // Don't revert local state on Firestore failure
+                console.warn("Firestore update failed, but local state remains updated");
+              } else {
+                // Wait before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error updating Firestore:", err);
+          // Don't revert local state on Firestore failure
+          console.warn("Firestore update failed, but local state remains updated");
         }
 
         return true;
@@ -291,22 +361,37 @@ export function useCreditState(user: User | null, transactions: Transaction[] | 
     [user, creditState]
   );
 
-  // Refresh credit state
+  // Refresh credit state with retry logic
   const refreshCreditState = useCallback(async (): Promise<void> => {
     if (!user) return;
 
-    try {
-      const newState = await loadCreditState();
-      if (mountedRef.current && newState) {
-        setCreditState(newState);
-      }
-    } catch (err) {
-      console.error("Error refreshing credit state:", err);
-      if (mountedRef.current) {
-        setError("Failed to refresh credit state");
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+      try {
+        const newState = await loadCreditState();
+        if (mountedRef.current && newState) {
+          // Only update if the new state is different
+          if (JSON.stringify(newState) !== JSON.stringify(creditState)) {
+            setCreditState(newState);
+          }
+        }
+        return;
+      } catch (err) {
+        retryCount++;
+        if (retryCount === maxRetries) {
+          console.error("Error refreshing credit state after retries:", err);
+          if (mountedRef.current) {
+            setError("Failed to refresh credit state");
+          }
+        } else {
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+        }
       }
     }
-  }, [user, loadCreditState]);
+  }, [user, loadCreditState, creditState]);
 
   // Load credit state on mount and when user changes
   useEffect(() => {

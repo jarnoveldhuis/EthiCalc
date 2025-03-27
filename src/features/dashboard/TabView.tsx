@@ -1,10 +1,10 @@
 // src/features/analysis/TabView.tsx
 import React, { useState, useEffect } from "react";
 import { Transaction } from "@/shared/types/transactions";
-import { ConsolidatedImpactView } from "./views/ConsolidatedImpactView";
-import { TransactionList } from "./views/TransactionList";
-import { CategoryExperimentView } from "./views/CategoryExperimentView";
+import { TransactionTableView } from "./views/TransactionTableView";
+import { BalanceSheetView } from "./views/BalanceSheetView";
 import { VendorBreakdownView } from "./views/VendorBreakdownView";
+import { GroupedImpactSummary } from "./views/GroupedImpactSummary";
 
 interface TabViewProps {
   transactions: Transaction[];
@@ -13,13 +13,13 @@ interface TabViewProps {
   initialActiveTab?: TabType;
 }
 
-export type TabType = "impact" | "transactions" | "categories" | "vendors";
+export type TabType = "transaction-table" | "balance-sheet" | "vendor-breakdown" | "grouped-impact";
 
 export function TabView({
   transactions,
   totalSocietalDebt,
   getColorClass,
-  initialActiveTab = "impact",
+  initialActiveTab = "transaction-table",
 }: TabViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>(initialActiveTab);
 
@@ -30,70 +30,61 @@ export function TabView({
     }
   }, [initialActiveTab]);
 
-  // Set the initial active tab based on whether analysis is completed
-  useEffect(() => {
-    if (transactions.length > 0 && totalSocietalDebt !== 0) {
-      // If transactions are loaded and analyzed, default to impact view
-      setActiveTab(initialActiveTab);
-    }
-  }, [transactions.length, totalSocietalDebt, initialActiveTab]);
-
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
       {/* Tab Navigation - responsive for mobile */}
       <div className="flex flex-wrap border-b">
         <TabButton
-          active={activeTab === "impact"}
-          onClick={() => setActiveTab("impact")}
-        >
-          Impact Summary
-        </TabButton>
-        <TabButton
-          active={activeTab === "transactions"}
-          onClick={() => setActiveTab("transactions")}
+          active={activeTab === "transaction-table"}
+          onClick={() => setActiveTab("transaction-table")}
         >
           Transactions
         </TabButton>
         <TabButton
-          active={activeTab === "vendors"}
-          onClick={() => setActiveTab("vendors")}
+          active={activeTab === "balance-sheet"}
+          onClick={() => setActiveTab("balance-sheet")}
+        >
+          Balance Sheet
+        </TabButton>
+        <TabButton
+          active={activeTab === "vendor-breakdown"}
+          onClick={() => setActiveTab("vendor-breakdown")}
         >
           Vendors
         </TabButton>
         <TabButton
-          active={activeTab === "categories"}
-          onClick={() => setActiveTab("categories")}
-          className="text-xs sm:text-sm"
+          active={activeTab === "grouped-impact"}
+          onClick={() => setActiveTab("grouped-impact")}
         >
-          Categories
+          Impact by Category
         </TabButton>
       </div>
 
-      {/* Tab Content - Content aligned to top */}
+      {/* Tab Content */}
       <div className="p-0">
-        {activeTab === "impact" && (
-          <ConsolidatedImpactView
+        {activeTab === "transaction-table" && (
+          <TransactionTableView
             transactions={transactions}
             totalSocietalDebt={totalSocietalDebt}
           />
         )}
-        {activeTab === "transactions" && (
-          <TransactionList
-            transactions={transactions}
-            getColorClass={getColorClass}
-          />
-        )}
-        {activeTab === "categories" && (
-          <CategoryExperimentView
+        {activeTab === "balance-sheet" && (
+          <BalanceSheetView
             transactions={transactions}
             totalSocietalDebt={totalSocietalDebt}
           />
         )}
-        {activeTab === "vendors" && (
+        {activeTab === "vendor-breakdown" && (
           <VendorBreakdownView
             transactions={transactions}
             totalSocietalDebt={totalSocietalDebt}
             getColorClass={getColorClass}
+          />
+        )}
+        {activeTab === "grouped-impact" && (
+          <GroupedImpactSummary
+            transactions={transactions}
+            totalSocietalDebt={totalSocietalDebt}
           />
         )}
       </div>

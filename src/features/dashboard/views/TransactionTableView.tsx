@@ -150,7 +150,7 @@ export function TransactionTableView({
           const weight = transaction.practiceWeights?.[practice] || 0;
           const practiceAmount = transaction.amount * (weight / 100);
           const info = transaction.information?.[practice] || "";
-          const tooltipId = `unethical-${idx}-${practice}`;
+          const tooltipId = `unethical-${transaction.id || transaction.name}-${idx}-${practice}`;
           
           return (
             <div 
@@ -184,7 +184,7 @@ export function TransactionTableView({
           const weight = transaction.practiceWeights?.[practice] || 0;
           const practiceAmount = transaction.amount * (weight / 100);
           const info = transaction.information?.[practice] || "";
-          const tooltipId = `ethical-${idx}-${practice}`;
+          const tooltipId = `ethical-${transaction.id || transaction.name}-${idx}-${practice}`;
           
           return (
             <div 

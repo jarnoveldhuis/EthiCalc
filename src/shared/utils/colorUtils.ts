@@ -10,6 +10,17 @@ export function getColorClass(value: number): string {
   return "text-red-700";
 }
 
+export const getImpactColorClass = (value: number): string => 
+  value < 0
+    ? "text-green-600"  // Positive impact
+    : value === 0
+    ? "text-gray-600"   // Neutral
+    : value < 10
+    ? "text-yellow-600" // Minor negative
+    : value < 20
+    ? "text-orange-600" // Moderate negative
+    : "text-red-600";   // Severe negative
+
 // Calculate practice donations for the PracticeDebtTable
 export function calculatePracticeDonations(transactions: Transaction[]) {
   if (!transactions || transactions.length === 0) {
