@@ -35,8 +35,8 @@ export function DashboardSidebar({
   hasTransactions,
   // negativeCategories,
   // positiveCategories
-  isBankConnected,
-  connectBankProps
+  // isBankConnected,
+  // connectBankProps
 }: DashboardSidebarProps) {
   // Local UI state
   const [showFeedback, setShowFeedback] = useState(false);
