@@ -161,7 +161,7 @@ export function useSampleData() {
       // Subtract debt from ethical practices
       (tx.ethicalPractices || []).forEach(practice => {
         const weight = tx.practiceWeights?.[practice] || 0;
-        const practiceCredit = tx.amount * (weight / 100) *.5;
+        const practiceCredit = tx.amount * (weight / 100);
         transactionDebt -= practiceCredit;
       });
       

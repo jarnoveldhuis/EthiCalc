@@ -61,45 +61,48 @@ export function DashboardSidebar({
   }, []);
 
   // Handle applying social credit to debt
-  const handleApplyCredit = async () => {
-    // Double-check button should be enabled to prevent race conditions
-    if (creditButtonDisabled) {
-      console.log("Credit button is disabled but was clicked anyway");
+  // Handle applying social credit to debt
+const handleApplyCredit = async () => {
+  // Double-check button should be enabled to prevent race conditions
+  if (creditButtonDisabled) {
+    console.log("Credit button is disabled but was clicked anyway");
+    return;
+  }
+
+  try {
+    // Use the amount of positive impact available, capped by effective debt
+    const amountToApply = impactAnalysis?.availableCredit || 0;
+    console.log("Attempting to apply credit amount:", amountToApply);
+
+    if (amountToApply <= 0) {
+      setFeedbackMessage("No debt to offset with credit");
+      setShowFeedback(true);
+      setTimeout(() => setShowFeedback(false), 3000);
       return;
     }
 
-    try {
-      // Use the amount of positive impact available, capped by effective debt
-      const amountToApply = impactAnalysis?.availableCredit || 0;
+    const success = await onApplyCredit(amountToApply);
+    console.log("Credit application result:", success);
 
-      if (amountToApply <= 0) {
-        setFeedbackMessage("No debt to offset with credit");
-        setShowFeedback(true);
-        setTimeout(() => setShowFeedback(false), 3000);
-        return;
-      }
-
-      const success = await onApplyCredit(amountToApply);
-
-      if (success) {
-        // Show feedback after successful application
-        setFeedbackMessage(
-          `Applied $${amountToApply.toFixed(2)} credit to your social debt`
-        );
-        setShowFeedback(true);
-
-        // Hide feedback after 3 seconds
-        setTimeout(() => {
-          setShowFeedback(false);
-        }, 3000);
-      }
-    } catch (error) {
-      console.error("Error applying credit:", error);
-      setFeedbackMessage("Failed to apply credit. Please try again.");
+    if (success) {
+      // Show feedback after successful application
+      setFeedbackMessage(
+        `Applied $${amountToApply.toFixed(2)} credit to your social debt`
+      );
       setShowFeedback(true);
-      setTimeout(() => setShowFeedback(false), 3000);
+
+      // Hide feedback after 3 seconds
+      setTimeout(() => {
+        setShowFeedback(false);
+      }, 3000);
     }
-  };
+  } catch (error) {
+    console.error("Error applying credit:", error);
+    setFeedbackMessage("Failed to apply credit. Please try again.");
+    setShowFeedback(true);
+    setTimeout(() => setShowFeedback(false), 3000);
+  }
+};
 
   // Handle opening donation modal
   const handleOpenDonationModal = () => {
