@@ -50,19 +50,23 @@ Guidelines:
     "date": "YYYY-MM-DD",
     "name": "McDonald's",
     "amount": 12.99,
-    "unethicalPractices": ["Factory Farming"],
+    "unethicalPractices": ["Factory Farming", "High Emissions"],
     "ethicalPractices": [],
     "practiceWeights": {
-        "Factory Farming": 75
+        "Factory Farming": 75,
+        "High Emissions": 25
     },
     "practiceSearchTerms": {
-        "Factory Farming": "animal welfare"
+        "Factory Farming": "animal welfare",
+        "High Emissions": "climate"
     },
     "practiceCategories": {
-        "Factory Farming": "Food Insecurity"
+        "Factory Farming": "Food Insecurity",
+        "High Emissions": "Climate Change"
     },
     "information": {
-        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns."
+        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns. [Source](https://www.ethicalconsumer.org/food-drink/what-factory-farming-why-it-problem)",
+        "High Emissions": "Produces significant greenhouse gas emissions from its operations. [Source](https://www.ethicalconsumer.org/food-drink/shopping-guide/fast-food-chains)"
     }
   },
   {
@@ -85,7 +89,7 @@ Guidelines:
     },
     "information": {
         "Data Privacy Issues": "Collects and monetizes extensive user data with privacy implications.",
-        "Clean Energy Usage": "Uses renewable energy for data centers and operations. https://citation.com/googleonecleanenergy"
+        "Clean Energy Usage": "Uses renewable energy for data centers and operations. [Source](https://www.ethicalconsumer.org/company-profile/google-llc)"
     }
   }
 ]

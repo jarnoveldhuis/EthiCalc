@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { TabType } from '@/features/dashboard/TabView';
 
 interface UIState {
+  // State
   activeView: TabType;
   isMenuOpen: boolean;
   showFeedback: boolean;

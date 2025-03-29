@@ -4,6 +4,7 @@ import { Transaction, AnalyzedTransactionData } from "./types";
 import { transactionAnalysisPrompt } from "./promptTemplates";
 import { config } from "@/config";
 import type { ChatCompletion } from "openai/resources/chat";
+import { calculationService } from "@/core/calculations/impactService";
 
 // Define consolidated interfaces for OpenAI API
 interface Citation {
@@ -523,48 +524,22 @@ export function processAnalyzedTransactions(
     };
   });
 
-  // Calculate metrics
+// Calculate metrics using the calculationService
+const {
+  positiveImpact,      // Correct name from ImpactAnalysis type
+  negativeImpact,      // Correct name from ImpactAnalysis type
+  // netSocietalDebt, // Removed this unused variable
+  debtPercentage
+} = calculationService.calculateImpactAnalysis(updatedTransactions);
 
-  const totalPositiveImpact = updatedTransactions.reduce(
-    (sum, tx) => sum + (tx.societalDebt && tx.societalDebt < 0 ? Math.abs(tx.societalDebt) : 0),
-    0
-  );
-  
-  const totalNegativeImpact = updatedTransactions.reduce(
-    (sum, tx) => sum + (tx.societalDebt && tx.societalDebt > 0 ? tx.societalDebt : 0),
-    0
-  );
-
-// Calculate ONLY the negative impact (actual debt)
-  const totalSocietalDebt = 1
-  // updatedTransactions.reduce(
-  //   (sum, tx) => sum + (tx.societalDebt && tx.societalDebt > 0 ? tx.societalDebt : 0),
-  //   0
-  // );
-  
-  
-  // updatedTransactions.reduce(
-  //   (sum, tx) => {
-  //     // Only add POSITIVE societal debt values (the bad shit)
-  //     // Ignore the negative values (the good shit)
-  //     const debtToAdd = (tx.societalDebt ?? 0) > 0 ? (tx.societalDebt ?? 0) : 0;
-  //     return sum + debtToAdd;
-  //   },
-  //   0
-  // );
-
-  const totalSpent = updatedTransactions.reduce(
-    (sum, tx) => sum + (tx.amount ?? 0),
-    0
-  );
-  const debtPercentage =
-    totalSpent > 0 ? (totalSocietalDebt / totalSpent) * 100 : 0;
+// The API response expects totalSocietalDebt to be only the negative part
+const totalSocietalDebtOnlyNegative = calculationService.calculateNegativeImpact(updatedTransactions);
 
   return {
     transactions: updatedTransactions,
-    totalPositiveImpact,
-    totalNegativeImpact,
-    totalSocietalDebt,
+    totalPositiveImpact: positiveImpact, // Use the destructured variable
+    totalNegativeImpact: negativeImpact, // Use the destructured variable
+    totalSocietalDebt: totalSocietalDebtOnlyNegative,
     debtPercentage,
   };
 }
