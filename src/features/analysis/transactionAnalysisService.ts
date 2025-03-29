@@ -173,6 +173,9 @@ ${JSON.stringify({ transactions: sanitizedTransactions })}`
       : JSON.stringify({ transactions: sanitizedTransactions });
 
     if (isSearchEnabled) {
+      console.log("systemPrompt", systemPrompt);
+      console.log("userMessage", userMessage);
+
       // For search-enabled models with custom parameters
       const searchParams = {
         model: config.openai.model,
