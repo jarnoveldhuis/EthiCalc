@@ -183,9 +183,9 @@ ${JSON.stringify({ transactions: sanitizedTransactions })}`
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage }
         ],
-        web_search_options: {
-          search_context_size: config.openai.searchContextSize || "high",
-        }
+        // web_search_options: {
+        //   search_context_size: config.openai.searchContextSize || "high",
+        // }
       } as OpenAICompletionParams;
       
       // Define an extended interface for the API parameters
