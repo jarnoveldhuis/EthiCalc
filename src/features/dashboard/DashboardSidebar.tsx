@@ -56,23 +56,16 @@ export function DashboardSidebar({
   );
   const colorTransitionTimer = useRef<NodeJS.Timeout | null>(null);
 
+  const [backgroundClass, setBackgroundClass] = useState<string>("");
+  const getBackgroundClass = useCallback((debt: number): string => {
+    if (debt <= 0) return "bg-green-500";
+    if (debt < 50) return "bg-yellow-500";
+    return "bg-red-500";
+  }, []);
   // In the useEffect where you handle background transitions
   useEffect(() => {
-    if (colorTransitionTimer.current) {
-      clearTimeout(colorTransitionTimer.current);
-    }
-
-    // Delay the background color change slightly
-    colorTransitionTimer.current = setTimeout(() => {
-      setBackgroundColorClass(getDebtColor(impactAnalysis?.effectiveDebt || 0));
-    }, 500);
-
-    return () => {
-      if (colorTransitionTimer.current) {
-        clearTimeout(colorTransitionTimer.current);
-      }
-    };
-  }, [impactAnalysis?.effectiveDebt, getDebtColor]);
+    setBackgroundClass(getBackgroundClass(impactAnalysis?.effectiveDebt || 0));
+  }, [impactAnalysis?.effectiveDebt, getBackgroundClass]);
 
   // Handle applying social credit to debt
   const handleApplyCredit = async () => {
@@ -147,9 +140,8 @@ export function DashboardSidebar({
     <div className="w-full lg:col-span-1">
       {/* Societal Credit Score */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-        <div
-          className={`bg-gradient-to-r ${backgroundColorClass} p-4 sm:p-6 text-white transition-all duration-5000 bg-gradient-container`}
-        >
+      <div className={`${backgroundClass} transition-colors duration-1000 p-4 sm:p-6 text-white`}>
+
           <div className="text-center">
             <h2 className="text-lg sm:text-xl font-bold mb-1">
               Total Social Debt
