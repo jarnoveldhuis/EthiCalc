@@ -1,38 +1,44 @@
+// src/store/uiStore.ts
 import { create } from 'zustand';
-import { TabType } from '@/features/dashboard/TabView';
+
+export type ViewType = 'balance-sheet' | 'transactions' | 'vendors' | 'categories' | 'premium';
 
 interface UIState {
-  // State
-  activeView: TabType;
-  isMenuOpen: boolean;
-  showFeedback: boolean;
-  feedbackMessage: string;
-  isDonationModalOpen: boolean;
-  lastAppliedAmount: number;
+  // UI State
+  activeView: ViewType;
+  isSidebarExpanded: boolean;
+  donationModalOpen: boolean;
+  donationPractice: string | null;
+  donationAmount: number;
+  feedbackMessage: string | null;
   
   // Actions
-  setActiveView: (view: TabType) => void;
-  toggleMenu: () => void;
-  setShowFeedback: (show: boolean) => void;
-  setFeedbackMessage: (message: string) => void;
-  setDonationModalOpen: (isOpen: boolean) => void;
-  setLastAppliedAmount: (amount: number) => void;
+  setActiveView: (view: ViewType) => void;
+  toggleSidebar: () => void;
+  openDonationModal: (practice: string, amount: number) => void;
+  closeDonationModal: () => void;
+  showFeedback: (message: string) => void;
+  clearFeedback: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  // State
-  activeView: "transaction-table",
-  isMenuOpen: false,
-  showFeedback: false,
-  feedbackMessage: "",
-  isDonationModalOpen: false,
-  lastAppliedAmount: 0,
+  // Initial state
+  activeView: 'balance-sheet',
+  isSidebarExpanded: true,
+  donationModalOpen: false,
+  donationPractice: null,
+  donationAmount: 0,
+  feedbackMessage: null,
   
   // Actions
   setActiveView: (view) => set({ activeView: view }),
-  toggleMenu: () => set((state) => ({ isMenuOpen: !state.isMenuOpen })),
-  setShowFeedback: (show) => set({ showFeedback: show }),
-  setFeedbackMessage: (message) => set({ feedbackMessage: message }),
-  setDonationModalOpen: (isOpen) => set({ isDonationModalOpen: isOpen }),
-  setLastAppliedAmount: (amount) => set({ lastAppliedAmount: amount }),
-})); 
+  toggleSidebar: () => set((state) => ({ isSidebarExpanded: !state.isSidebarExpanded })),
+  openDonationModal: (practice, amount) => set({ 
+    donationModalOpen: true, 
+    donationPractice: practice, 
+    donationAmount: amount 
+  }),
+  closeDonationModal: () => set({ donationModalOpen: false }),
+  showFeedback: (message) => set({ feedbackMessage: message }),
+  clearFeedback: () => set({ feedbackMessage: null })
+}));

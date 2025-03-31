@@ -15,6 +15,7 @@ import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
 interface DonationModalProps {
   practice: string;
   amount: number;
+  searchTerm?: string; 
   isOpen: boolean;
   onClose: () => void;
 }

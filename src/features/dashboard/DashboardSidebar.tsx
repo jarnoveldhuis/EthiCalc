@@ -1,9 +1,8 @@
 // src/features/dashboard/DashboardSidebar.tsx
-// Modifications to include all navigation options in the sidebar
-import { useState, useEffect, useCallback } from "react";
-import { DonationModal } from "@/features/charity/DonationModal";
+import { useState, useCallback, useEffect } from "react";
 import { ImpactAnalysis } from "@/core/calculations/type";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
+import { DonationModal } from "@/features/charity/DonationModal";
 
 interface DashboardSidebarProps {
   impactAnalysis: ImpactAnalysis | null;
@@ -16,6 +15,12 @@ interface DashboardSidebarProps {
   positiveCategories: Array<{ name: string; amount: number }>;
 }
 
+type NavOption = {
+  id: string;
+  label: string;
+  description: string;
+}
+
 export function DashboardSidebar({
   impactAnalysis,
   activeView,
@@ -24,64 +29,57 @@ export function DashboardSidebar({
   isApplyingCredit,
   hasTransactions,
   negativeCategories,
-  positiveCategories,
+  positiveCategories
 }: DashboardSidebarProps) {
-  // Local UI state
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [feedbackMessage, setFeedbackMessage] = useState("");
-  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // Local state
+  const [showFeedback, setShowFeedback] = useState<boolean>(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<string>("");
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState<boolean>(false);
+  const [selectedPractice, setSelectedPractice] = useState<string | null>(null);
+  const [selectedAmount, setSelectedAmount] = useState<number>(0);
+  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const [backgroundClass, setBackgroundClass] = useState<string>("bg-green-500");
 
-  // Credit button should be disabled if:
-  // - No positive impact available
-  // - Currently applying credit
-  // - No effective debt to offset
-  const creditButtonDisabled =
-    !impactAnalysis ||
-    impactAnalysis.availableCredit <= 0 ||
-    isApplyingCredit ||
+  // Navigation options
+  const navOptions: NavOption[] = [
+    { id: "balance-sheet", label: "Balance Sheet", description: "View positive and negative impacts" },
+    { id: "transaction-table", label: "Transactions", description: "Details for each purchase" },
+    { id: "vendor-breakdown", label: "Vendors", description: "Impact by merchant" },
+    { id: "grouped-impact", label: "Categories", description: "Impact by ethical category" }
+  ];
+
+  // Credit button disabled logic
+  const creditButtonDisabled: boolean = 
+    !impactAnalysis || 
+    impactAnalysis.availableCredit <= 0 || 
+    isApplyingCredit || 
     impactAnalysis.effectiveDebt <= 0;
-
-  const [backgroundClass, setBackgroundClass] = useState<string>("");
-  const getBackgroundClass = useCallback((debt: number): string => {
-    if (debt <= 0) return "bg-green-500";
-    if (debt < 50) return "bg-yellow-500";
-    return "bg-red-500";
-  }, []);
-  // In the useEffect where you handle background transitions
+  
+  // Set background color based on debt level
   useEffect(() => {
-    setBackgroundClass(getBackgroundClass(impactAnalysis?.effectiveDebt || 0));
-  }, [impactAnalysis?.effectiveDebt, getBackgroundClass]);
+    if (!impactAnalysis) return;
+    
+    if (impactAnalysis.effectiveDebt <= 0) {
+      setBackgroundClass("bg-green-500");
+    } else if (impactAnalysis.effectiveDebt < 50) {
+      setBackgroundClass("bg-yellow-500");
+    } else {
+      setBackgroundClass("bg-red-500");
+    }
+  }, [impactAnalysis]);
 
   // Handle applying social credit to debt
-  const handleApplyCredit = async () => {
-    if (creditButtonDisabled) {
-      console.log("Credit button is disabled but was clicked anyway");
-      return;
-    }
-
+  const handleApplyCredit = useCallback(async () => {
+    if (creditButtonDisabled) return;
+    
     try {
       const amountToApply = impactAnalysis?.availableCredit || 0;
-      console.log("Attempting to apply credit amount:", amountToApply);
-
-      if (amountToApply <= 0) {
-        setFeedbackMessage("No debt to offset with credit");
+      const success = await onApplyCredit(amountToApply);
+      
+      if (success) {
+        setFeedbackMessage(`Applied $${amountToApply.toFixed(2)} credit to your social debt`);
         setShowFeedback(true);
         setTimeout(() => setShowFeedback(false), 3000);
-        return;
-      }
-
-      const success = await onApplyCredit(amountToApply);
-      console.log("Credit application result:", success);
-
-      if (success) {
-        setFeedbackMessage(
-          `Applied $${amountToApply.toFixed(2)} credit to your social debt`
-        );
-        setShowFeedback(true);
-        setTimeout(() => {
-          setShowFeedback(false);
-        }, 3000);
       }
     } catch (error) {
       console.error("Error applying credit:", error);
@@ -89,17 +87,19 @@ export function DashboardSidebar({
       setShowFeedback(true);
       setTimeout(() => setShowFeedback(false), 3000);
     }
-  };
-
-  // Handle opening donation modal
-  const handleOpenDonationModal = () => {
+  }, [creditButtonDisabled, impactAnalysis, onApplyCredit]);
+  
+  // Handle opening donation modal for a specific practice or category
+  const handleOpenDonationModal = useCallback((practice: string, amount: number) => {
+    setSelectedPractice(practice);
+    setSelectedAmount(amount);
     setIsDonationModalOpen(true);
-  };
-
-  // Toggle mobile menu
-  const toggleMenu = () => {
-    setIsMenuOpen(!isMenuOpen);
-  };
+  }, []);
+  
+  // Handle "Offset All" button click
+  const handleOffsetAll = useCallback(() => {
+    handleOpenDonationModal("All Societal Debt", impactAnalysis?.effectiveDebt || 0);
+  }, [handleOpenDonationModal, impactAnalysis]);
 
   // Helper function for category emoji
   const getCategoryEmoji = (categoryName: string): string => {
@@ -111,23 +111,21 @@ export function DashboardSidebar({
       "Digital Rights": "💻",
       "Animal Welfare": "🐾",
       "Food Insecurity": "🍽️",
-      Poverty: "💰",
-      Conflict: "⚔️",
-      Inequality: "⚖️",
+      "Poverty": "💰",
+      "Conflict": "⚔️",
+      "Inequality": "⚖️",
       "Public Health": "🏥",
-      // Default for categories not in our map
-      Uncategorized: "⚖️",
+      "Uncategorized": "❓"
     };
-
-    return emojiMap[categoryName] || emojiMap["Uncategorized"];
+    
+    return emojiMap[categoryName] || "❓";
   };
 
   return (
     <div className="w-full lg:col-span-1">
       {/* Societal Credit Score */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-      <div className={`${backgroundClass} transition-colors duration-1000 p-4 sm:p-6 text-white`}>
-
+        <div className={`${backgroundClass} transition-colors duration-1000 p-4 sm:p-6 text-white`}>
           <div className="text-center">
             <h2 className="text-lg sm:text-xl font-bold mb-1">
               Total Social Debt
@@ -146,9 +144,8 @@ export function DashboardSidebar({
             {/* Only show Offset button if there's effective debt */}
             {(impactAnalysis?.effectiveDebt || 0) > 0 && (
               <button
-                onClick={handleOpenDonationModal}
+                onClick={handleOffsetAll}
                 className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 py-2 rounded-lg font-bold shadow transition-colors text-sm sm:text-base"
-                title="Offset your social debt through donations"
               >
                 Offset All
               </button>
@@ -203,7 +200,7 @@ export function DashboardSidebar({
         {/* Mobile menu toggle */}
         <div className="block lg:hidden p-4 border-b border-gray-200">
           <button
-            onClick={toggleMenu}
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="w-full flex items-center justify-between py-2 px-3 bg-blue-50 rounded-lg"
           >
             <span className="font-medium">Dashboard Views</span>
@@ -230,173 +227,100 @@ export function DashboardSidebar({
         <div className={`p-4 ${!isMenuOpen && "hidden lg:block"}`}>
           <h3 className="font-medium text-gray-800 mb-3">Dashboard Views</h3>
           <nav className="space-y-2">
-            <NavButton
-              label="Premium View"
-              isActive={activeView === "premium-view"}
-              onClick={() => {
-                onViewChange("premium-view");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Transactions"
-              isActive={activeView === "transaction-table"}
-              onClick={() => {
-                onViewChange("transaction-table");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Balance Sheet"
-              isActive={activeView === "balance-sheet"}
-              onClick={() => {
-                onViewChange("balance-sheet");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Vendor Breakdown"
-              isActive={activeView === "vendor-breakdown"}
-              onClick={() => {
-                onViewChange("vendor-breakdown");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            />
-            <NavButton
-              label="Impact by Category"
-              isActive={activeView === "grouped-impact"}
-              onClick={() => {
-                onViewChange("grouped-impact");
-                setIsMenuOpen(false);
-              }}
-              disabled={!hasTransactions}
-            />
+            {navOptions.map((option) => (
+              <button
+                key={option.id}
+                onClick={() => {
+                  onViewChange(option.id);
+                  setIsMenuOpen(false);
+                }}
+                disabled={!hasTransactions}
+                className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
+                  activeView === option.id
+                    ? "bg-blue-50 border-blue-200 text-blue-800 border"
+                    : !hasTransactions
+                    ? "text-gray-400 cursor-not-allowed"
+                    : "hover:bg-gray-50 text-gray-700"
+                }`}
+              >
+                <div className="font-medium">{option.label}</div>
+                <div className="text-xs text-gray-500">{option.description}</div>
+              </button>
+            ))}
           </nav>
         </div>
       </div>
 
-      {/* Positive Impact Categories */}
-      {hasTransactions && positiveCategories.length > 0 && (
+      {/* Impact Categories Section */}
+      {hasTransactions && (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
           <div className="p-4 border-b border-gray-200">
-            <h3 className="font-bold text-sm sm:text-base text-green-700">
-              Top Positive Impact Categories
-            </h3>
+            <h3 className="font-bold text-gray-800">Impact Categories</h3>
           </div>
-          <div className="p-3 sm:p-4 space-y-3">
-            {positiveCategories.map((category, index) => (
-              <div
-                key={`pos-${index}`}
-                className="border border-green-100 rounded-lg p-2 sm:p-3 bg-green-50"
-              >
-                <div className="flex items-center mb-2">
-                  <div className="text-xl sm:text-2xl mr-2">
-                    {getCategoryEmoji(category.name)}
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-sm sm:text-base text-green-800">
-                      {category.name}
-                    </h4>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-green-600 font-medium text-sm sm:text-base">
-                    ${category.amount.toFixed(2)}
-                  </span>
+          
+          <div className="p-4 space-y-4">
+            {/* Positive Impact Categories */}
+            {positiveCategories.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-green-700 mb-2">Positive Impact</h4>
+                <div className="space-y-2">
+                  {positiveCategories.slice(0, 2).map((category, index) => (
+                    <div
+                      key={`pos-${index}`}
+                      className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-100"
+                    >
+                      <div className="flex items-center">
+                        <span className="text-xl mr-2">{getCategoryEmoji(category.name)}</span>
+                        <span className="font-medium text-green-800">{category.name}</span>
+                      </div>
+                      <span className="text-green-600 font-medium">${category.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+            
+            {/* Negative Impact Categories */}
+            {negativeCategories.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-red-700 mb-2">Negative Impact</h4>
+                <div className="space-y-2">
+                  {negativeCategories.slice(0, 2).map((category, index) => (
+                    <div
+                      key={`neg-${index}`}
+                      className="flex items-center justify-between bg-red-50 p-2 rounded border border-red-100"
+                    >
+                      <div className="flex items-center">
+                        <span className="text-xl mr-2">{getCategoryEmoji(category.name)}</span>
+                        <span className="font-medium text-red-800">{category.name}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-red-600 font-medium mr-2">${category.amount.toFixed(2)}</span>
+                        <button 
+                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded"
+                          onClick={() => handleOpenDonationModal(category.name, category.amount)}
+                        >
+                          Offset
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Negative Impact Categories */}
-      {hasTransactions && negativeCategories.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-gray-200">
-            <h3 className="font-bold text-sm sm:text-base">
-              Top Negative Impact Categories
-            </h3>
-          </div>
-          <div className="p-3 sm:p-4 space-y-3">
-            {negativeCategories.map((category, index) => (
-              <div
-                key={`neg-${index}`}
-                className="border border-gray-200 rounded-lg p-2 sm:p-3"
-              >
-                <div className="flex items-center mb-2">
-                  <div className="text-xl sm:text-2xl mr-2">
-                    {getCategoryEmoji(category.name)}
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-sm sm:text-base">
-                      {category.name}
-                    </h4>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-red-600 font-medium text-sm sm:text-base">
-                    ${category.amount.toFixed(2)}
-                  </span>
-                  <button
-                    className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-full"
-                    onClick={() => {
-                      setIsDonationModalOpen(true);
-                    }}
-                  >
-                    Offset Impact
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Donation modal */}
+      {/* Donation Modal */}
       {isDonationModalOpen && (
         <DonationModal
-          practice="All Societal Debt"
-          amount={impactAnalysis?.effectiveDebt || 0}
+          practice={selectedPractice || "All Societal Debt"}
+          amount={selectedAmount}
           isOpen={isDonationModalOpen}
           onClose={() => setIsDonationModalOpen(false)}
         />
       )}
     </div>
-  );
-}
-
-// Navigation button component
-interface NavButtonProps {
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-  disabled?: boolean;
-}
-
-function NavButton({
-  label,
-  isActive,
-  onClick,
-  disabled = false,
-}: NavButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full px-3 py-2 sm:py-2 rounded-lg transition-colors flex items-center text-sm sm:text-base ${
-        isActive
-          ? "bg-blue-50 border-blue-200 text-blue-800 border"
-          : disabled
-          ? "text-gray-400 cursor-not-allowed"
-          : "hover:bg-gray-100 text-gray-700"
-      }`}
-    >
-      <span className="capitalize">{label}</span>
-    </button>
   );
 }

@@ -1,50 +1,43 @@
+// src/app/dashboard/page.tsx
 "use client";
 
 import { useCallback, useState, useEffect, useMemo } from "react";
-// import { ClearFirestoreButton } from "@/features/debug/ClearFirestoreButton";
-// import { SandboxTestingPanel } from "@/features/debug/SandboxTestingPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useBankConnection } from "@/hooks/useBankConnection";
 import { useTransactionStorage } from "@/hooks/useTransactionStorage";
 import { useTransactionAnalysis } from "@/hooks/useTransactionAnalysis";
 import { useImpactAnalysis } from "@/hooks/useImpactAnalysis";
+import { Transaction } from "@/shared/types/transactions";
 import { ErrorAlert } from "@/shared/ui/ErrorAlert";
-import { config } from "@/config";
 import { DashboardLayout } from "@/features/dashboard/DashboardLayout";
 import { DashboardSidebar } from "@/features/dashboard/DashboardSidebar";
 import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
-import { PremiumTransactionView } from "@/features/dashboard/views/PremiumTransactionView";
-import { TransactionTableView } from "@/features/dashboard/views/TransactionTableView";
 import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
+import { TransactionTableView } from "@/features/dashboard/views/TransactionTableView";
 import { VendorBreakdownView } from "@/features/dashboard/views/VendorBreakdownView";
 import { GroupedImpactSummary } from "@/features/dashboard/views/GroupedImpactSummary";
 import { getColorClass } from "@/core/calculations/impactService";
 import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
-// import { DebugPanel } from "@/features/dashboard/DebugPanel";
+import { DashboardLoading, DashboardEmptyState } from "@/features/dashboard/DashboardLoading";
 import { mergeTransactions } from "@/core/plaid/transactionMapper";
 import { useSampleData } from "@/features/debug/useSampleData";
-import { DashboardLoading } from "@/features/dashboard/DashboardLoading";
 
-// interface CountUpOptions {
-//   duration?: number;
-//   easing?: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
-//   delay?: number;
-//   decimalPlaces?: number;
-//   formatter?: (value: number) => string;
-// }
-
-// Determine if we're in development/sandbox mode
-const isSandboxMode =
-  process.env.NODE_ENV === "development" || config.plaid.isSandbox;
+// Define view types for better type safety
+type ViewType = "balance-sheet" | "transaction-table" | "vendor-breakdown" | "grouped-impact" | "premium-view";
 
 export default function Dashboard() {
-  const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState(false);
-  // const [showDebugPanel, setShowDebugPanel] = useState(false);
+  // Core state
+  const [activeView, setActiveView] = useState<ViewType>("balance-sheet");
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
+  const [debugConnectionStatus, setDebugConnectionStatus] = useState<boolean>(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>("Loading your dashboard...");
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState<boolean>(false);
 
-  // Authentication
+  // Auth hook
   const { user, loading: authLoading, logout } = useAuth();
 
-  // Bank connection
+  // Bank connection hook
   const {
     connectionStatus,
     transactions,
@@ -53,7 +46,7 @@ export default function Dashboard() {
     manuallyFetchTransactions,
   } = useBankConnection(user);
 
-  // Transaction storage and analysis
+  // Transaction storage hook
   const {
     savedTransactions,
     isLoading: storageLoading,
@@ -61,138 +54,94 @@ export default function Dashboard() {
     saveTransactions,
     hasSavedData,
     loadLatestTransactions,
-    // resetStorage,
   } = useTransactionStorage(user);
 
-  const { analyzedData, analysisStatus, analyzeTransactions } =
-    useTransactionAnalysis(savedTransactions);
-
-  // UI State
-  const [activeView, setActiveView] = useState("balance-sheet");
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("Loading...");
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  // Transaction analysis hook
+  const {
+    analyzedData,
+    analysisStatus,
+    analyzeTransactions,
+  } = useTransactionAnalysis(savedTransactions);
 
   // Sample data utility
   const { generateSampleTransactions } = useSampleData();
 
-  // Effective connection status combines real status with debug status
-  const effectiveConnectionStatus =
-    connectionStatus.isConnected || debugConnectionStatus;
 
-  // Display transactions from analyzed data or saved transactions
-  const displayTransactions = useMemo(() => {
-    // If we have both analyzed and saved data, merge them
-    if (analyzedData?.transactions && savedTransactions) {
-      return mergeTransactions(savedTransactions, analyzedData.transactions);
-    }
-    // Otherwise fallback to whichever exists
-    return analyzedData?.transactions || savedTransactions || [];
-  }, [analyzedData, savedTransactions]);
 
-  // Use the new hook for impact analysis calculations
+  // Derived/computed state
+  const effectiveConnectionStatus: boolean = connectionStatus.isConnected || debugConnectionStatus;
+  
+  const isLoading: boolean = connectionStatus.isLoading || 
+                             analysisStatus.status === "loading" || 
+                             storageLoading;
+  
+  const error: string | null = connectionStatus.error || 
+                               analysisStatus.error || 
+                               storageError || 
+                               fetchError;
+  
+  const bankConnecting: boolean = connectionStatus.isLoading || isConnecting;
+
+// Display transactions - merging analyzed data with saved transactions
+const displayTransactions: Transaction[] = useMemo(() => {
+  if (analyzedData?.transactions && savedTransactions) {
+    return mergeTransactions(savedTransactions, analyzedData.transactions);
+  }
+  return analyzedData?.transactions || savedTransactions || [];
+}, [analyzedData, savedTransactions]);
+
+  // Impact analysis hook
   const {
     impactAnalysis,
-    applyCredit: applyCreditToDebt,
+    applyCredit,
     isApplyingCredit,
     negativeCategories,
     positiveCategories,
   } = useImpactAnalysis(displayTransactions, user);
 
-  // Determine if we have data to show
-  const hasData = displayTransactions.length > 0;
+const hasData: boolean = displayTransactions.length > 0;
 
-  // Combined loading state
-  const isLoading =
-    connectionStatus.isLoading ||
-    analysisStatus.status === "loading" ||
-    storageLoading;
+  // Handle Plaid success callback
+  const handlePlaidSuccess = useCallback(async (publicToken: string | null) => {
+    setIsConnecting(true);
+    setLoadingMessage("Connecting to your bank...");
 
-  // Combined error state
-  const error =
-    connectionStatus.error ||
-    analysisStatus.error ||
-    storageError ||
-    fetchError;
+    try {
+      if (publicToken) {
+        await connectBank(publicToken);
+      } else {
+        // For sample data when no token provided
+        handleLoadSampleData();
+      }
+    } catch (error) {
+      console.error("Error connecting bank:", error);
+      setFetchError(error instanceof Error ? error.message : "Unknown error connecting bank");
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [connectBank]);
 
-  // Flag for when bank is connecting
-  const bankConnecting = connectionStatus.isLoading || isConnecting;
+  // Load sample data handler
+  const handleLoadSampleData = useCallback(() => {
+    const sampleTransactions = generateSampleTransactions();
+    analyzeTransactions(sampleTransactions);
+    setDebugConnectionStatus(true);
+  }, [generateSampleTransactions, analyzeTransactions]);
 
-  // Manual fetch handler with error handling
+  // Manual fetch handler
   const handleManualFetch = useCallback(async () => {
     setFetchError(null);
     try {
       await manuallyFetchTransactions();
     } catch (error) {
-      console.error("Manual fetch error in dashboard:", error);
-      setFetchError(
-        error instanceof Error
-          ? error.message
-          : "Unknown error fetching transactions"
-      );
+      console.error("Manual fetch error:", error);
+      setFetchError(error instanceof Error ? error.message : "Unknown error fetching transactions");
     }
   }, [manuallyFetchTransactions]);
-
-  // Handle loading sample data
-  const handleLoadSampleData = useCallback(() => {
-    const sampleTransactions = generateSampleTransactions();
-
-    // Skip the bank connection process and go straight to analysis
-    analyzeTransactions(sampleTransactions);
-
-    // Set debug connection status
-    setDebugConnectionStatus(true);
-  }, [generateSampleTransactions, analyzeTransactions]);
-
-  // Handle resetting transactions
-  // const handleResetTransactions = useCallback(async () => {
-  //   if (!user) return;
-
-  //   try {
-  //     // Reset the storage
-  //     await resetStorage();
-
-  //     // Clear the analyzed data
-  //     analyzeTransactions([]);
-
-  //     // Reset connection status
-  //     setDebugConnectionStatus(false);
-
-  //     // Force a page reload to clear all state
-  //     window.location.reload();
-  //   } catch (error) {
-  //     console.error("Error resetting transactions:", error);
-  //     alert("Failed to reset transactions. See console for details.");
-  //   }
-  // }, [user, resetStorage, analyzeTransactions]);
-
-  // Handle Plaid success
-  const handlePlaidSuccess = useCallback(
-    async (publicToken: string | null) => {
-      setIsConnecting(true);
-      setLoadingMessage("Connecting to your bank...");
-
-      try {
-        if (publicToken) {
-          await connectBank(publicToken);
-        } else if (isSandboxMode) {
-          // For sandbox/development, use sample data if no token
-          handleLoadSampleData();
-        }
-      } catch (error) {
-        console.error("Error connecting bank:", error);
-      } finally {
-        setIsConnecting(false);
-      }
-    },
-    [connectBank, handleLoadSampleData]
-  );
 
   // Load data from Firebase on mount
   useEffect(() => {
     if (user && !firebaseLoadingComplete && !hasSavedData && !storageLoading) {
-      // Try to load from Firebase first
       loadLatestTransactions()
         .then(() => {
           setFirebaseLoadingComplete(true);
@@ -202,13 +151,7 @@ export default function Dashboard() {
           setFirebaseLoadingComplete(true); // Mark as complete even on error
         });
     }
-  }, [
-    user,
-    firebaseLoadingComplete,
-    hasSavedData,
-    storageLoading,
-    loadLatestTransactions,
-  ]);
+  }, [user, firebaseLoadingComplete, hasSavedData, storageLoading, loadLatestTransactions]);
 
   // Save analyzed data to Firebase
   useEffect(() => {
@@ -233,63 +176,53 @@ export default function Dashboard() {
       analyzeTransactions(transactions);
     }
   }, [transactions, analyzedData, analyzeTransactions]);
-  
-  // Get the currently active view component
+
+  // Render based on loading state
+  if (authLoading) {
+    return <DashboardLoading message="Checking authentication..." />;
+  }
+
+  // Redirect handled by useAuth hook
+  if (!user) {
+    return <DashboardLoading message="Redirecting to login..." />;
+  }
+
+  // Render the active view based on state
   const renderActiveView = () => {
     if (isLoading) {
       return <DashboardLoading message={loadingMessage} />;
     }
 
-    const commonProps = {
+    if (!hasData) {
+      return (
+        <DashboardEmptyState 
+          effectiveConnectionStatus={effectiveConnectionStatus}
+          bankConnecting={bankConnecting}
+        />
+      );
+    }
+
+    // Common props for all views
+    const viewProps = {
       transactions: displayTransactions,
       totalSocietalDebt: impactAnalysis?.netSocietalDebt || 0,
-      getColorClass,
+      getColorClass
     };
 
+    // Return the appropriate view component
     switch (activeView) {
-      case "premium-view":
-        return (
-          <PremiumTransactionView
-            transactions={displayTransactions}
-            impactAnalysis={impactAnalysis}
-          />
-        );
       case "transaction-table":
-        return (
-          <TransactionTableView
-            transactions={displayTransactions}
-            totalSocietalDebt={impactAnalysis?.netSocietalDebt || 0}
-          />
-        );
+        return <TransactionTableView {...viewProps} />;
       case "balance-sheet":
-        return <BalanceSheetView {...commonProps} />;
+        return <BalanceSheetView {...viewProps} />;
       case "vendor-breakdown":
-        return <VendorBreakdownView {...commonProps} />;
+        return <VendorBreakdownView {...viewProps} />;
       case "grouped-impact":
-        return <GroupedImpactSummary {...commonProps} />;
+        return <GroupedImpactSummary {...viewProps} />;
       default:
-        return (
-          <TransactionTableView
-            transactions={displayTransactions}
-            totalSocietalDebt={impactAnalysis?.netSocietalDebt || 0}
-          />
-        );
+        return <BalanceSheetView {...viewProps} />;
     }
   };
-
-  // Handle loading states
-  if (authLoading) {
-    return (
-      <div className="text-center mt-10">
-        <DashboardLoading message="Checking authentication..." />
-      </div>
-    );
-  }
-
-  // Redirect if no user is found (handled by useAuth hook)
-  if (!user) {
-    return <div className="text-center mt-10">Redirecting to login...</div>;
-  }
 
   // Main render
   return (
@@ -302,53 +235,40 @@ export default function Dashboard() {
       {/* Error display */}
       {error && <ErrorAlert message={error} />}
 
-      {/* Main content area */}
+      {/* Main content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar */}
         <DashboardSidebar
           impactAnalysis={impactAnalysis}
           activeView={activeView}
-          onViewChange={setActiveView}
-          onApplyCredit={applyCreditToDebt}
+          onViewChange={(view: string) => setActiveView(view as ViewType)}
+          onApplyCredit={applyCredit}
           isApplyingCredit={isApplyingCredit}
           hasTransactions={hasData}
           negativeCategories={negativeCategories}
           positiveCategories={positiveCategories}
-          // Remove bank connection props since we're moving this functionality
-          // isBankConnected={effectiveConnectionStatus}
-          // connectBankProps={{
-          //   onSuccess: handlePlaidSuccess,
-          //   isLoading: bankConnecting,
-          //   isSandboxMode: isSandboxMode
-          // }}
         />
 
-        {/* Main view content */}
+        {/* Main content area */}
         <div className="lg:col-span-3">
-          {/* Bank Connection section (only show if not connected) */}
+          {/* Bank Connection (only when not connected) */}
           {!effectiveConnectionStatus && (
             <div className="bg-white rounded-xl shadow-md p-6 mb-6">
               <h2 className="text-lg font-semibold text-blue-800 mb-2">
                 Connect Your Bank
               </h2>
               <p className="text-gray-700 mb-4">
-                Connect your bank account to analyze the ethical impact of your
-                spending.
+                Connect your bank account to analyze the ethical impact of your spending.
               </p>
               <PlaidConnectionSection
                 onSuccess={handlePlaidSuccess}
                 isConnected={effectiveConnectionStatus}
                 isLoading={bankConnecting}
               />
-              {isSandboxMode && (
-                <div className="mt-4 text-xs text-gray-500">
-                  <p>Sandbox mode: You can use test credentials</p>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Manual Fetch Button - shown when connected but no data is visible */}
+          {/* Manual Fetch Button (when connected but no data) */}
           {effectiveConnectionStatus && !hasData && (
             <ManualFetchButton
               onFetch={handleManualFetch}
@@ -357,38 +277,7 @@ export default function Dashboard() {
             />
           )}
 
-          {/* Add tab navigation here - only visible on desktop and when we have data */}
-          {/* {hasData && (
-            <div className="hidden sm:block bg-white rounded-t-xl shadow-md pt-4 pb-0">
-              <nav className="flex">
-                <TabButton
-                  label="Transactions"
-                  isActive={activeView === "transaction-table"}
-                  onClick={() => setActiveView("transaction-table")}
-                />
-                <TabButton
-                  label="Balance"
-                  isActive={activeView === "balance-sheet"}
-                  onClick={() => setActiveView("balance-sheet")}
-                />
-                <TabButton
-                  label="Vendors"
-                  isActive={activeView === "vendor-breakdown"}
-                  onClick={() => setActiveView("vendor-breakdown")}
-                />
-                <TabButton
-                  label="Impact"
-                  isActive={activeView === "grouped-impact"}
-                  onClick={() => setActiveView("grouped-impact")}
-                />
-              </nav>
-            </div>
-          )} */}
-
-          {/* Tabs View */}
-          {/* <div className={`bg-white ${hasData ? "rounded-b-xl" : "rounded-xl"} shadow-md overflow-hidden ${hasData ? "mt-0" : ""}`}>
-            {renderActiveView()}
-          </div> */}
+          {/* Main view content */}
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
             {renderActiveView()}
           </div>
@@ -397,27 +286,3 @@ export default function Dashboard() {
     </DashboardLayout>
   );
 }
-
-// Updated TabButton component
-// function TabButton({
-//   label,
-//   isActive,
-//   onClick,
-// }: {
-//   label: string;
-//   isActive: boolean;
-//   onClick: () => void;
-// }) {
-//   return (
-//     <button
-//       onClick={onClick}
-//       className={`flex-1 py-2 px-4 text-sm font-medium transition-all duration-200 relative
-//       ${isActive ? "text-blue-600" : "text-gray-500 hover:text-blue-500"}`}
-//     >
-//       {label}
-//       {isActive && (
-//         <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-full"></div>
-//       )}
-//     </button>
-//   );
-// }
