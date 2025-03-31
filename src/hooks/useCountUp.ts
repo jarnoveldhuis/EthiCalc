@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 // Define the function signature with TypeScript
 interface CountUpOptions {
@@ -49,7 +49,7 @@ export function useCountUp(
     if (targetValue === prevValueRef.current) return;
     
     let startTimestamp: number | null = null;
-    let startValue = prevValueRef.current;
+    const startValue = prevValueRef.current;
     prevValueRef.current = targetValue;
     
     // If we want to delay the animation

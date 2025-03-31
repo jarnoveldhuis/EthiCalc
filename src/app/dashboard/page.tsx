@@ -25,13 +25,13 @@ import { mergeTransactions } from "@/core/plaid/transactionMapper";
 import { useSampleData } from "@/features/debug/useSampleData";
 import { DashboardLoading } from "@/features/dashboard/DashboardLoading";
 
-interface CountUpOptions {
-  duration?: number;
-  easing?: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
-  delay?: number;
-  decimalPlaces?: number;
-  formatter?: (value: number) => string;
-}
+// interface CountUpOptions {
+//   duration?: number;
+//   easing?: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+//   delay?: number;
+//   decimalPlaces?: number;
+//   formatter?: (value: number) => string;
+// }
 
 // Determine if we're in development/sandbox mode
 const isSandboxMode =
@@ -399,25 +399,25 @@ export default function Dashboard() {
 }
 
 // Updated TabButton component
-function TabButton({
-  label,
-  isActive,
-  onClick,
-}: {
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 py-2 px-4 text-sm font-medium transition-all duration-200 relative
-      ${isActive ? "text-blue-600" : "text-gray-500 hover:text-blue-500"}`}
-    >
-      {label}
-      {isActive && (
-        <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-full"></div>
-      )}
-    </button>
-  );
-}
+// function TabButton({
+//   label,
+//   isActive,
+//   onClick,
+// }: {
+//   label: string;
+//   isActive: boolean;
+//   onClick: () => void;
+// }) {
+//   return (
+//     <button
+//       onClick={onClick}
+//       className={`flex-1 py-2 px-4 text-sm font-medium transition-all duration-200 relative
+//       ${isActive ? "text-blue-600" : "text-gray-500 hover:text-blue-500"}`}
+//     >
+//       {label}
+//       {isActive && (
+//         <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-full"></div>
+//       )}
+//     </button>
+//   );
+// }

@@ -1,6 +1,6 @@
 // src/features/dashboard/DashboardSidebar.tsx
 // Modifications to include all navigation options in the sidebar
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { ImpactAnalysis } from "@/core/calculations/type";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
@@ -41,20 +41,6 @@ export function DashboardSidebar({
     impactAnalysis.availableCredit <= 0 ||
     isApplyingCredit ||
     impactAnalysis.effectiveDebt <= 0;
-
-    
-  // Get color based on societal debt (use effective debt for styling)
-  const getDebtColor = useCallback((debt: number): string => {
-    if (debt <= 0) return "bg-green-500";
-    if (debt < 50) return "bg-orange-500";
-    return "bg-red-500";
-  }, []);
-
-  // Add this state to track the animation of the background
-  const [backgroundColorClass, setBackgroundColorClass] = useState(
-    getDebtColor(impactAnalysis?.effectiveDebt || 0)
-  );
-  const colorTransitionTimer = useRef<NodeJS.Timeout | null>(null);
 
   const [backgroundClass, setBackgroundClass] = useState<string>("");
   const getBackgroundClass = useCallback((debt: number): string => {
