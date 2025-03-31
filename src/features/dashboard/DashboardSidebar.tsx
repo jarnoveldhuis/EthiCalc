@@ -1,28 +1,19 @@
-// src/features/dashboard/components/DashboardSidebar.tsx
-"use client";
-
-import { useState, useCallback } from "react";
+// src/features/dashboard/DashboardSidebar.tsx
+// Modifications to include all navigation options in the sidebar
+import { useState, useEffect, useCallback, useRef } from "react";
 import { DonationModal } from "@/features/charity/DonationModal";
-import { UserCreditState } from "@/hooks/useCreditState";
 import { ImpactAnalysis } from "@/core/calculations/type";
-// import { useUIStore } from "@/store/uiStore";
+import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 
 interface DashboardSidebarProps {
   impactAnalysis: ImpactAnalysis | null;
   activeView: string;
   onViewChange: (view: string) => void;
   onApplyCredit: (amount: number) => Promise<boolean>;
-  creditState?: UserCreditState | null;
   isApplyingCredit: boolean;
   hasTransactions: boolean;
-  negativeCategories: Array<{name: string; amount: number}>;
-  positiveCategories: Array<{name: string; amount: number}>;
-  isBankConnected?: boolean;
-  connectBankProps?: {
-    onSuccess: (publicToken: string | null) => Promise<void>;
-    isLoading: boolean;
-    isSandboxMode: boolean;
-  };
+  negativeCategories: Array<{ name: string; amount: number }>;
+  positiveCategories: Array<{ name: string; amount: number }>;
 }
 
 export function DashboardSidebar({
@@ -30,13 +21,10 @@ export function DashboardSidebar({
   activeView,
   onViewChange,
   onApplyCredit,
-  // creditState,
   isApplyingCredit,
   hasTransactions,
-  // negativeCategories,
-  // positiveCategories
-  // isBankConnected,
-  // connectBankProps
+  negativeCategories,
+  positiveCategories,
 }: DashboardSidebarProps) {
   // Local UI state
   const [showFeedback, setShowFeedback] = useState(false);
@@ -48,61 +36,81 @@ export function DashboardSidebar({
   // - No positive impact available
   // - Currently applying credit
   // - No effective debt to offset
-  const creditButtonDisabled = !impactAnalysis || 
-    impactAnalysis.availableCredit <= 0 || 
-    isApplyingCredit || 
+  const creditButtonDisabled =
+    !impactAnalysis ||
+    impactAnalysis.availableCredit <= 0 ||
+    isApplyingCredit ||
     impactAnalysis.effectiveDebt <= 0;
 
+    
   // Get color based on societal debt (use effective debt for styling)
   const getDebtColor = useCallback((debt: number): string => {
-    if (debt <= 0) return "from-green-500 to-teal-600";
-    if (debt < 50) return "from-yellow-500 to-orange-600";
-    return "from-red-500 to-pink-600";
+    if (debt <= 0) return "bg-green-500";
+    if (debt < 50) return "bg-orange-500";
+    return "bg-red-500";
   }, []);
 
-  // Handle applying social credit to debt
-  // Handle applying social credit to debt
-const handleApplyCredit = async () => {
-  // Double-check button should be enabled to prevent race conditions
-  if (creditButtonDisabled) {
-    console.log("Credit button is disabled but was clicked anyway");
-    return;
-  }
+  // Add this state to track the animation of the background
+  const [backgroundColorClass, setBackgroundColorClass] = useState(
+    getDebtColor(impactAnalysis?.effectiveDebt || 0)
+  );
+  const colorTransitionTimer = useRef<NodeJS.Timeout | null>(null);
 
-  try {
-    // Use the amount of positive impact available, capped by effective debt
-    const amountToApply = impactAnalysis?.availableCredit || 0;
-    console.log("Attempting to apply credit amount:", amountToApply);
+  // In the useEffect where you handle background transitions
+  useEffect(() => {
+    if (colorTransitionTimer.current) {
+      clearTimeout(colorTransitionTimer.current);
+    }
 
-    if (amountToApply <= 0) {
-      setFeedbackMessage("No debt to offset with credit");
-      setShowFeedback(true);
-      setTimeout(() => setShowFeedback(false), 3000);
+    // Delay the background color change slightly
+    colorTransitionTimer.current = setTimeout(() => {
+      setBackgroundColorClass(getDebtColor(impactAnalysis?.effectiveDebt || 0));
+    }, 500);
+
+    return () => {
+      if (colorTransitionTimer.current) {
+        clearTimeout(colorTransitionTimer.current);
+      }
+    };
+  }, [impactAnalysis?.effectiveDebt, getDebtColor]);
+
+  // Handle applying social credit to debt
+  const handleApplyCredit = async () => {
+    if (creditButtonDisabled) {
+      console.log("Credit button is disabled but was clicked anyway");
       return;
     }
 
-    const success = await onApplyCredit(amountToApply);
-    console.log("Credit application result:", success);
+    try {
+      const amountToApply = impactAnalysis?.availableCredit || 0;
+      console.log("Attempting to apply credit amount:", amountToApply);
 
-    if (success) {
-      // Show feedback after successful application
-      setFeedbackMessage(
-        `Applied $${amountToApply.toFixed(2)} credit to your social debt`
-      );
+      if (amountToApply <= 0) {
+        setFeedbackMessage("No debt to offset with credit");
+        setShowFeedback(true);
+        setTimeout(() => setShowFeedback(false), 3000);
+        return;
+      }
+
+      const success = await onApplyCredit(amountToApply);
+      console.log("Credit application result:", success);
+
+      if (success) {
+        setFeedbackMessage(
+          `Applied $${amountToApply.toFixed(2)} credit to your social debt`
+        );
+        setShowFeedback(true);
+        setTimeout(() => {
+          setShowFeedback(false);
+        }, 3000);
+      }
+    } catch (error) {
+      console.error("Error applying credit:", error);
+      setFeedbackMessage("Failed to apply credit. Please try again.");
       setShowFeedback(true);
-
-      // Hide feedback after 3 seconds
-      setTimeout(() => {
-        setShowFeedback(false);
-      }, 3000);
+      setTimeout(() => setShowFeedback(false), 3000);
     }
-  } catch (error) {
-    console.error("Error applying credit:", error);
-    setFeedbackMessage("Failed to apply credit. Please try again.");
-    setShowFeedback(true);
-    setTimeout(() => setShowFeedback(false), 3000);
-  }
-};
+  };
 
   // Handle opening donation modal
   const handleOpenDonationModal = () => {
@@ -114,26 +122,48 @@ const handleApplyCredit = async () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  // Helper function for category emoji
+  const getCategoryEmoji = (categoryName: string): string => {
+    const emojiMap: Record<string, string> = {
+      "Climate Change": "🌍",
+      "Environmental Impact": "🌳",
+      "Social Responsibility": "👥",
+      "Labor Practices": "👷‍♂️",
+      "Digital Rights": "💻",
+      "Animal Welfare": "🐾",
+      "Food Insecurity": "🍽️",
+      Poverty: "💰",
+      Conflict: "⚔️",
+      Inequality: "⚖️",
+      "Public Health": "🏥",
+      // Default for categories not in our map
+      Uncategorized: "⚖️",
+    };
+
+    return emojiMap[categoryName] || emojiMap["Uncategorized"];
+  };
+
   return (
     <div className="w-full lg:col-span-1">
       {/* Societal Credit Score */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
         <div
-          className={`bg-gradient-to-r ${getDebtColor(
-            impactAnalysis?.effectiveDebt || 0
-          )} p-4 sm:p-6 text-white`}
+          className={`bg-gradient-to-r ${backgroundColorClass} p-4 sm:p-6 text-white transition-all duration-5000 bg-gradient-container`}
         >
           <div className="text-center">
             <h2 className="text-lg sm:text-xl font-bold mb-1">
               Total Social Debt
             </h2>
             <div className="text-4xl sm:text-5xl font-black mb-2">
-              ${Math.abs(impactAnalysis?.effectiveDebt || 0).toFixed(2)}
+              <AnimatedCounter
+                value={impactAnalysis?.effectiveDebt || 0}
+                className="transition-all duration-1000"
+              />
             </div>
             <div>
-                Credit applied: $
-                {impactAnalysis?.appliedCredit.toFixed(2) || "0.00"}
-              </div>
+              Credit applied: $
+              {impactAnalysis?.appliedCredit.toFixed(2) || "0.00"}
+            </div>
 
             {/* Only show Offset button if there's effective debt */}
             {(impactAnalysis?.effectiveDebt || 0) > 0 && (
@@ -151,12 +181,6 @@ const handleApplyCredit = async () => {
         {/* Credit summary with Apply button */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex flex-col">
-            {/* Display applied credit if any */}
-            {(impactAnalysis?.appliedCredit || 0) > 0 && (
-              <div className="flex items-center justify-between mb-2">
-              </div>
-            )}
-
             {/* Available Credit with Apply button */}
             <div className="flex items-center justify-between">
               <div>
@@ -199,7 +223,7 @@ const handleApplyCredit = async () => {
         </div>
 
         {/* Mobile menu toggle */}
-        <div className="block sm:hidden p-4 border-b border-gray-200">
+        <div className="block lg:hidden p-4 border-b border-gray-200">
           <button
             onClick={toggleMenu}
             className="w-full flex items-center justify-between py-2 px-3 bg-blue-50 rounded-lg"
@@ -224,57 +248,60 @@ const handleApplyCredit = async () => {
           </button>
         </div>
 
-        {/* Navigation */}
-        <div className={`p-4 ${!isMenuOpen && "hidden"}`}>
-
-          
-          {/* Mobile: vertical menu (only visible when isMenuOpen) */}
-          <nav className="space-y-1">
-            {isMenuOpen && (
-              <>
-                <NavButton
-                  label="Transaction Table"
-                  isActive={activeView === "transaction-table"}
-                  onClick={() => {
-                    onViewChange("transaction-table");
-                    setIsMenuOpen(false);
-                  }}
-                  disabled={!hasTransactions}
-                />
-                <NavButton
-                  label="Balance Sheet"
-                  isActive={activeView === "balance-sheet"}
-                  onClick={() => {
-                    onViewChange("balance-sheet");
-                    setIsMenuOpen(false);
-                  }}
-                  disabled={!hasTransactions}
-                />
-                <NavButton
-                  label="Vendor Breakdown"
-                  isActive={activeView === "vendor-breakdown"}
-                  onClick={() => {
-                    onViewChange("vendor-breakdown");
-                    setIsMenuOpen(false);
-                  }}
-                  disabled={!hasTransactions}
-                />
-                <NavButton
-                  label="Impact by Category"
-                  isActive={activeView === "grouped-impact"}
-                  onClick={() => {
-                    onViewChange("grouped-impact");
-                    setIsMenuOpen(false);
-                  }}
-                  disabled={!hasTransactions}
-                />
-              </>
-            )}
+        {/* Navigation - Always visible on desktop, toggled on mobile */}
+        <div className={`p-4 ${!isMenuOpen && "hidden lg:block"}`}>
+          <h3 className="font-medium text-gray-800 mb-3">Dashboard Views</h3>
+          <nav className="space-y-2">
+            <NavButton
+              label="Premium View"
+              isActive={activeView === "premium-view"}
+              onClick={() => {
+                onViewChange("premium-view");
+                setIsMenuOpen(false);
+              }}
+              disabled={!hasTransactions}
+            />
+            <NavButton
+              label="Transactions"
+              isActive={activeView === "transaction-table"}
+              onClick={() => {
+                onViewChange("transaction-table");
+                setIsMenuOpen(false);
+              }}
+              disabled={!hasTransactions}
+            />
+            <NavButton
+              label="Balance Sheet"
+              isActive={activeView === "balance-sheet"}
+              onClick={() => {
+                onViewChange("balance-sheet");
+                setIsMenuOpen(false);
+              }}
+              disabled={!hasTransactions}
+            />
+            <NavButton
+              label="Vendor Breakdown"
+              isActive={activeView === "vendor-breakdown"}
+              onClick={() => {
+                onViewChange("vendor-breakdown");
+                setIsMenuOpen(false);
+              }}
+              disabled={!hasTransactions}
+            />
+            <NavButton
+              label="Impact by Category"
+              isActive={activeView === "grouped-impact"}
+              onClick={() => {
+                onViewChange("grouped-impact");
+                setIsMenuOpen(false);
+              }}
+              disabled={!hasTransactions}
+            />
           </nav>
         </div>
       </div>
 
-      {/* Positive Impact Categories
+      {/* Positive Impact Categories */}
       {hasTransactions && positiveCategories.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
           <div className="p-4 border-b border-gray-200">
@@ -307,10 +334,10 @@ const handleApplyCredit = async () => {
             ))}
           </div>
         </div>
-      )} */}
+      )}
 
       {/* Negative Impact Categories */}
-      {/* {hasTransactions && negativeCategories.length > 0 && (
+      {hasTransactions && negativeCategories.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-200">
             <h3 className="font-bold text-sm sm:text-base">
@@ -350,7 +377,7 @@ const handleApplyCredit = async () => {
             ))}
           </div>
         </div>
-      )} */}
+      )}
 
       {/* Donation modal */}
       {isDonationModalOpen && (
@@ -364,25 +391,6 @@ const handleApplyCredit = async () => {
     </div>
   );
 }
-
-// Helper function for category emoji
-// function getCategoryEmoji(categoryName: string): string {
-//   const emojiMap: Record<string, string> = {
-//     "Climate Change": "🌍",
-//     "Environmental Impact": "🌳",
-//     "Social Responsibility": "👥",
-//     "Labor Practices": "👷‍♂️",
-//     "Digital Rights": "💻",
-//     "Animal Welfare": "🐾",
-//     "Food Insecurity": "🍽️",
-//     "Poverty": "💰",
-//     "Conflict": "⚔️",
-//     "Inequality": "⚖️",
-//     "Public Health": "🏥",
-//   };
-
-//   return emojiMap[categoryName] || "⚖️";
-// }
 
 // Navigation button component
 interface NavButtonProps {
@@ -404,7 +412,7 @@ function NavButton({
       disabled={disabled}
       className={`w-full px-3 py-2 sm:py-2 rounded-lg transition-colors flex items-center text-sm sm:text-base ${
         isActive
-          ? "bg-blue-50 border-blue-200 text-blue-800"
+          ? "bg-blue-50 border-blue-200 text-blue-800 border"
           : disabled
           ? "text-gray-400 cursor-not-allowed"
           : "hover:bg-gray-100 text-gray-700"

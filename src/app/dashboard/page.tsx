@@ -25,6 +25,14 @@ import { mergeTransactions } from "@/core/plaid/transactionMapper";
 import { useSampleData } from "@/features/debug/useSampleData";
 import { DashboardLoading } from "@/features/dashboard/DashboardLoading";
 
+interface CountUpOptions {
+  duration?: number;
+  easing?: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+  delay?: number;
+  decimalPlaces?: number;
+  formatter?: (value: number) => string;
+}
+
 // Determine if we're in development/sandbox mode
 const isSandboxMode =
   process.env.NODE_ENV === "development" || config.plaid.isSandbox;
@@ -60,7 +68,7 @@ export default function Dashboard() {
     useTransactionAnalysis(savedTransactions);
 
   // UI State
-  const [activeView, setActiveView] = useState("premium-view");
+  const [activeView, setActiveView] = useState("balance-sheet");
   const [isConnecting, setIsConnecting] = useState(false);
   const [debugConnectionStatus, setDebugConnectionStatus] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Loading...");
@@ -225,7 +233,7 @@ export default function Dashboard() {
       analyzeTransactions(transactions);
     }
   }, [transactions, analyzedData, analyzeTransactions]);
-
+  
   // Get the currently active view component
   const renderActiveView = () => {
     if (isLoading) {
@@ -262,8 +270,8 @@ export default function Dashboard() {
       default:
         return (
           <TransactionTableView
-          transactions={displayTransactions}
-          totalSocietalDebt={impactAnalysis?.netSocietalDebt || 0}
+            transactions={displayTransactions}
+            totalSocietalDebt={impactAnalysis?.netSocietalDebt || 0}
           />
         );
     }
@@ -324,7 +332,8 @@ export default function Dashboard() {
                 Connect Your Bank
               </h2>
               <p className="text-gray-700 mb-4">
-                Connect your bank account to analyze the ethical impact of your spending.
+                Connect your bank account to analyze the ethical impact of your
+                spending.
               </p>
               <PlaidConnectionSection
                 onSuccess={handlePlaidSuccess}
@@ -338,7 +347,7 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          
+
           {/* Manual Fetch Button - shown when connected but no data is visible */}
           {effectiveConnectionStatus && !hasData && (
             <ManualFetchButton
@@ -349,7 +358,7 @@ export default function Dashboard() {
           )}
 
           {/* Add tab navigation here - only visible on desktop and when we have data */}
-          {hasData && (
+          {/* {hasData && (
             <div className="hidden sm:block bg-white rounded-t-xl shadow-md pt-4 pb-0">
               <nav className="flex">
                 <TabButton
@@ -374,10 +383,13 @@ export default function Dashboard() {
                 />
               </nav>
             </div>
-          )}
+          )} */}
 
-          {/* Main view content */}
-          <div className={`bg-white ${hasData ? "rounded-b-xl" : "rounded-xl"} shadow-md overflow-hidden ${hasData ? "mt-0" : ""}`}>
+          {/* Tabs View */}
+          {/* <div className={`bg-white ${hasData ? "rounded-b-xl" : "rounded-xl"} shadow-md overflow-hidden ${hasData ? "mt-0" : ""}`}>
+            {renderActiveView()}
+          </div> */}
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
             {renderActiveView()}
           </div>
         </div>
@@ -400,10 +412,7 @@ function TabButton({
     <button
       onClick={onClick}
       className={`flex-1 py-2 px-4 text-sm font-medium transition-all duration-200 relative
-      ${isActive 
-        ? "text-blue-600"
-        : "text-gray-500 hover:text-blue-500"
-      }`}
+      ${isActive ? "text-blue-600" : "text-gray-500 hover:text-blue-500"}`}
     >
       {label}
       {isActive && (
