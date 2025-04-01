@@ -38,10 +38,10 @@ export function DashboardSidebar({
 
   // Navigation options
   const navOptions: NavOption[] = [
-    { id: "grouped-impact", label: "Ethical Impact", description: "Impact by ethical category" },
+    // { id: "grouped-impact", label: "Ethical Impact", description: "Impact by ethical category" },
     { id: "balance-sheet", label: "Balance Sheet", description: "View positive and negative impacts" },
-    { id: "transaction-table", label: "Transactions", description: "Details for each purchase" },
-    { id: "vendor-breakdown", label: "Vendors", description: "Impact by merchant" }
+    // { id: "transaction-table", label: "Transactions", description: "Details for each purchase" },
+    // { id: "vendor-breakdown", label: "Vendors", description: "Impact by merchant" }
   ];
 
   // Get the label for the current view
@@ -175,7 +175,7 @@ export function DashboardSidebar({
         </div>
 
         {/* Mobile menu toggle */}
-        <div className="block lg:hidden p-4 border-b border-gray-200">
+        {/* <div className="block lg:hidden p-4 border-b border-gray-200">
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="w-full flex items-center justify-between py-2 px-3 bg-blue-50 rounded-lg"
@@ -198,11 +198,10 @@ export function DashboardSidebar({
               />
             </svg>
           </button>
-        </div>
+        </div> */}
 
         {/* Navigation - Always visible on desktop, toggled on mobile */}
-        <div className={`${!isMenuOpen ? "hidden" : "block"} lg:block p-4`}>
-          <h3 className="font-medium text-gray-800 mb-3">Views</h3>
+        {/* <div className={`${!isMenuOpen ? "hidden" : "block"} lg:block p-4`}>
           <nav className="space-y-2">
             {navOptions.map((option) => (
               <button
@@ -225,7 +224,7 @@ export function DashboardSidebar({
               </button>
             ))}
           </nav>
-        </div>
+        </div> */}
       </div>
 
       {/* Donation Modal */}

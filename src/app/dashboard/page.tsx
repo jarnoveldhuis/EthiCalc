@@ -13,9 +13,6 @@ import { DashboardLayout } from "@/features/dashboard/DashboardLayout";
 import { DashboardSidebar } from "@/features/dashboard/DashboardSidebar";
 import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
 import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
-import { TransactionTableView } from "@/features/dashboard/views/TransactionTableView";
-import { VendorBreakdownView } from "@/features/dashboard/views/VendorBreakdownView";
-import { GroupedImpactSummary } from "@/features/dashboard/views/GroupedImpactSummary";
 import { getColorClass } from "@/core/calculations/impactService";
 import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
 import { DashboardLoading, DashboardEmptyState } from "@/features/dashboard/DashboardLoading";
@@ -212,14 +209,9 @@ const hasData: boolean = displayTransactions.length > 0;
 
     // Return the appropriate view component
     switch (activeView) {
-      case "transaction-table":
-        return <TransactionTableView {...viewProps} />;
       case "balance-sheet":
         return <BalanceSheetView {...viewProps} />;
-      case "vendor-breakdown":
-        return <VendorBreakdownView {...viewProps} />;
-      case "grouped-impact":
-        return <GroupedImpactSummary {...viewProps} />;
+
       default:
         return <BalanceSheetView {...viewProps} />;
     }
