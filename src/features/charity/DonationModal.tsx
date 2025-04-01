@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 import { 
   CharitySearchResult, 
   getRecommendedCharities, 
-  createDonationUrl, 
   cleanPracticeName 
 } from "./charityService";
 import { CharitySearch } from "./CharitySearch";
@@ -15,7 +14,6 @@ import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
 interface DonationModalProps {
   practice: string;
   amount: number;
-  searchTerm?: string; 
   isOpen: boolean;
   onClose: () => void;
 }
@@ -37,7 +35,6 @@ export function DonationModal({
   // Format practice name for display
   const cleanedPractice = cleanPracticeName(practice);
   const displayPractice = cleanedPractice === "All Societal Debt" ? "Total Impact" : practice;
-  const isAllSocietalDebt = cleanedPractice === "All Societal Debt";
 
   // Fetch recommended charities when modal opens
   useEffect(() => {
@@ -59,51 +56,39 @@ export function DonationModal({
     setError(null);
     
     try {
-      console.log(`Fetching charities for: ${practice}`);
       const charities = await getRecommendedCharities(practice);
       
       if (charities.length === 0) {
         // If no specific recommendations, try a more generic search term
-        const fallbackTerm = isAllSocietalDebt ? "environment" : "charity";
-        console.log(`No results, trying fallback term: ${fallbackTerm}`);
+        const fallbackTerm = cleanedPractice === "All Societal Debt" ? "environment" : "charity";
         const fallbackCharities = await getRecommendedCharities(fallbackTerm);
-        setRecommendedCharities(fallbackCharities);
+        
+        if (fallbackCharities.length === 0) {
+          setError("Unable to find charity recommendations. Please try searching manually.");
+          setRecommendedCharities([]);
+        } else {
+          setRecommendedCharities(fallbackCharities);
+        }
       } else {
         setRecommendedCharities(charities);
       }
-    } catch (error) {
-      console.error("Error fetching recommended charities:", error);
+    } catch {
       setError("Unable to load charity recommendations. Please try searching manually.");
+      setRecommendedCharities([]);
     } finally {
       setLoadingRecommendations(false);
     }
   };
 
   // Handle donation submission
-  const handleDonate = () => {
-    if (!selectedCharity) return;
-    
+  const handleDonate = async (charityId: string) => {
     try {
-      // Get charity ID from the URL or the ID field
-      const charityId = selectedCharity.id || 
-                         selectedCharity.url?.split('/').pop() || 
-                         'everydotorg';
-      
-      // Create donation URL consistently using our helper
-      const donationUrl = createDonationUrl(
-        charityId, 
-        donationAmount, 
-        practice
-      );
-      
-      console.log("Opening donation URL:", donationUrl);
-      
-      // Open donation URL in a new tab
-      window.open(donationUrl, "_blank");
+      // Create donation URL and redirect
+      const donationUrl = `https://www.everyaction.com/donate/${charityId}?amount=${donationAmount}`;
+      window.open(donationUrl, '_blank');
       onClose();
     } catch (error) {
-      console.error("Error processing donation:", error);
-      setError("Something went wrong. Please try again.");
+      console.error('Error creating donation:', error);
     }
   };
 
@@ -241,7 +226,11 @@ export function DonationModal({
               Cancel
             </button>
             <button
-              onClick={handleDonate}
+              onClick={() => {
+                if (selectedCharity) {
+                  handleDonate(selectedCharity.id || '');
+                }
+              }}
               disabled={!selectedCharity}
               className={`px-4 py-2 rounded-lg text-white ${
                 selectedCharity

@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
+import { useDonationModal } from "@/hooks/useDonationModal";
 
 interface BalanceSheetViewProps {
   transactions: Transaction[];
@@ -32,12 +33,8 @@ export function BalanceSheetView({
   transactions,
   totalSocietalDebt,
 }: BalanceSheetViewProps) {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedPractice, setSelectedPractice] = useState<string | null>(null);
-  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState<
-    Record<string, boolean>
-  >({});
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const { modalState, openDonationModal, closeDonationModal } = useDonationModal({ transactions });
 
   // Process transactions to get positive and negative categories
   const {
@@ -260,47 +257,30 @@ export function BalanceSheetView({
     return icons[category] || "❓";
   };
 
-  // Handle offset button clicks
+  // Handle practice offset
   const handleOffsetPractice = (practice: string) => {
-    setSelectedPractice(practice);
-    setIsDonationModalOpen(true);
-  };
-
-  const handleOffsetCategory = (category: string) => {
-    setSelectedCategory(category);
-    setIsDonationModalOpen(true);
-  };
-
-  const handleOffsetAll = () => {
-    setSelectedPractice("all");
-    setIsDonationModalOpen(true);
-  };
-
-  // Get amount for donation modal
-  const getSelectedAmount = () => {
-    if (selectedPractice === "all") {
-      return Math.max(0, totalSocietalDebt);
-    }
-
-    if (selectedCategory) {
-      const category = negativeCategories.find(
-        (c) => c.name === selectedCategory
-      );
-      return category ? category.totalImpact : 0;
-    }
-
-    if (selectedPractice) {
-      for (const category of negativeCategories) {
-        const practice = category.practices.find(
-          (p) => p.practice === selectedPractice
-        );
-        if (practice) {
-          return practice.amount;
-        }
+    // Find the total impact for this practice
+    let totalImpact = 0;
+    transactions.forEach(tx => {
+      if (tx.unethicalPractices?.includes(practice)) {
+        totalImpact += tx.practiceDebts?.[practice] || 0;
       }
-    }
+    });
 
-    return 0;
+    openDonationModal(practice, totalImpact);
+  };
+
+  // Handle category offset
+  const handleOffsetCategory = (category: string) => {
+    const categoryData = negativeCategories.find(c => c.name === category);
+    if (!categoryData) return;
+    
+    openDonationModal(category, categoryData.totalImpact);
+  };
+
+  // Handle offset all
+  const handleOffsetAll = () => {
+    openDonationModal("All Societal Debt", totalSocietalDebt);
   };
 
   return (
@@ -408,22 +388,32 @@ export function BalanceSheetView({
                             </span>
                           </div>
 
-                          {/* Practice details with vendor breakdown */}
-                          <div className="text-sm text-gray-600 mb-2">
-                            {practice.information}
-                          </div>
-
                           {/* Vendor tags */}
-                          <div className="flex flex-wrap gap-1 mt-2">
+                          <div className="flex flex-wrap gap-2 mt-2">
                             {practice.vendorContributions.map(
                               (vendor, vendorIndex) => (
-                                <span
+                                <div
                                   key={vendorIndex}
-                                  className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs"
+                                  className={`${
+                                    practice.isPositive ? "bg-green-50" : "bg-red-50"
+                                  } p-2 rounded-lg border ${
+                                    practice.isPositive ? "border-green-200" : "border-red-200"
+                                  }`}
                                 >
-                                  {vendor.vendorName} ($
-                                  {Math.abs(vendor.amount).toFixed(2)})
-                                </span>
+                                  <div className="font-medium text-sm">
+                                    {vendor.vendorName}
+                                  </div>
+                                  <div className={`text-sm ${
+                                    practice.isPositive ? "text-green-700" : "text-red-700"
+                                  }`}>
+                                    ${Math.abs(vendor.amount).toFixed(2)} ({vendor.percentage.toFixed(1)}%)
+                                  </div>
+                                  {practice.information && (
+                                    <div className="text-xs text-gray-600 mt-1">
+                                      {practice.information}
+                                    </div>
+                                  )}
+                                </div>
                               )
                             )}
                           </div>
@@ -548,22 +538,32 @@ export function BalanceSheetView({
                             </div>
                           </div>
 
-                          {/* Practice details with vendor breakdown */}
-                          <div className="text-sm text-gray-600 mb-2">
-                            {practice.information}
-                          </div>
-
                           {/* Vendor tags */}
-                          <div className="flex flex-wrap gap-1 mt-2">
+                          <div className="flex flex-wrap gap-2 mt-2">
                             {practice.vendorContributions.map(
                               (vendor, vendorIndex) => (
-                                <span
+                                <div
                                   key={vendorIndex}
-                                  className="bg-red-50 text-red-700 px-2 py-0.5 rounded text-xs"
+                                  className={`${
+                                    practice.isPositive ? "bg-green-50" : "bg-red-50"
+                                  } p-2 rounded-lg border ${
+                                    practice.isPositive ? "border-green-200" : "border-red-200"
+                                  }`}
                                 >
-                                  {vendor.vendorName} ($
-                                  {vendor.amount.toFixed(2)})
-                                </span>
+                                  <div className="font-medium text-sm">
+                                    {vendor.vendorName}
+                                  </div>
+                                  <div className={`text-sm ${
+                                    practice.isPositive ? "text-green-700" : "text-red-700"
+                                  }`}>
+                                    ${Math.abs(vendor.amount).toFixed(2)} ({vendor.percentage.toFixed(1)}%)
+                                  </div>
+                                  {practice.information && (
+                                    <div className="text-xs text-gray-600 mt-1">
+                                      {practice.information}
+                                    </div>
+                                  )}
+                                </div>
                               )
                             )}
                           </div>
@@ -632,24 +632,13 @@ export function BalanceSheetView({
         )}
       </div>
 
-      {/* Donation Modal */}
-      {/* {isDonationModalOpen && (
+      {/* Donation modal */}
+      {modalState.isOpen && (
         <DonationModal
-          practice={selectedPractice === "all" 
-            ? "All Societal Debt" 
-            : selectedCategory || selectedPractice || ""}
-          amount={getSelectedAmount()}
-          isOpen={isDonationModalOpen}
-          onClose={() => setIsDonationModalOpen(false)}
-        />
-      )} */}
-
-      {isDonationModalOpen && (
-        <DonationModal
-          practice={selectedPractice || "All Societal Debt"}
-          amount={getSelectedAmount()}
-          isOpen={isDonationModalOpen}
-          onClose={() => setIsDonationModalOpen(false)}
+          practice={modalState.practice}
+          amount={modalState.amount}
+          isOpen={modalState.isOpen}
+          onClose={closeDonationModal}
         />
       )}
     </div>

@@ -1,40 +1,74 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
+import { useDonationModal } from "@/hooks/useDonationModal";
 
 interface TransactionTableViewProps {
   transactions: Transaction[];
   totalSocietalDebt: number;
 }
 
+type SortKey = keyof Transaction | 'merchant' | 'debt' | 'credit';
+
+interface SortConfig {
+  key: SortKey;
+  direction: 'asc' | 'desc';
+}
+
 export function TransactionTableView({
   transactions,
   totalSocietalDebt,
 }: TransactionTableViewProps) {
-  // Helper function for sorting - defined BEFORE it's used because JavaScript is a fucking monster
-  const getValue = (tx: Transaction, key: string): string | number => {
-    switch (key) {
-      case 'date': return tx.date;
-      case 'merchant': return tx.name;
-      case 'amount': return tx.amount;
-      case 'debt': return getDebtAmount(tx);
-      case 'credit': return getCreditAmount(tx);
-      default: return '';
-    }
-  };
+  const { modalState, openDonationModal, closeDonationModal } = useDonationModal({ transactions });
 
-  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [sortConfig, setSortConfig] = useState<{
-    key: string;
-    direction: 'ascending' | 'descending';
-  }>({
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'date',
-    direction: 'descending'
+    direction: 'desc'
   });
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+
+  // Move getSortValue inside useMemo to fix the dependency warning
+  const sortedTransactions = useMemo(() => {
+    const getSortValue = (transaction: Transaction, key: SortKey): string | number => {
+      switch (key) {
+        case 'date':
+          return new Date(transaction.date).getTime();
+        case 'amount':
+          return transaction.amount ?? 0;
+        case 'societalDebt':
+          return transaction.societalDebt ?? 0;
+        case 'merchant':
+          return transaction.name.toLowerCase();
+        case 'debt':
+          return getDebtAmount(transaction);
+        case 'credit':
+          return getCreditAmount(transaction);
+        default:
+          return String(transaction[key] ?? '');
+      }
+    };
+
+    return [...transactions].sort((a, b) => {
+      const aValue = getSortValue(a, sortConfig.key);
+      const bValue = getSortValue(b, sortConfig.key);
+      
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [transactions, sortConfig]);
+
+  // Calculate totals
+  const { totalDebt, totalCredit } = useMemo(() => {
+    return sortedTransactions.reduce((acc, tx) => {
+      return {
+        totalDebt: acc.totalDebt + getDebtAmount(tx),
+        totalCredit: acc.totalCredit + getCreditAmount(tx)
+      };
+    }, { totalDebt: 0, totalCredit: 0 });
+  }, [sortedTransactions]);
 
   // Helper function to extract debt amount from a transaction
   function getDebtAmount(transaction: Transaction): number {
@@ -72,64 +106,34 @@ export function TransactionTableView({
     return creditTotal;
   }
 
-  // Sort transactions
-  const sortedTransactions = useMemo(() => {
-    return [...transactions].sort((a, b) => {
-      const aValue = getValue(a, sortConfig.key);
-      const bValue = getValue(b, sortConfig.key);
-      
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortConfig.direction === 'ascending' 
-          ? aValue.localeCompare(bValue) 
-          : bValue.localeCompare(aValue);
-      }
-      
-      return sortConfig.direction === 'ascending' 
-        ? (aValue as number) - (bValue as number) 
-        : (bValue as number) - (aValue as number);
-    });
-  }, [transactions, sortConfig, getValue]);
-
-  // Calculate totals
-  const { totalDebt, totalCredit } = useMemo(() => {
-    return sortedTransactions.reduce((acc, tx) => {
-      return {
-        totalDebt: acc.totalDebt + getDebtAmount(tx),
-        totalCredit: acc.totalCredit + getCreditAmount(tx)
-      };
-    }, { totalDebt: 0, totalCredit: 0 });
-  }, [sortedTransactions]);
-
   // Handle sort request
-  const requestSort = (key: string) => {
-    let direction: 'ascending' | 'descending' = 'ascending';
+  const requestSort = useCallback((key: SortKey) => {
+    let direction: 'asc' | 'desc' = 'asc';
     
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
     }
     
     setSortConfig({ key, direction });
-  };
+  }, [sortConfig]);
 
   // Get sort indicator
-  const getSortIndicator = (key: string) => {
+  const getSortIndicator = useCallback((key: SortKey) => {
     if (sortConfig.key !== key) {
       return null;
     }
     
-    return sortConfig.direction === 'ascending' ? ' ↑' : ' ↓';
-  };
+    return sortConfig.direction === 'asc' ? ' ↑' : ' ↓';
+  }, [sortConfig]);
 
   // Handle donation modal
   const handleOpenDonationModal = (transaction: Transaction) => {
-    setSelectedTransaction(transaction);
-    setIsDonationModalOpen(true);
+    openDonationModal(transaction.unethicalPractices?.[0] || "All Societal Debt", getDebtAmount(transaction) - getCreditAmount(transaction));
   };
 
-  // Function to handle donation for total societal debt
+  // Handle offset all
   const handleOffsetAll = () => {
-    setSelectedTransaction(null);
-    setIsDonationModalOpen(true);
+    openDonationModal("All Societal Debt", totalSocietalDebt);
   };
 
   // Add this function to handle tooltip interactions
@@ -276,8 +280,6 @@ export function TransactionTableView({
               {sortedTransactions.map((transaction, index) => {
                 const debtAmount = getDebtAmount(transaction);
                 const creditAmount = getCreditAmount(transaction);
-                // const unethicalPractices = transaction.unethicalPractices || [];
-                // const ethicalPractices = transaction.ethicalPractices || [];
                 
                 return (
                   <tr key={index} className="hover:bg-gray-50">
@@ -428,19 +430,12 @@ export function TransactionTableView({
       </div>
       
       {/* Donation Modal */}
-      {isDonationModalOpen && (
+      {modalState.isOpen && (
         <DonationModal
-          practice={selectedTransaction 
-            ? `${selectedTransaction.name} Impact` 
-            : "All Societal Debt"}
-          amount={selectedTransaction 
-            ? getDebtAmount(selectedTransaction) - getCreditAmount(selectedTransaction)
-            : totalSocietalDebt}
-          isOpen={isDonationModalOpen}
-          onClose={() => {
-            setIsDonationModalOpen(false);
-            setSelectedTransaction(null);
-          }}
+          practice={modalState.practice}
+          amount={modalState.amount}
+          isOpen={modalState.isOpen}
+          onClose={closeDonationModal}
         />
       )}
     </div>

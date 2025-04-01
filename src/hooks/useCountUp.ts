@@ -36,14 +36,6 @@ export function useCountUp(
   // Store animation frame reference for cleanup
   const animationRef = useRef<number | null>(null);
   
-  // Easing functions
-  const easingFunctions = {
-    linear: (t: number) => t,
-    easeIn: (t: number) => t * t,
-    easeOut: (t: number) => t * (2 - t),
-    easeInOut: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
-  };
-  
   useEffect(() => {
     // Skip the animation if targetValue and displayValue are the same
     if (targetValue === prevValueRef.current) return;
@@ -51,6 +43,14 @@ export function useCountUp(
     let startTimestamp: number | null = null;
     const startValue = prevValueRef.current;
     prevValueRef.current = targetValue;
+    
+    // Define easing functions inside useEffect to avoid dependency issues
+    const easingFunctions = {
+      linear: (t: number) => t,
+      easeIn: (t: number) => t * t,
+      easeOut: (t: number) => t * (2 - t),
+      easeInOut: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+    };
     
     // If we want to delay the animation
     if (delay > 0) {

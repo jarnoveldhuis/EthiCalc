@@ -3,6 +3,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { config } from "@/config";
 
+// Helper to extract slug from URL
+function extractSlug(url: string): string | null {
+  if (!url) return null;
+  
+  try {
+    // Try to extract slug from URL
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    if (pathParts.length > 0) {
+      return pathParts[pathParts.length - 1];
+    }
+  } catch {
+    // If URL parsing fails, try a simple regex extraction
+    const match = url.match(/\/([^\/]+)\/?$/);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
+}
+
 interface EveryOrgNonprofit {
   ein?: string;
   id?: string;
@@ -62,62 +84,47 @@ export async function getRecommendedCharitiesHandler(req: NextRequest) {
       searchTerm = "charity";
     }
     
-    console.log(`Charity recommendation for practice "${practice}" using search term "${searchTerm}"`);
-    
     try {
       // Call the Every.org API
       const apiUrl = `${config.charity.baseUrl}/search/${encodeURIComponent(searchTerm)}?apiKey=${config.charity.apiKey}&take=5`;
-      console.log(`Calling Every.org API: ${apiUrl}`);
-      
       const response = await fetch(apiUrl);
       
       if (!response.ok) {
-        console.error(`API error: ${response.status}`);
-        // Fall back to empty results instead of throwing an error
         return NextResponse.json({ 
-          practice,
-          searchTerm,
           charities: []
         });
       }
       
-      // Check content type
-      const contentType = response.headers.get('content-type');
-      console.log(`Received content type: ${contentType}`);
-      
-      // Parse based on content type
+      // Parse response
       const data: EveryOrgResponse = await response.json();
       
       // Transform the response to our desired format
-      const charities = data.nonprofits?.map((charity: EveryOrgNonprofit) => ({
-        id: charity.ein || charity.id || "",
-        name: charity.name,
-        url: charity.profileUrl || `https://www.every.org/${charity.slug}`,
-        mission: charity.description || "No description available",
-        category: charity.tags?.[0] || "Charity",
-        logoUrl: charity.logoUrl,
-        donationUrl: charity.profileUrl ? `${charity.profileUrl}/donate` : null
-      })) || [];
+      const charities = data.nonprofits?.map((charity: EveryOrgNonprofit) => {
+        // Extract slug from profile URL if available
+        const slug = charity.slug || (charity.profileUrl ? extractSlug(charity.profileUrl) : null);
+        
+        return {
+          id: charity.ein || charity.id || "",
+          name: charity.name || "Unknown Charity",
+          url: charity.profileUrl || (slug ? `https://www.every.org/${slug}` : "https://www.every.org"),
+          slug: slug,
+          mission: charity.description || "No description available",
+          category: charity.tags?.[0] || "Charity",
+          logoUrl: charity.logoUrl,
+          // Use slug format for donation URL if available
+          donationUrl: slug 
+            ? `https://www.every.org/${slug}/donate` 
+            : charity.ein 
+              ? `https://www.every.org/ein/${charity.ein}/donate`
+              : `https://www.every.org/donate`
+        };
+      }) || [];
       
-      return NextResponse.json({ 
-        practice,
-        searchTerm,
-        charities 
-      });
-    } catch (apiError) {
-      console.error("API request failed:", apiError);
-      // Return empty results instead of error
-      return NextResponse.json({ 
-        practice,
-        searchTerm,
-        charities: []
-      });
+      return NextResponse.json({ charities });
+    } catch {
+      return NextResponse.json({ charities: [] });
     }
-  } catch (error) {
-    console.error("Charity recommendation error:", error);
-    return NextResponse.json({ 
-      practice: practice || "Unknown",
-      charities: []
-    }, { status: 200 });
+  } catch {
+    return NextResponse.json({ charities: [] }, { status: 200 });
   }
 }

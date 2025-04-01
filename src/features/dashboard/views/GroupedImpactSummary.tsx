@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
 
@@ -10,27 +10,29 @@ interface GroupedImpactSummaryProps {
   totalSocietalDebt: number;
 }
 
-type PracticeImpact = {
-  practice: string;
+interface Practice {
+  name: string;
   amount: number;
-  isPositive: boolean;
   information: string;
-  searchTerm?: string;
   category?: string;
-  weight: number;
-  vendor: string;
-};
+  isPositive: boolean;
+  vendor?: string;
+  weight?: number;
+}
 
-type CategoryImpact = {
-  category: string;
-  practices: PracticeImpact[];
-  totalImpact: number;
-};
+interface CategorySummary {
+  name: string;
+  totalAmount: number;
+  practices: Practice[];
+  netImpact: number;
+}
 
 export function GroupedImpactSummary({
   transactions,
   totalSocietalDebt
 }: GroupedImpactSummaryProps) {
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedImpact, setSelectedImpact] = useState<{
     category: string;
     vendor: string;
@@ -40,101 +42,90 @@ export function GroupedImpactSummary({
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
 
   // Process transactions to group by category
-  const groupedImpacts = processTransactionsIntoGroups(transactions);
+  const groupedTransactions = useMemo(() => {
+    const grouped = transactions.reduce((acc, transaction) => {
+      // Process unethical practices
+      (transaction.unethicalPractices || []).forEach((practiceName) => {
+        const weight = transaction.practiceWeights?.[practiceName] || 0;
+        const amount = transaction.amount * (weight / 100);
+        const category = transaction.practiceCategories?.[practiceName] || "Uncategorized";
+        const information = transaction.information?.[practiceName] || "";
+        
+        if (!acc[category]) {
+          acc[category] = {
+            name: category,
+            totalAmount: 0,
+            practices: [],
+            netImpact: 0,
+          };
+        }
+        acc[category].practices.push({
+          name: practiceName,
+          amount: -amount,
+          information,
+          category,
+          isPositive: false,
+        });
+        acc[category].totalAmount += amount;
+        acc[category].netImpact -= amount;
+      });
+
+      // Process ethical practices
+      (transaction.ethicalPractices || []).forEach((practiceName) => {
+        const weight = transaction.practiceWeights?.[practiceName] || 0;
+        const amount = transaction.amount * (weight / 100);
+        const category = transaction.practiceCategories?.[practiceName] || "Uncategorized";
+        const information = transaction.information?.[practiceName] || "";
+        
+        if (!acc[category]) {
+          acc[category] = {
+            name: category,
+            totalAmount: 0,
+            practices: [],
+            netImpact: 0,
+          };
+        }
+        acc[category].practices.push({
+          name: practiceName,
+          amount,
+          information,
+          category,
+          isPositive: true,
+        });
+        acc[category].totalAmount += amount;
+        acc[category].netImpact += amount;
+      });
+
+      return acc;
+    }, {} as Record<string, CategorySummary>);
+
+    // Sort categories by absolute total amount
+    return Object.values(grouped).sort((a, b) => Math.abs(b.totalAmount) - Math.abs(a.totalAmount));
+  }, [transactions]);
+
+  // Filter categories based on search term
+  const filteredCategories = useMemo(() => {
+    if (!searchTerm) return groupedTransactions;
+    return groupedTransactions.filter((category) =>
+      category.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [groupedTransactions, searchTerm]);
+
+  // Handle category selection
+  const handleCategorySelect = useCallback((category: string) => {
+    setSelectedCategory(category === selectedCategory ? null : category);
+  }, [selectedCategory]);
+
+  // Handle search input change
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  }, []);
 
   // Handle offset
   const handleOffset = (category: string, vendor: string, practice: string, amount: number) => {
     setSelectedImpact({ category, vendor, practice, amount });
     setIsDonationModalOpen(true);
   };
-
-  // Process transactions to group by category
-  function processTransactionsIntoGroups(transactions: Transaction[]): CategoryImpact[] {
-    // First, collect all impacts grouped by category
-    const categoriesMap: Record<string, CategoryImpact> = {};
-
-    transactions.forEach(tx => {
-      const vendorName = tx.name;
-      
-      // Process unethical practices (positive debt)
-      (tx.unethicalPractices || []).forEach(practice => {
-        const weight = tx.practiceWeights?.[practice] || 10;
-        const amount = tx.amount * (weight / 100);
-        const category = tx.practiceCategories?.[practice] || "Uncategorized";
-        const information = tx.information?.[practice] || "No details available";
-        const searchTerm = tx.practiceSearchTerms?.[practice];
-        
-        // Initialize category if needed
-        if (!categoriesMap[category]) {
-          categoriesMap[category] = {
-            category,
-            practices: [],
-            totalImpact: 0
-          };
-        }
-        
-        // Add practice to category
-        categoriesMap[category].practices.push({
-          practice,
-          amount,
-          isPositive: false,
-          information,
-          searchTerm,
-          category,
-          weight,
-          vendor: vendorName
-        });
-        
-        // Update category total
-        categoriesMap[category].totalImpact += amount;
-      });
-      
-      // Process ethical practices (negative debt)
-      (tx.ethicalPractices || []).forEach(practice => {
-        const weight = tx.practiceWeights?.[practice] || 10;
-        const amount = tx.amount * (weight / 100);
-        const category = tx.practiceCategories?.[practice] || "Uncategorized";
-        const information = tx.information?.[practice] || "No details available";
-        const searchTerm = tx.practiceSearchTerms?.[practice];
-        
-        // Initialize category if needed
-        if (!categoriesMap[category]) {
-          categoriesMap[category] = {
-            category,
-            practices: [],
-            totalImpact: 0
-          };
-        }
-        
-        // Add practice to category
-        categoriesMap[category].practices.push({
-          practice,
-          amount: -amount, // Negative for ethical impact
-          isPositive: true,
-          information,
-          searchTerm,
-          category,
-          weight,
-          vendor: vendorName
-        });
-        
-        // Update category total
-        categoriesMap[category].totalImpact -= amount;
-      });
-    });
-
-    // Convert to array and sort
-    const result = Object.values(categoriesMap)
-      .sort((a, b) => Math.abs(b.totalImpact) - Math.abs(a.totalImpact))
-      .filter(category => category.practices.length > 0); // Only include categories with practices
-    
-    // Sort practices within each category
-    result.forEach(category => {
-      category.practices.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
-    });
-    
-    return result;
-  }
 
   // Get icon for a category
   const getCategoryIcon = (category: string): string => {
@@ -183,89 +174,141 @@ export function GroupedImpactSummary({
     return colors[category] || "bg-gray-100";
   };
 
+  // Function to render markdown links as clickable links
+  const renderMarkdownLinks = (text: string): React.ReactNode => {
+    // Split text by markdown links
+    const parts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+    
+    return (
+      <>
+        {parts.map((part, index) => {
+          // Check if this part is a markdown link
+          const linkMatch = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
+          if (linkMatch) {
+            const [, text, url] = linkMatch;
+            return (
+              <a
+                key={index}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {text}
+              </a>
+            );
+          }
+          return part;
+        })}
+      </>
+    );
+  };
+
   return (
     <div className="p-4">
-      <h2 className="text-xl font-bold text-gray-800 mb-6">
-        Ethical Impact By Category
-      </h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold text-gray-800">
+          Ethical Impact By Category
+        </h2>
+        <div className="w-64">
+          <input
+            type="text"
+            placeholder="Search categories..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+      </div>
       
-      {groupedImpacts.length === 0 ? (
+      {filteredCategories.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
           No ethical impact data available
         </div>
       ) : (
         <div className="space-y-6">
           {/* Loop through categories */}
-          {groupedImpacts.map((category) => (
-            <div key={category.category} className="border rounded-lg overflow-hidden shadow-sm">
+          {filteredCategories.map((category) => (
+            <div 
+              key={category.name} 
+              className={`border rounded-lg overflow-hidden shadow-sm cursor-pointer transition-colors ${
+                selectedCategory === category.name ? 'ring-2 ring-blue-400' : ''
+              }`}
+              onClick={() => handleCategorySelect(category.name)}
+            >
               {/* Category Header */}
-              <div className={`px-4 py-3 ${getCategoryBgColor(category.category)} flex justify-between items-center`}>
+              <div className={`px-4 py-3 ${getCategoryBgColor(category.name)} flex justify-between items-center`}>
                 <div className="flex items-center">
-                  <span className="text-2xl mr-2">{getCategoryIcon(category.category)}</span>
-                  <h3 className="font-bold text-gray-800">{category.category}</h3>
+                  <span className="text-2xl mr-2">{getCategoryIcon(category.name)}</span>
+                  <h3 className="font-bold text-gray-800">{category.name}</h3>
                   <span className="ml-2 text-sm text-gray-600">({category.practices.length} items)</span>
                 </div>
-                <div className={`font-bold ${getImpactColorClass(category.totalImpact)}`}>
-                  Net: {category.totalImpact >= 0 ? '+' : ''}${Math.abs(category.totalImpact).toFixed(2)}
+                <div className={`font-bold ${getImpactColorClass(category.netImpact)}`}>
+                  Net: ${Math.abs(category.netImpact).toFixed(2)}
                 </div>
               </div>
               
               {/* Column Headers */}
               <div className="grid grid-cols-7 gap-2 px-4 py-2 bg-gray-50 border-b border-t border-gray-200 text-xs font-semibold text-gray-600">
-                <div className="col-span-2">Vendor</div>
-                <div className="col-span-3">Details</div>
-                <div className="col-span-1 text-right">Impact</div>
-                <div className="col-span-1 text-center">Action</div>
+                <div className="col-span-4">Details</div>
+                <div className="col-span-2 text-right">Impact</div>
+                <div className="col-span-1 text-right">Action</div>
               </div>
               
               {/* Practice Rows */}
               <div className="divide-y divide-gray-200">
-                {category.practices.map((practice, pIndex) => (
+                {category.practices
+                  .sort((a, b) => {
+                    // Sort negative impacts first (most negative to least)
+                    if (!a.isPositive && !b.isPositive) {
+                      return a.amount - b.amount;
+                    }
+                    // Sort positive impacts last (most positive to least)
+                    if (a.isPositive && b.isPositive) {
+                      return b.amount - a.amount;
+                    }
+                    // Negative impacts come before positive impacts
+                    return a.isPositive ? 1 : -1;
+                  })
+                  .map((practice, pIndex) => (
                   <div 
-                    key={`${practice.vendor}-${practice.practice}-${pIndex}`} 
+                    key={`${practice.name}-${pIndex}`} 
                     className={`grid grid-cols-7 gap-2 px-4 py-3 ${
                       practice.isPositive ? "bg-green-50" : "bg-white"
                     }`}
                   >
-                    {/* Vendor */}
-                    <div className="col-span-2 truncate font-medium">
-                      {practice.vendor}
-                    </div>
-                    
-                    {/* Details with Practice Tag */}
-                    <div className="col-span-3 text-sm">
+                    <div className="col-span-4">
                       <div className="flex flex-wrap gap-1 mb-1">
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {practice.practice}
+                          {practice.name}
                         </span>
                         {practice.weight && (
-                          <span className="text-xs bg-gray-200 text-gray-800 px-1 py-0.5 rounded-full">
-                            {practice.weight}% of purchase
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            {practice.weight}%
                           </span>
                         )}
                       </div>
-                      <div className="text-gray-700">
-                        {practice.information}
-                      </div>
+                      <p className="text-sm text-gray-600">{renderMarkdownLinks(practice.information)}</p>
                     </div>
-                    
-                    {/* Amount */}
-                    <div className={`col-span-1 text-right font-bold ${getImpactColorClass(practice.amount)}`}>
-                      {practice.amount >= 0 ? '+' : ''}
-                      ${Math.abs(practice.amount).toFixed(2)}
+                    <div className="col-span-2 text-right">
+                      <span className={`font-medium ${practice.isPositive ? "text-green-600" : "text-red-600"}`}>
+                        ${Math.abs(practice.amount).toFixed(2)}
+                      </span>
                     </div>
-                    
-                    {/* Action */}
-                    <div className="col-span-1 text-center">
-                      {practice.amount > 0 && (
-                        <button 
+                    <div className="col-span-1 text-right">
+                      {!practice.isPositive && (
+                        <button
                           className="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded"
-                          onClick={() => handleOffset(
-                            category.category,
-                            practice.vendor,
-                            practice.practice,
-                            practice.amount
-                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOffset(
+                              category.name,
+                              practice.vendor || "",
+                              practice.name,
+                              practice.amount
+                            );
+                          }}
                         >
                           Offset
                         </button>
@@ -280,7 +323,7 @@ export function GroupedImpactSummary({
           {/* Total Impact Summary */}
           <div className="mt-6 pt-4 border-t-2 border-gray-300 flex justify-between items-center">
             <div className="text-gray-700 font-medium">
-              Total Entries: {groupedImpacts.reduce((sum, cat) => sum + cat.practices.length, 0)}
+              Total Entries: {filteredCategories.reduce((sum, cat) => sum + cat.practices.length, 0)}
             </div>
             <div className={`text-xl font-bold ${totalSocietalDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>
               Net Impact: ${Math.abs(totalSocietalDebt).toFixed(2)} {totalSocietalDebt > 0 ? 'Negative' : 'Positive'}

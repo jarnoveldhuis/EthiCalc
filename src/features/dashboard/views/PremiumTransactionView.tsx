@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { ImpactAnalysis } from "@/core/calculations/type";
 import { getColorClass } from "@/core/calculations/impactService";
+import { useDonationModal } from "@/hooks/useDonationModal";
 
 interface PremiumTransactionViewProps {
   transactions: Transaction[];
@@ -31,19 +32,27 @@ interface EnhancedTransaction extends Transaction {
   id: string;
 }
 
+type SortKey = 'date' | 'name' | 'amount' | 'debt' | 'credit' | 'net';
+
+interface SortConfig {
+  key: SortKey;
+  direction: 'asc' | 'desc';
+}
+
 export function PremiumTransactionView({
   transactions,
   impactAnalysis
 }: PremiumTransactionViewProps) {
   // State for expanded items, sorting, and donation modal
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
-  const [sortKey, setSortKey] = useState<string>("date");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<EnhancedTransaction | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: 'date',
+    direction: 'desc'
+  });
+  const { modalState, openDonationModal, closeDonationModal } = useDonationModal({ transactions });
 
   // Helper to get value for sorting
-  const getValue = (tx: EnhancedTransaction, key: string): string | number => {
+  const getValue = useCallback((tx: EnhancedTransaction, key: SortKey): string | number => {
     switch (key) {
       case 'date': return tx.date;
       case 'name': return tx.name;
@@ -53,7 +62,7 @@ export function PremiumTransactionView({
       case 'net': return tx.netImpact;
       default: return '';
     }
-  };
+  }, []);
 
   // Process and sort transactions
   const processedTransactions = useMemo(() => {
@@ -103,22 +112,22 @@ export function PremiumTransactionView({
     
     // Sort processed transactions
     return processed.sort((a, b) => {
-      const aValue = getValue(a, sortKey);
-      const bValue = getValue(b, sortKey);
+      const aValue = getValue(a, sortConfig.key);
+      const bValue = getValue(b, sortConfig.key);
       
       // Handle string vs number sorting
       if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortDirection === 'asc' 
+        return sortConfig.direction === 'asc' 
           ? aValue.localeCompare(bValue) 
           : bValue.localeCompare(aValue);
       }
       
       // Numeric sort
-      return sortDirection === 'asc'
+      return sortConfig.direction === 'asc'
         ? Number(aValue) - Number(bValue)
         : Number(bValue) - Number(aValue);
     });
-  }, [transactions, sortKey, sortDirection]);
+  }, [transactions, sortConfig, getValue]);
   
   // Toggle expanded state for a transaction
   const toggleExpanded = (id: string) => {
@@ -128,28 +137,38 @@ export function PremiumTransactionView({
     }));
   };
   
-  // Handle sort
-  const handleSort = (key: string) => {
-    if (sortKey === key) {
-      // Toggle direction if same key
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      // Set new key and default to descending
-      setSortKey(key);
-      setSortDirection('desc');
+  // Handle sort request
+  const requestSort = useCallback((key: SortKey) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
     }
-  };
+    
+    setSortConfig({ key, direction });
+  }, [sortConfig]);
+
+  // Get sort indicator
+  const getSortIndicator = useCallback((key: SortKey) => {
+    if (sortConfig.key !== key) {
+      return null;
+    }
+    
+    return sortConfig.direction === 'asc' ? ' ↑' : ' ↓';
+  }, [sortConfig]);
   
-  // Handle donation modal
-  const handleOpenDonationModal = (transaction: EnhancedTransaction) => {
-    setSelectedTransaction(transaction);
-    setIsDonationModalOpen(true);
-  };
-  
-  // Handle "Offset All" button
+  // Handle offset all
   const handleOffsetAll = () => {
-    setSelectedTransaction(null);
-    setIsDonationModalOpen(true);
+    if (!impactAnalysis?.effectiveDebt) return;
+    openDonationModal("All Societal Debt", impactAnalysis.effectiveDebt);
+  };
+
+  // Handle opening donation modal for a transaction
+  const handleOpenDonationModal = (transaction: EnhancedTransaction) => {
+    openDonationModal(
+      transaction.unethicalPractices?.[0] || "All Societal Debt",
+      transaction.netImpact
+    );
   };
 
   return (
@@ -170,15 +189,13 @@ export function PremiumTransactionView({
         {['date', 'name', 'amount', 'debt', 'credit', 'net'].map(key => (
           <button
             key={key}
-            onClick={() => handleSort(key)}
+            onClick={() => requestSort(key as SortKey)}
             className={`px-2 py-1 text-xs rounded ${
-              sortKey === key ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+              sortConfig.key === key ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
             }`}
           >
             {key.charAt(0).toUpperCase() + key.slice(1)}
-            {sortKey === key && (
-              <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-            )}
+            {getSortIndicator(key as SortKey)}
           </button>
         ))}
       </div>
@@ -335,19 +352,12 @@ export function PremiumTransactionView({
       </div>
       
       {/* Donation Modal */}
-      {isDonationModalOpen && (
+      {modalState.isOpen && (
         <DonationModal
-          practice={selectedTransaction 
-            ? `${selectedTransaction.name} Impact` 
-            : "All Societal Debt"}
-          amount={selectedTransaction 
-            ? selectedTransaction.netImpact 
-            : impactAnalysis?.effectiveDebt || 0}
-          isOpen={isDonationModalOpen}
-          onClose={() => {
-            setIsDonationModalOpen(false);
-            setSelectedTransaction(null);
-          }}
+          practice={modalState.practice}
+          amount={modalState.amount}
+          isOpen={modalState.isOpen}
+          onClose={closeDonationModal}
         />
       )}
     </div>

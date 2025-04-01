@@ -27,9 +27,8 @@ type ViewType = "balance-sheet" | "transaction-table" | "vendor-breakdown" | "gr
 
 export default function Dashboard() {
   // Core state
-  const [activeView, setActiveView] = useState<ViewType>("balance-sheet");
+  const [activeView, setActiveView] = useState<ViewType>("grouped-impact");
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
-  const [debugConnectionStatus, setDebugConnectionStatus] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>("Loading your dashboard...");
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [firebaseLoadingComplete, setFirebaseLoadingComplete] = useState<boolean>(false);
@@ -66,10 +65,8 @@ export default function Dashboard() {
   // Sample data utility
   const { generateSampleTransactions } = useSampleData();
 
-
-
   // Derived/computed state
-  const effectiveConnectionStatus: boolean = connectionStatus.isConnected || debugConnectionStatus;
+  const effectiveConnectionStatus: boolean = connectionStatus.isConnected;
   
   const isLoading: boolean = connectionStatus.isLoading || 
                              analysisStatus.status === "loading" || 
@@ -95,13 +92,24 @@ const displayTransactions: Transaction[] = useMemo(() => {
     impactAnalysis,
     applyCredit,
     isApplyingCredit,
-    negativeCategories,
-    positiveCategories,
   } = useImpactAnalysis(displayTransactions, user);
 
 const hasData: boolean = displayTransactions.length > 0;
 
-  // Handle Plaid success callback
+  // Handle loading sample data
+  const handleLoadSampleData = useCallback(async () => {
+    try {
+      setLoadingMessage("Generating sample data...");
+      const sampleTransactions = generateSampleTransactions();
+      const totalDebt = sampleTransactions.reduce((sum, tx) => sum + (tx.societalDebt || 0), 0);
+      await saveTransactions(sampleTransactions, totalDebt);
+      await analyzeTransactions(sampleTransactions);
+    } catch (error) {
+      console.error("Error loading sample data:", error);
+      setFetchError("Failed to load sample data");
+    }
+  }, [generateSampleTransactions, saveTransactions, analyzeTransactions]);
+
   const handlePlaidSuccess = useCallback(async (publicToken: string | null) => {
     setIsConnecting(true);
     setLoadingMessage("Connecting to your bank...");
@@ -119,14 +127,7 @@ const hasData: boolean = displayTransactions.length > 0;
     } finally {
       setIsConnecting(false);
     }
-  }, [connectBank]);
-
-  // Load sample data handler
-  const handleLoadSampleData = useCallback(() => {
-    const sampleTransactions = generateSampleTransactions();
-    analyzeTransactions(sampleTransactions);
-    setDebugConnectionStatus(true);
-  }, [generateSampleTransactions, analyzeTransactions]);
+  }, [connectBank, handleLoadSampleData]);
 
   // Manual fetch handler
   const handleManualFetch = useCallback(async () => {
@@ -238,16 +239,16 @@ const hasData: boolean = displayTransactions.length > 0;
       {/* Main content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar */}
-        <DashboardSidebar
-          impactAnalysis={impactAnalysis}
-          activeView={activeView}
-          onViewChange={(view: string) => setActiveView(view as ViewType)}
-          onApplyCredit={applyCredit}
-          isApplyingCredit={isApplyingCredit}
-          hasTransactions={hasData}
-          negativeCategories={negativeCategories}
-          positiveCategories={positiveCategories}
-        />
+        <div className="lg:col-span-1">
+          <DashboardSidebar
+            impactAnalysis={impactAnalysis}
+            activeView={activeView}
+            onViewChange={(view: string) => setActiveView(view as ViewType)}
+            onApplyCredit={applyCredit}
+            isApplyingCredit={isApplyingCredit}
+            hasTransactions={hasData}
+          />
+        </div>
 
         {/* Main content area */}
         <div className="lg:col-span-3">

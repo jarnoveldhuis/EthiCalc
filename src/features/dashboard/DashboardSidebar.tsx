@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from "react";
 import { ImpactAnalysis } from "@/core/calculations/type";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { DonationModal } from "@/features/charity/DonationModal";
+import { useDonationModal } from "@/hooks/useDonationModal";
 
 interface DashboardSidebarProps {
   impactAnalysis: ImpactAnalysis | null;
@@ -11,8 +12,6 @@ interface DashboardSidebarProps {
   onApplyCredit: (amount: number) => Promise<boolean>;
   isApplyingCredit: boolean;
   hasTransactions: boolean;
-  negativeCategories: Array<{ name: string; amount: number }>;
-  positiveCategories: Array<{ name: string; amount: number }>;
 }
 
 type NavOption = {
@@ -27,26 +26,26 @@ export function DashboardSidebar({
   onViewChange,
   onApplyCredit,
   isApplyingCredit,
-  hasTransactions,
-  negativeCategories,
-  positiveCategories
+  hasTransactions
 }: DashboardSidebarProps) {
+  const { modalState, openDonationModal, closeDonationModal } = useDonationModal({ transactions: [] });
+
   // Local state
   const [showFeedback, setShowFeedback] = useState<boolean>(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string>("");
-  const [isDonationModalOpen, setIsDonationModalOpen] = useState<boolean>(false);
-  const [selectedPractice, setSelectedPractice] = useState<string | null>(null);
-  const [selectedAmount, setSelectedAmount] = useState<number>(0);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [backgroundClass, setBackgroundClass] = useState<string>("bg-green-500");
 
   // Navigation options
   const navOptions: NavOption[] = [
+    { id: "grouped-impact", label: "Ethical Impact", description: "Impact by ethical category" },
     { id: "balance-sheet", label: "Balance Sheet", description: "View positive and negative impacts" },
     { id: "transaction-table", label: "Transactions", description: "Details for each purchase" },
-    { id: "vendor-breakdown", label: "Vendors", description: "Impact by merchant" },
-    { id: "grouped-impact", label: "Categories", description: "Impact by ethical category" }
+    { id: "vendor-breakdown", label: "Vendors", description: "Impact by merchant" }
   ];
+
+  // Get the label for the current view
+  const currentViewLabel = navOptions.find(option => option.id === activeView)?.label || "Dashboard Views";
 
   // Credit button disabled logic
   const creditButtonDisabled: boolean = 
@@ -89,37 +88,15 @@ export function DashboardSidebar({
     }
   }, [creditButtonDisabled, impactAnalysis, onApplyCredit]);
   
-  // Handle opening donation modal for a specific practice or category
+  // Handle opening donation modal
   const handleOpenDonationModal = useCallback((practice: string, amount: number) => {
-    setSelectedPractice(practice);
-    setSelectedAmount(amount);
-    setIsDonationModalOpen(true);
-  }, []);
+    openDonationModal(practice, amount);
+  }, [openDonationModal]);
   
   // Handle "Offset All" button click
   const handleOffsetAll = useCallback(() => {
     handleOpenDonationModal("All Societal Debt", impactAnalysis?.effectiveDebt || 0);
   }, [handleOpenDonationModal, impactAnalysis]);
-
-  // Helper function for category emoji
-  const getCategoryEmoji = (categoryName: string): string => {
-    const emojiMap: Record<string, string> = {
-      "Climate Change": "🌍",
-      "Environmental Impact": "🌳",
-      "Social Responsibility": "👥",
-      "Labor Practices": "👷‍♂️",
-      "Digital Rights": "💻",
-      "Animal Welfare": "🐾",
-      "Food Insecurity": "🍽️",
-      "Poverty": "💰",
-      "Conflict": "⚔️",
-      "Inequality": "⚖️",
-      "Public Health": "🏥",
-      "Uncategorized": "❓"
-    };
-    
-    return emojiMap[categoryName] || "❓";
-  };
 
   return (
     <div className="w-full lg:col-span-1">
@@ -203,7 +180,7 @@ export function DashboardSidebar({
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="w-full flex items-center justify-between py-2 px-3 bg-blue-50 rounded-lg"
           >
-            <span className="font-medium">Dashboard Views</span>
+            <span className="font-medium">{currentViewLabel}</span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className={`h-5 w-5 transition-transform ${
@@ -224,15 +201,15 @@ export function DashboardSidebar({
         </div>
 
         {/* Navigation - Always visible on desktop, toggled on mobile */}
-        <div className={`p-4 ${!isMenuOpen && "hidden lg:block"}`}>
-          <h3 className="font-medium text-gray-800 mb-3">Dashboard Views</h3>
+        <div className={`${!isMenuOpen ? "hidden" : "block"} lg:block p-4`}>
+          <h3 className="font-medium text-gray-800 mb-3">Views</h3>
           <nav className="space-y-2">
             {navOptions.map((option) => (
               <button
                 key={option.id}
                 onClick={() => {
                   onViewChange(option.id);
-                  setIsMenuOpen(false);
+                  setIsMenuOpen(false); // Close menu after selection
                 }}
                 disabled={!hasTransactions}
                 className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
@@ -251,74 +228,13 @@ export function DashboardSidebar({
         </div>
       </div>
 
-      {/* Impact Categories Section */}
-      {hasTransactions && (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-          <div className="p-4 border-b border-gray-200">
-            <h3 className="font-bold text-gray-800">Impact Categories</h3>
-          </div>
-          
-          <div className="p-4 space-y-4">
-            {/* Positive Impact Categories */}
-            {positiveCategories.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-green-700 mb-2">Positive Impact</h4>
-                <div className="space-y-2">
-                  {positiveCategories.slice(0, 2).map((category, index) => (
-                    <div
-                      key={`pos-${index}`}
-                      className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-100"
-                    >
-                      <div className="flex items-center">
-                        <span className="text-xl mr-2">{getCategoryEmoji(category.name)}</span>
-                        <span className="font-medium text-green-800">{category.name}</span>
-                      </div>
-                      <span className="text-green-600 font-medium">${category.amount.toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Negative Impact Categories */}
-            {negativeCategories.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-red-700 mb-2">Negative Impact</h4>
-                <div className="space-y-2">
-                  {negativeCategories.slice(0, 2).map((category, index) => (
-                    <div
-                      key={`neg-${index}`}
-                      className="flex items-center justify-between bg-red-50 p-2 rounded border border-red-100"
-                    >
-                      <div className="flex items-center">
-                        <span className="text-xl mr-2">{getCategoryEmoji(category.name)}</span>
-                        <span className="font-medium text-red-800">{category.name}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <span className="text-red-600 font-medium mr-2">${category.amount.toFixed(2)}</span>
-                        <button 
-                          className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded"
-                          onClick={() => handleOpenDonationModal(category.name, category.amount)}
-                        >
-                          Offset
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Donation Modal */}
-      {isDonationModalOpen && (
+      {modalState.isOpen && (
         <DonationModal
-          practice={selectedPractice || "All Societal Debt"}
-          amount={selectedAmount}
-          isOpen={isDonationModalOpen}
-          onClose={() => setIsDonationModalOpen(false)}
+          practice={modalState.practice}
+          amount={modalState.amount}
+          isOpen={modalState.isOpen}
+          onClose={closeDonationModal}
         />
       )}
     </div>

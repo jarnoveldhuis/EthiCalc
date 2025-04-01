@@ -5,6 +5,7 @@
 import React, { useState, useMemo } from "react";
 import { Transaction } from "@/shared/types/transactions";
 import { DonationModal } from "@/features/charity/DonationModal";
+import { useDonationModal } from "@/hooks/useDonationModal";
 
 interface VendorBreakdownViewProps {
   transactions: Transaction[];
@@ -32,8 +33,7 @@ export function VendorBreakdownView({
   getColorClass,
 }: VendorBreakdownViewProps) {
   const [expandedVendors, setExpandedVendors] = useState<Record<string, boolean>>({});
-  const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
-  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+  const { modalState, openDonationModal, closeDonationModal } = useDonationModal({ transactions });
 
   // Process transactions by vendor
   const vendorsData = useMemo(() => {
@@ -135,16 +135,20 @@ export function VendorBreakdownView({
 
   // Handle vendor offset button
   const handleOffsetVendor = (vendorName: string) => {
-    setSelectedVendor(vendorName);
-    setIsDonationModalOpen(true);
-  };
+    const vendor = vendorsData.find(v => v.name === vendorName);
+    if (!vendor) return;
 
-  // Get amount to offset for the selected vendor
-  const getSelectedAmount = (): number => {
-    if (!selectedVendor) return 0;
-    
-    const vendor = vendorsData.find(v => v.name === selectedVendor);
-    return vendor ? Math.max(0, vendor.societalDebt) : 0;
+    // Find the practice with the highest negative impact
+    const mostImpactfulPractice = vendor.practices
+      .filter(p => !p.isEthical)
+      .sort((a, b) => b.impact - a.impact)[0];
+
+    if (!mostImpactfulPractice) {
+      openDonationModal("All Societal Debt", vendor.societalDebt);
+      return;
+    }
+
+    openDonationModal(mostImpactfulPractice.name, vendor.societalDebt);
   };
 
   return (
@@ -298,22 +302,23 @@ export function VendorBreakdownView({
       )}
       
       {/* Donation modal */}
-      {isDonationModalOpen && selectedVendor && (
+      {modalState.isOpen && (
         <DonationModal
-          practice={`${selectedVendor} Impact`}
-          amount={getSelectedAmount()}
-          isOpen={isDonationModalOpen}
-          onClose={() => setIsDonationModalOpen(false)}
+          practice={modalState.practice}
+          amount={modalState.amount}
+          isOpen={modalState.isOpen}
+          onClose={closeDonationModal}
         />
       )}
-                      {totalSocietalDebt > 0 && (
-                  <button
-                    className="mt-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors"
-                  >
-                    Offset All (${totalSocietalDebt.toFixed(2)})
-                  </button>
-                )}
+      
+      {totalSocietalDebt > 0 && (
+        <button
+          onClick={() => openDonationModal("All Societal Debt", totalSocietalDebt)}
+          className="mt-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors"
+        >
+          Offset All (${totalSocietalDebt.toFixed(2)})
+        </button>
+      )}
     </div>
-    
   );
 }
