@@ -56,12 +56,12 @@ interface TransactionState {
   setTransactions: (transactions: Transaction[]) => void;
   connectBank: (publicToken: string, user: User | null) => Promise<void>;
   disconnectBank: () => void;
-  fetchTransactions: (accessToken?: string) => Promise<void>;
+  fetchTransactions: (accessToken?: string, mergeWithExisting?: boolean) => Promise<void>;
   manuallyFetchTransactions: () => Promise<void>;
   analyzeTransactions: (transactions: Transaction[]) => Promise<Transaction[]>;
   saveTransactions: (transactions: Transaction[], totalDebt: number, userId?: string) => Promise<void>;
   applyCredit: (amount: number, userId?: string) => Promise<boolean>;
-  loadLatestTransactions: (userId: string) => Promise<boolean>;
+  loadLatestTransactions: (userId: string) => Promise<{ success: boolean; batchTimestamp?: Timestamp | null }>;
   loadCreditState: (userId: string) => Promise<CreditState | null>;
   resetState: () => void;
   initializeStore: (user: User | null) => Promise<void>;
@@ -190,8 +190,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     });
   },
   
-  fetchTransactions: async (accessToken) => {
-    const { connectionStatus } = get();
+  fetchTransactions: async (accessToken, mergeWithExisting = false) => {
+    const { connectionStatus, transactions: currentTransactions } = get();
     
     // Don't fetch if already loading
     if (connectionStatus.isLoading) return;
@@ -233,24 +233,30 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         throw new Error(`Failed to fetch transactions: ${response.status}`);
       }
       
-      const data = await response.json();
+      const fetchedData = await response.json();
       
-      if (Array.isArray(data)) {
+      if (Array.isArray(fetchedData)) {
+        let finalTransactions = fetchedData;
+        if (mergeWithExisting) {
+          console.log("🔄 fetchTransactions: Merging fetched transactions with existing ones.");
+          finalTransactions = mergeTransactions(currentTransactions, fetchedData);
+        }
+
         // Update state with transactions
         set({
-          transactions: data,
+          transactions: finalTransactions,
           connectionStatus: {
             isConnected: true,
             isLoading: false,
-            error: data.length === 0 ? "Connected, but no transactions were found" : null,
+            error: finalTransactions.length === 0 ? "Connected, but no transactions were found" : null,
           }
         });
         
         // Analyze the transactions and get the result
-        const analyzedTransactionsResult = await get().analyzeTransactions(data);
+        const analyzedTransactionsResult = await get().analyzeTransactions(finalTransactions);
         
         // Use the returned analyzed transactions for saving
-        const currentTotalDebt = get().totalSocietalDebt; // Get debt after analysis
+        const currentTotalDebt = get().totalSocietalDebt;
 
         // Save the ANALYZED transactions to Firestore if we have a user ID
         try {
@@ -264,8 +270,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         } catch (error) {
           console.error("Error saving transactions:", error);
         }
-      } else if (data.error) {
-        throw new Error(data.error);
+      } else if (fetchedData.error) {
+        throw new Error(fetchedData.error);
       } else {
         throw new Error("Invalid response format");
       }
@@ -291,7 +297,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
       
       const tokenInfo = JSON.parse(storedData);
-      await get().fetchTransactions(tokenInfo.token);
+      // Always merge when manually fetching
+      console.log("🔄 manuallyFetchTransactions: Fetching and merging latest transactions...");
+      await get().fetchTransactions(tokenInfo.token, true);
       
       return; // Success
     } catch (error) {
@@ -410,7 +418,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       };
       
       // Add to Firestore
-      const docRef = await addDoc(collection(db, "transactionBatches"), batch);
+      await addDoc(collection(db, "transactionBatches"), batch);
       
       // Update local state
       set({
@@ -508,10 +516,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
   
-  loadLatestTransactions: async (userId) => {
+  loadLatestTransactions: async (userId): Promise<{ success: boolean; batchTimestamp?: Timestamp | null }> => {
     if (!userId) {
-      return false;
+      // console.log("🚫 loadLatestTransactions: No user ID provided");
+      return { success: false, batchTimestamp: null };
     }
+    
+    // console.log("🔄 loadLatestTransactions: Starting load for user:", userId);
     
     set(state => ({
       connectionStatus: {
@@ -521,6 +532,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }));
     
     try {
+      // console.log("📥 loadLatestTransactions: Querying Firebase...");
       const q = query(
         collection(db, 'transactionBatches'),
         where('userId', '==', userId),
@@ -531,19 +543,17 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
-        set(state => ({
-          connectionStatus: {
-            ...state.connectionStatus,
-            isLoading: false
-          }
-        }));
-        
-        return false;
+        // console.log('🚫 loadLatestTransactions: No saved transactions found for user:', userId);
+        // ... (set loading state) ...
+        return { success: false, batchTimestamp: null };
       }
       
       // Get the latest batch
       const doc = querySnapshot.docs[0];
       const data = doc.data();
+      const batchTimestamp = data.createdAt instanceof Timestamp ? data.createdAt : null;
+      
+      // console.log(`✅ loadLatestTransactions: Loaded batch ${doc.id} with ${data.transactions.length} transactions`);
       
       // Update state with saved transactions first
       set({
@@ -572,21 +582,14 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
       
       // Load credit state
+      // console.log("💳 loadLatestTransactions: Loading credit state");
       await get().loadCreditState(userId);
       
-      return true;
+      return { success: true, batchTimestamp: batchTimestamp }; // Return success and timestamp
     } catch (error) {
       console.error('❌ loadLatestTransactions: Error:', error);
-      
-      set(state => ({
-        connectionStatus: {
-          ...state.connectionStatus,
-          isLoading: false,
-          error: 'Failed to load saved transactions'
-        }
-      }));
-      
-      return false;
+      // ... (set error state) ...
+      return { success: false, batchTimestamp: null }; // Return failure
     }
   },
   
@@ -715,17 +718,34 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     try {
       // First try to load saved transactions from Firebase
-      const loadedFromFirebase = await get().loadLatestTransactions(user.uid);
+      const loadResult = await get().loadLatestTransactions(user.uid);
+      let shouldFetchFromPlaid = false;
+      let mergePlaidData = false;
+      const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+
+      if (loadResult.success && loadResult.batchTimestamp) {
+        // Successfully loaded from Firebase, check timestamp
+        if (loadResult.batchTimestamp.toMillis() < twentyFourHoursAgo) {
+          console.log("🔄 initializeStore: Firebase data is older than 24 hours, preparing to fetch updates from Plaid.");
+          shouldFetchFromPlaid = true;
+          mergePlaidData = true; // Merge with existing Firebase data
+        } else {
+          console.log("✅ initializeStore: Successfully loaded recent transactions from Firebase.");
+        }
+      } else {
+        // Failed to load from Firebase or no data found
+        console.log("📥 initializeStore: No recent transactions in Firebase, preparing to fetch from Plaid.");
+        shouldFetchFromPlaid = true;
+        mergePlaidData = false; // Overwrite with Plaid data
+      }
       
-      // Only fetch from Plaid if we don't have any transactions loaded
-      if (!get().transactions.length) {
+      // Fetch from Plaid if needed
+      if (shouldFetchFromPlaid) {
         const storedData = localStorage.getItem("plaid_access_token_info");
         if (storedData) {
           const tokenInfo = JSON.parse(storedData);
           
-          // Verify token belongs to current user
           if (tokenInfo.userId === user.uid) {
-            // Check if user manually disconnected before fetching from Plaid
             const wasManuallyDisconnected = (() => {
               try {
                 return sessionStorage.getItem('wasManuallyDisconnected') === 'true';
@@ -734,38 +754,52 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
               }
             })();
             
-            if (wasManuallyDisconnected) {
-              return;
-            }
-            
-            // Set connected state
-            set(state => ({
-              connectionStatus: {
-                ...state.connectionStatus,
-                isConnected: true,
-                isLoading: false,
+            if (!wasManuallyDisconnected) {
+              console.log(`🔌 initializeStore: Fetching from Plaid (merge=${mergePlaidData})...`);
+              set(state => ({ // Ensure loading state is still true if Firebase load finished quickly
+                connectionStatus: { ...state.connectionStatus, isLoading: true }
+              }));
+              await get().fetchTransactions(tokenInfo.token, mergePlaidData);
+            } else {
+              console.log("🚫 initializeStore: User manually disconnected, skipping Plaid fetch.");
+              // Ensure loading is false if we skipped Plaid after a successful Firebase load
+              if (loadResult.success) {
+                set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: false } }));
               }
-            }));
-            
-            // Fetch transactions with the stored token
-            await get().fetchTransactions(tokenInfo.token);
+            }
           } else {
+            console.log("🚫 initializeStore: Plaid token belongs to different user, clearing...");
             localStorage.removeItem("plaid_access_token_info");
+            // Ensure loading is false if we skipped Plaid after a successful Firebase load
+            if (loadResult.success) {
+              set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: false } }));
+            }
           }
         } else {
+          console.log("🚫 initializeStore: No Plaid token found, cannot fetch updates.");
+          // Ensure loading is false if we skipped Plaid after a successful Firebase load
+          if (loadResult.success) {
+            set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: false } }));
+          }
         }
-      } else {
       }
+      
+      // Ensure loading state is finally false if no Plaid fetch happened
+      // (fetchTransactions handles setting isLoading to false if it runs)
+      if (!shouldFetchFromPlaid) {
+         set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: false } }));
+      }
+
     } catch (error) {
       console.error("❌ initializeStore: Error during initialization:", error);
-      
-      set(state => ({
-        connectionStatus: {
-          ...state.connectionStatus,
-          isLoading: false,
-          error: error instanceof Error ? error.message : "Failed to initialize store",
-        }
-      }));
+      // ... (error handling, ensure isLoading is false) ...
+       set(state => ({ 
+         connectionStatus: { 
+           ...state.connectionStatus, 
+           isLoading: false, 
+           error: error instanceof Error ? error.message : "Failed to initialize store" 
+         } 
+       }));
     }
   },
 }));

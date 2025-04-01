@@ -34,8 +34,6 @@ export default function Dashboard() {
     manuallyFetchTransactions,
     analyzeTransactions,
     saveTransactions,
-    loadLatestTransactions,
-    hasSavedData,
     initializeStore
   } = useTransactionStore();
   
@@ -61,10 +59,13 @@ export default function Dashboard() {
     if (user && !authLoading && !connectionStatus.isLoading) {
       // console.log("🔄 Dashboard: Starting store initialization");
       initializeStore(user).catch((err) => {
-        console.error("❌ Dashboard: Store initialization failed:", err); // Keep this error log
+        console.error("❌ Dashboard: Store initialization failed:", err);
         setFetchError(err instanceof Error ? err.message : "Failed to initialize dashboard");
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // We intentionally omit connectionStatus.isLoading to prevent re-initialization loops where
+    // the loading state changes *during* initialization, triggering the effect again.
   }, [user, authLoading, initializeStore]);
   
   // Handle loading sample data
