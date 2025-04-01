@@ -14,38 +14,38 @@ interface DashboardSidebarProps {
   hasTransactions: boolean;
 }
 
-type NavOption = {
-  id: string;
-  label: string;
-  description: string;
-}
+// type NavOption = {
+//   id: string;
+//   label: string;
+//   description: string;
+// }
 
 export function DashboardSidebar({
   impactAnalysis,
-  activeView,
-  onViewChange,
+  // activeView,
+  // onViewChange,
   onApplyCredit,
   isApplyingCredit,
-  hasTransactions
+  // hasTransactions
 }: DashboardSidebarProps) {
   const { modalState, openDonationModal, closeDonationModal } = useDonationModal({ transactions: [] });
 
   // Local state
   const [showFeedback, setShowFeedback] = useState<boolean>(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string>("");
-  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  // const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [backgroundClass, setBackgroundClass] = useState<string>("bg-green-500");
 
   // Navigation options
-  const navOptions: NavOption[] = [
+  // const navOptions: NavOption[] = [
     // { id: "grouped-impact", label: "Ethical Impact", description: "Impact by ethical category" },
-    { id: "balance-sheet", label: "Balance Sheet", description: "View positive and negative impacts" },
+    // { id: "balance-sheet", label: "Balance Sheet", description: "View positive and negative impacts" },
     // { id: "transaction-table", label: "Transactions", description: "Details for each purchase" },
     // { id: "vendor-breakdown", label: "Vendors", description: "Impact by merchant" }
-  ];
+  // ];
 
   // Get the label for the current view
-  const currentViewLabel = navOptions.find(option => option.id === activeView)?.label || "Dashboard Views";
+  // const currentViewLabel = navOptions.find(option => option.id === activeView)?.label || "Dashboard Views";
 
   // Credit button disabled logic
   const creditButtonDisabled: boolean = 
