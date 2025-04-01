@@ -25,7 +25,6 @@ interface UseBankConnectionResult {
 }
 
 export function useBankConnection(user: User | null): UseBankConnectionResult {
-  
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     isConnected: false,
@@ -33,9 +32,6 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
     error: null,
   });
 
-  // Check for existing connection on component mount
-  // Fixing the missing dependency in useEffect
-  // Look for this effect in useBankConnection.ts
   // Function to fetch transactions with retry capability
   const fetchTransactions = useCallback(
     async (accessToken?: string, retryCount = 0) => {
@@ -195,6 +191,7 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
     },
     [user]
   );
+
   // Check for existing connection on component mount
   useEffect(() => {
     if (!user) return;
@@ -214,22 +211,20 @@ export function useBankConnection(user: User | null): UseBankConnectionResult {
         return;
       }
       
-      // Set connected state REGARDLESS of loading state
+      // Set connected state
       setConnectionStatus(prev => ({
         ...prev,
         isConnected: true,
-        // Don't override loading status if it's already true
-        isLoading: prev.isLoading 
+        isLoading: false
       }));
       
-      // Only fetch transactions if we haven't loaded them yet
-      if (transactions.length === 0 && !connectionStatus.isLoading) {
-        fetchTransactions(tokenInfo.token);
-      }
+      // Fetch transactions with stored token
+      fetchTransactions(tokenInfo.token);
     } catch (error) {
       console.error("Error checking stored token:", error);
+      localStorage.removeItem("plaid_access_token_info");
     }
-  }, [user, fetchTransactions, transactions.length, connectionStatus.isLoading]);
+  }, [user, fetchTransactions]);
 
   // Function to manually fetch transactions using stored token
   const manuallyFetchTransactions = useCallback(async () => {

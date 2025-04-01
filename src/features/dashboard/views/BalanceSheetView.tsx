@@ -34,7 +34,7 @@ export function BalanceSheetView({
   totalSocietalDebt,
 }: BalanceSheetViewProps) {
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
-  const { modalState, openDonationModal, closeDonationModal } = useDonationModal({ transactions });
+  const { modalState, openDonationModal, closeDonationModal } = useDonationModal();
 
   // Process transactions to get positive and negative categories
   const {

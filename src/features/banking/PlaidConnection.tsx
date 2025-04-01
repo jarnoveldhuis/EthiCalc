@@ -1,213 +1,100 @@
-// src/features/banking/PlaidConnection.tsx
+// src/features/banking/PlaidConnectionSection.tsx
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { useBankConnection } from '../../hooks/useBankConnection';
-// import { useTransactionAnalysis } from '../../../Deprecate/useTransactionAnalysis';
-import { useTransactionStorage } from '@/hooks/useTransactionStorage';
-import PlaidLink from './PlaidLink';
-import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
-import { ErrorAlert } from '@/shared/ui/ErrorAlert';
-import { User } from 'firebase/auth';
-import { Transaction } from '@/shared/types/transactions';
-import { useTransactionAnalysis } from '@/hooks/useTransactionAnalysis';
+import { useState } from 'react';
+import PlaidLink from "@/features/banking/PlaidLink";
+import { useSampleData } from '@/features/debug/useSampleData';
+import { config } from '@/config';
+import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
+import { useTransactionStore } from '@/store/transactionStore';
 
-interface PlaidConnectionProps {
-  user: User | null;
-  onTransactionsLoaded?: (transactions: Transaction[]) => void;
-  onAnalysisComplete?: (totalDebt: number) => void;
+// Determine if we're in development/sandbox mode
+const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
+
+interface PlaidConnectionSectionProps {
+  onSuccess: (public_token: string | null) => void;
+  isConnected: boolean;
+  isLoading?: boolean;
 }
 
-export function PlaidConnection({ 
-  user, 
-  onTransactionsLoaded,
-  onAnalysisComplete 
-}: PlaidConnectionProps) {
-  // State for managing connection flow
-  const [step, setStep] = useState<'connect' | 'loading' | 'analyzing' | 'complete'>('connect');
-  const [debugMessage, setDebugMessage] = useState<string | null>(null);
+export function PlaidConnectionSection({ 
+  onSuccess, 
+  isConnected,
+  isLoading = false
+}: PlaidConnectionSectionProps) {
+  // Add internal loading state
+  const [linkLoading] = useState(false);
+  // We're keeping showSampleOption state even though we're not modifying it
+  // because it might be needed in the future for UI toggling
+  const [showSampleOption] = useState(isSandboxMode);
+  const { generateSampleTransactions } = useSampleData();
   
-  // Get bank connection and transaction analysis hooks
-  const { 
-    connectionStatus, 
-    transactions, 
-    connectBank, 
-    disconnectBank 
-  } = useBankConnection(user);
+  // Get connection status from store
+  const { connectionStatus } = useTransactionStore();
   
-  const {
-    analyzedData,
-    analysisStatus,
-    analyzeTransactions
-  } = useTransactionAnalysis();
-  
-  const { 
-    saveTransactions, 
-    isLoading: isSaving,
-    error: saveError
-  } = useTransactionStorage(user);
-  
-  // Handle Plaid success - when user completes Plaid Link flow
-  const handlePlaidSuccess = useCallback((public_token: string) => {
-    setStep('loading');
-    setDebugMessage('Received public token from Plaid, exchanging for access token...');
+  // Sample data handler for development
+  const handleUseSampleData = () => {
+    // Generate sample transactions directly
+    const sampleTransactions = generateSampleTransactions();
     
-    // Connect to bank using the public token
-    connectBank(public_token).catch(error => {
-      console.error('Bank connection error:', error);
-      setDebugMessage(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setStep('connect');
-    });
-  }, [connectBank]);
-  
-  // Listen for bank transactions to be loaded
-  useEffect(() => {
-    if (transactions.length > 0 && step === 'loading') {
-      setStep('analyzing');
-      setDebugMessage(`Successfully loaded ${transactions.length} transactions, starting analysis...`);
-      
-      // Notify parent component if needed
-      if (onTransactionsLoaded) {
-        onTransactionsLoaded(transactions);
-      }
-      
-      // Start analyzing the transactions
-      analyzeTransactions(transactions);
-    }
-  }, [transactions, step, analyzeTransactions, onTransactionsLoaded]);
-  
-  // Listen for analysis to complete
-  useEffect(() => {
-    if (analyzedData && 
-        analyzedData.transactions.length > 0 && 
-        analysisStatus.status === 'success' && 
-        step === 'analyzing') {
-      
-      setStep('complete');
-      setDebugMessage(`Analysis complete. Total societal debt: $${analyzedData.totalSocietalDebt.toFixed(2)}`);
-      
-      // Save analyzed data if we have a user
-      if (user) {
-        saveTransactions(
-          analyzedData.transactions,
-          analyzedData.totalSocietalDebt
-        ).catch(error => {
-          console.error('Failed to save transactions:', error);
-        });
-      }
-      
-      // Notify parent component if needed
-      if (onAnalysisComplete) {
-        onAnalysisComplete(analyzedData.totalSocietalDebt);
-      }
-    }
-  }, [analyzedData, analysisStatus, step, user, saveTransactions, onAnalysisComplete]);
-  
-  // Show loading indicator during connection and analysis
-  const isLoading = connectionStatus.isLoading || 
-                    analysisStatus.status === 'loading' || 
-                    isSaving;
-  
-  // Get any errors from the process
-  const error = connectionStatus.error || 
-                analysisStatus.error || 
-                saveError;
-  
-  // Reset connection
-  const handleReset = useCallback(() => {
-    disconnectBank();
-    setStep('connect');
-    setDebugMessage(null);
-  }, [disconnectBank]);
-  
-  // Determine what to render based on the current step
-  const renderContent = () => {
-    if (step === 'connect' && !connectionStatus.isConnected) {
-      return (
-        <div className="text-center">
-          <h2 className="text-lg font-semibold mb-4">Connect Your Bank Account</h2>
-          <PlaidLink onSuccess={handlePlaidSuccess} />
-        </div>
-      );
-    }
+    // Call onSuccess with null to indicate we're not using Plaid
+    // The parent component should detect this and use the sample data
+    onSuccess(null);
     
-    if (isLoading) {
-      return (
-        <div className="text-center py-6">
-          <LoadingSpinner 
-            message={
-              connectionStatus.isLoading 
-                ? "Connecting to your bank..." 
-                : analysisStatus.status === 'loading'
-                  ? "Analyzing your transactions..."
-                  : "Saving your analysis..."
-            } 
-          />
-          {debugMessage && (
-            <div className="mt-4 text-xs text-gray-500">
-              {debugMessage}
-            </div>
-          )}
-        </div>
-      );
-    }
-    
-    if (error) {
-      return (
-        <div className="py-4">
-          <ErrorAlert message={error} />
-          <div className="mt-4 text-center">
-            <button 
-              onClick={handleReset}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+    // This is where you would call a function to load the sample data
+    // In the real implementation, you should have a way to pass these
+    // transactions to your analysis service
+    console.log("Sample data loaded:", sampleTransactions);
+  };
+
+  // Combined loading state from props and internal state
+  const showLoading = isLoading || linkLoading || connectionStatus.isLoading;
+
+  if (showLoading) {
+    return (
+      <div className="flex flex-col items-center">
+        <LoadingSpinner message="Connecting to your bank..." />
+        <p className="text-sm text-gray-500 mt-2">
+          This might take a moment. Please do not close this window.
+        </p>
+      </div>
+    );
+  }
+
+  if (isConnected || connectionStatus.isConnected) {
+    return (
+      <div className="flex flex-col items-center">
+        <span className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full">
+          ✓ Bank account connected
+        </span>
+        <span className="text-xs text-gray-500 mt-1">
+          Your transactions are available for analysis.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center space-y-3">
+      <PlaidLink 
+        onSuccess={onSuccess} 
+        // onLoadingChange={setLinkLoading}
+      />
+      
+      {/* Sample data option for development */}
+      {showSampleOption && (
+        <div className="mt-4">
+          <div className="text-center">
+            <div className="text-xs text-gray-500 mb-2">- OR -</div>
+            <button
+              onClick={handleUseSampleData}
+              className="text-blue-600 hover:text-blue-800 text-sm underline"
             >
-              Try Again
+              Use Sample Data (Development Only)
             </button>
           </div>
         </div>
-      );
-    }
-    
-    if (step === 'complete' && analyzedData) {
-      // If complete, show a success message (parent component will handle displaying the data)
-      return (
-        <div className="text-center py-4">
-          <div className="text-lg font-semibold text-green-600 mb-2">
-            ✅ Successfully analyzed {analyzedData.transactions.length} transactions
-          </div>
-          <div className="text-sm text-gray-700">
-            Your transactions are now ready to view
-          </div>
-          {debugMessage && (
-            <div className="mt-4 text-xs text-gray-500">
-              {debugMessage}
-            </div>
-          )}
-        </div>
-      );
-    }
-    
-    // Default case
-    return (
-      <div className="text-center py-4">
-        <div className="text-gray-600">
-          {connectionStatus.isConnected 
-            ? "Bank connected, but no transactions loaded."
-            : "Please connect your bank to get started."}
-        </div>
-        <button 
-          onClick={handleReset}
-          className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-        >
-          {connectionStatus.isConnected ? "Reconnect Bank" : "Connect Bank"}
-        </button>
-      </div>
-    );
-  };
-  
-  return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      {renderContent()}
+      )}
     </div>
   );
 }

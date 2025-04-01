@@ -39,6 +39,8 @@ export default function PlaidLink({ onSuccess, onExit }: PlaidLinkProps) {
 
   // Fetch Link token on component mount
   useEffect(() => {
+    let mounted = true;
+
     async function fetchLinkToken() {
       try {
         setLoading(true);
@@ -51,18 +53,28 @@ export default function PlaidLink({ onSuccess, onExit }: PlaidLinkProps) {
         }
         
         const data = await response.json();
-        console.log("Generated Plaid Link Token");
-        setLinkToken(data.link_token);
+        if (mounted) {
+          console.log("Generated Plaid Link Token");
+          setLinkToken(data.link_token);
+        }
       } catch (err) {
-        console.error("Error fetching Plaid link token:", err);
-        setError(err instanceof Error ? err.message : "Failed to initialize Plaid");
+        if (mounted) {
+          console.error("Error fetching Plaid link token:", err);
+          setError(err instanceof Error ? err.message : "Failed to initialize Plaid");
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
 
     fetchLinkToken();
-  }, []);
+
+    return () => {
+      mounted = false;
+    };
+  }, []); // Empty dependency array since we only want this to run once on mount
 
   // Open Plaid Link
   const openPlaidLink = useCallback(() => {

@@ -1,9 +1,6 @@
+// src/hooks/useDonationModal.ts
 import { useState } from 'react';
-import { Transaction } from '@/shared/types/transactions';
-
-interface UseDonationModalProps {
-  transactions: Transaction[];
-}
+import { useTransactionStore } from '@/store/transactionStore';
 
 interface DonationModalState {
   isOpen: boolean;
@@ -12,7 +9,11 @@ interface DonationModalState {
   amount: number;
 }
 
-export function useDonationModal({ transactions }: UseDonationModalProps) {
+// Remove the props interface entirely! No more parameter needed!
+export function useDonationModal() {
+  // Get transactions directly from the store
+  const { transactions } = useTransactionStore();
+  
   const [modalState, setModalState] = useState<DonationModalState>({
     isOpen: false,
     practice: "All Societal Debt",
@@ -49,4 +50,4 @@ export function useDonationModal({ transactions }: UseDonationModalProps) {
     openDonationModal,
     closeDonationModal
   };
-} 
+}

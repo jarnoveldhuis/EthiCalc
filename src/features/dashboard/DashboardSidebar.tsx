@@ -1,63 +1,37 @@
 // src/features/dashboard/DashboardSidebar.tsx
 import { useState, useCallback, useEffect } from "react";
-import { ImpactAnalysis } from "@/core/calculations/type";
+import { useTransactionStore } from "@/store/transactionStore";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
 
-interface DashboardSidebarProps {
-  impactAnalysis: ImpactAnalysis | null;
-  activeView: string;
-  onViewChange: (view: string) => void;
-  onApplyCredit: (amount: number) => Promise<boolean>;
-  isApplyingCredit: boolean;
-  hasTransactions: boolean;
-}
+// No props needed anymore!
+export function DashboardSidebar() {
+  // Get everything from the store
+  const { impactAnalysis, applyCredit, isApplyingCredit } =
+    useTransactionStore();
 
-// type NavOption = {
-//   id: string;
-//   label: string;
-//   description: string;
-// }
-
-export function DashboardSidebar({
-  impactAnalysis,
-  // activeView,
-  // onViewChange,
-  onApplyCredit,
-  isApplyingCredit,
-  // hasTransactions
-}: DashboardSidebarProps) {
-  const { modalState, openDonationModal, closeDonationModal } = useDonationModal({ transactions: [] });
+  // In DashboardSidebar.tsx
+  const { modalState, openDonationModal, closeDonationModal } =
+    useDonationModal();
 
   // Local state
   const [showFeedback, setShowFeedback] = useState<boolean>(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string>("");
-  // const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
-  const [backgroundClass, setBackgroundClass] = useState<string>("bg-green-500");
-
-  // Navigation options
-  // const navOptions: NavOption[] = [
-    // { id: "grouped-impact", label: "Ethical Impact", description: "Impact by ethical category" },
-    // { id: "balance-sheet", label: "Balance Sheet", description: "View positive and negative impacts" },
-    // { id: "transaction-table", label: "Transactions", description: "Details for each purchase" },
-    // { id: "vendor-breakdown", label: "Vendors", description: "Impact by merchant" }
-  // ];
-
-  // Get the label for the current view
-  // const currentViewLabel = navOptions.find(option => option.id === activeView)?.label || "Dashboard Views";
+  const [backgroundClass, setBackgroundClass] =
+    useState<string>("bg-green-500");
 
   // Credit button disabled logic
-  const creditButtonDisabled: boolean = 
-    !impactAnalysis || 
-    impactAnalysis.availableCredit <= 0 || 
-    isApplyingCredit || 
+  const creditButtonDisabled: boolean =
+    !impactAnalysis ||
+    impactAnalysis.availableCredit <= 0 ||
+    isApplyingCredit ||
     impactAnalysis.effectiveDebt <= 0;
-  
+
   // Set background color based on debt level
   useEffect(() => {
     if (!impactAnalysis) return;
-    
+
     if (impactAnalysis.effectiveDebt <= 0) {
       setBackgroundClass("bg-green-500");
     } else if (impactAnalysis.effectiveDebt < 50) {
@@ -70,13 +44,15 @@ export function DashboardSidebar({
   // Handle applying social credit to debt
   const handleApplyCredit = useCallback(async () => {
     if (creditButtonDisabled) return;
-    
+
     try {
       const amountToApply = impactAnalysis?.availableCredit || 0;
-      const success = await onApplyCredit(amountToApply);
-      
+      const success = await applyCredit(amountToApply);
+
       if (success) {
-        setFeedbackMessage(`Applied $${amountToApply.toFixed(2)} credit to your social debt`);
+        setFeedbackMessage(
+          `Applied $${amountToApply.toFixed(2)} credit to your social debt`
+        );
         setShowFeedback(true);
         setTimeout(() => setShowFeedback(false), 3000);
       }
@@ -86,23 +62,31 @@ export function DashboardSidebar({
       setShowFeedback(true);
       setTimeout(() => setShowFeedback(false), 3000);
     }
-  }, [creditButtonDisabled, impactAnalysis, onApplyCredit]);
-  
+  }, [creditButtonDisabled, impactAnalysis, applyCredit]);
+
   // Handle opening donation modal
-  const handleOpenDonationModal = useCallback((practice: string, amount: number) => {
-    openDonationModal(practice, amount);
-  }, [openDonationModal]);
-  
+  const handleOpenDonationModal = useCallback(
+    (practice: string, amount: number) => {
+      openDonationModal(practice, amount);
+    },
+    [openDonationModal]
+  );
+
   // Handle "Offset All" button click
   const handleOffsetAll = useCallback(() => {
-    handleOpenDonationModal("All Societal Debt", impactAnalysis?.effectiveDebt || 0);
+    handleOpenDonationModal(
+      "All Societal Debt",
+      impactAnalysis?.effectiveDebt || 0
+    );
   }, [handleOpenDonationModal, impactAnalysis]);
 
   return (
     <div className="w-full lg:col-span-1">
       {/* Societal Credit Score */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-        <div className={`${backgroundClass} transition-colors duration-1000 p-4 sm:p-6 text-white`}>
+        <div
+          className={`${backgroundClass} transition-colors duration-1000 p-4 sm:p-6 text-white`}
+        >
           <div className="text-center">
             <h2 className="text-lg sm:text-xl font-bold mb-1">
               Total Social Debt
@@ -173,58 +157,6 @@ export function DashboardSidebar({
             </div>
           )}
         </div>
-
-        {/* Mobile menu toggle */}
-        {/* <div className="block lg:hidden p-4 border-b border-gray-200">
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="w-full flex items-center justify-between py-2 px-3 bg-blue-50 rounded-lg"
-          >
-            <span className="font-medium">{currentViewLabel}</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className={`h-5 w-5 transition-transform ${
-                isMenuOpen ? "transform rotate-180" : ""
-              }`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </button>
-        </div> */}
-
-        {/* Navigation - Always visible on desktop, toggled on mobile */}
-        {/* <div className={`${!isMenuOpen ? "hidden" : "block"} lg:block p-4`}>
-          <nav className="space-y-2">
-            {navOptions.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => {
-                  onViewChange(option.id);
-                  setIsMenuOpen(false); // Close menu after selection
-                }}
-                disabled={!hasTransactions}
-                className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
-                  activeView === option.id
-                    ? "bg-blue-50 border-blue-200 text-blue-800 border"
-                    : !hasTransactions
-                    ? "text-gray-400 cursor-not-allowed"
-                    : "hover:bg-gray-50 text-gray-700"
-                }`}
-              >
-                <div className="font-medium">{option.label}</div>
-                <div className="text-xs text-gray-500">{option.description}</div>
-              </button>
-            ))}
-          </nav>
-        </div> */}
       </div>
 
       {/* Donation Modal */}

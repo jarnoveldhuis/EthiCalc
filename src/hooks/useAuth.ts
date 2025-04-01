@@ -1,39 +1,56 @@
-import { useState, useEffect } from 'react';
+// src/hooks/useAuth.ts
+import { useState, useEffect, useCallback } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { auth } from '@/core/firebase/firebase';
+import { useTransactionStore } from '@/store/transactionStore';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const resetStore = useTransactionStore((state) => state.resetState);
   const router = useRouter();
+  const pathname = usePathname();
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-      
-      // Redirect to sign-in if no user and not already on sign-in page
-      if (!currentUser && window.location.pathname !== '/signin') {
-        router.push('/signin');
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
+      } else {
+        setUser(null);
+        if (pathname !== '/sign-in' && !loading) {
+          router.push('/sign-in');
+        }
       }
+      setLoading(false);
     });
     
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
-  }, [router]);
+    return () => {
+      unsubscribe();
+    };
+  }, [router, pathname, loading]);
   
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
-      setLoading(true);
       await signOut(auth);
-      router.push('/signin');
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
+      
+      resetStore();
+      
+      localStorage.removeItem("plaid_access_token_info");
+      sessionStorage.removeItem('wasManuallyDisconnected');
+      
+      setUser(null);
       setLoading(false);
+      router.push('/sign-in');
+    } catch (error) {
+      console.error("❌ useAuth: Error logging out:", error);
+      setUser(null);
+      setLoading(false);
+      router.push('/sign-in');
     }
-  };
+  }, [resetStore, router]);
   
   return { user, loading, logout };
 }
+
+export default useAuth;
