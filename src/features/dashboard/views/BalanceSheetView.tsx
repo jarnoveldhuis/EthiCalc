@@ -289,40 +289,6 @@ export function BalanceSheetView({
         Ethical Balance Sheet
       </h2>
 
-      {/* Balance Sheet Header with progress bar */}
-      <div className="mb-8">
-        <div className="flex justify-between text-sm mb-1">
-          <div className="text-green-600 font-medium">
-            ${totalPositive.toFixed(2)} Positive Impact
-          </div>
-          <div className="text-red-600 font-medium">
-            ${totalNegative.toFixed(2)} Negative Impact
-          </div>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-          {/* Positive impact (green) */}
-          <div
-            className="bg-green-500 h-full float-left"
-            style={{
-              width: `${Math.min(
-                (totalPositive / (totalPositive + totalNegative || 1)) * 100,
-                100
-              )}%`,
-            }}
-          />
-          {/* Negative impact (red) */}
-          <div
-            className="bg-red-500 h-full float-right"
-            style={{
-              width: `${Math.min(
-                (totalNegative / (totalPositive + totalNegative || 1)) * 100,
-                100
-              )}%`,
-            }}
-          />
-        </div>
-      </div>
-
       {/* Two-column layout for desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Positive Impact Column */}

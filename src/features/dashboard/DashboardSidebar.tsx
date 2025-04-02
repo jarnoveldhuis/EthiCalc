@@ -4,9 +4,11 @@ import { useTransactionStore } from "@/store/transactionStore";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
+import { useAuth } from "@/hooks/useAuth";
 
 // No props needed anymore!
 export function DashboardSidebar() {
+  const { user } = useAuth();
   // Get everything from the store
   const { impactAnalysis, applyCredit, isApplyingCredit } =
     useTransactionStore();
@@ -43,11 +45,19 @@ export function DashboardSidebar() {
 
   // Handle applying social credit to debt
   const handleApplyCredit = useCallback(async () => {
-    if (creditButtonDisabled) return;
-
+    // Check for user, loading state, and if credit <= 0
+    if (
+      !user ||
+      creditButtonDisabled ||
+      !impactAnalysis ||
+      impactAnalysis.availableCredit <= 0
+    ) {
+      return;
+    }
     try {
-      const amountToApply = impactAnalysis?.availableCredit || 0;
-      const success = await applyCredit(amountToApply);
+      // Use the available credit amount directly from impactAnalysis
+      const amountToApply = impactAnalysis.availableCredit;
+      const success = await applyCredit(amountToApply, user.uid); // Pass user.uid
 
       if (success) {
         setFeedbackMessage(
@@ -55,14 +65,20 @@ export function DashboardSidebar() {
         );
         setShowFeedback(true);
         setTimeout(() => setShowFeedback(false), 3000);
+      } else {
+        // Handle the case where applyCredit returns false but doesn't throw
+        setFeedbackMessage("Failed to apply credit.");
+        setShowFeedback(true);
+        setTimeout(() => setShowFeedback(false), 3000);
       }
     } catch (error) {
       console.error("Error applying credit:", error);
-      setFeedbackMessage("Failed to apply credit. Please try again.");
+      setFeedbackMessage("Failed to apply credit.");
       setShowFeedback(true);
       setTimeout(() => setShowFeedback(false), 3000);
     }
-  }, [creditButtonDisabled, impactAnalysis, applyCredit]);
+    // Dependencies now include user and impactAnalysis (for availableCredit)
+  }, [applyCredit, user, impactAnalysis, creditButtonDisabled]);
 
   // Handle opening donation modal
   const handleOpenDonationModal = useCallback(
@@ -113,7 +129,45 @@ export function DashboardSidebar() {
             )}
           </div>
         </div>
-
+        {/* Balance Sheet Header with progress bar */}
+        <div className="mb-8">
+          <div className="flex justify-between text-sm mb-1">
+            <div className="text-green-600 font-medium">
+              ${impactAnalysis?.appliedCredit.toFixed(2)} Applied Credit
+            </div>
+            <div className="text-red-600 font-medium">
+              ${impactAnalysis?.effectiveDebt} Negative Impact
+            </div>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+            {(() => { // Use an IIFE to calculate values cleanly
+              const applied = parseFloat(impactAnalysis?.appliedCredit?.toFixed(2) || '0');
+              const effective = impactAnalysis?.effectiveDebt || 0;
+              const total = applied + effective || 1; // Ensure total is not 0 for division
+              const appliedWidth = total > 0 ? Math.min((applied / total) * 100, 100) : 0;
+              const effectiveWidth = total > 0 ? Math.min((effective / total) * 100, 100) : 0;
+              
+              return (
+                <>
+                  {/* Positive impact (green) */}
+                  <div
+                    className="bg-green-500 h-full float-left"
+                    style={{
+                      width: `${appliedWidth}%`,
+                    }}
+                  />
+                  {/* Negative impact (red) */}
+                  <div
+                    className="bg-red-500 h-full float-right"
+                    style={{
+                      width: `${effectiveWidth}%`,
+                    }}
+                  />
+                </>
+              );
+            })()}
+          </div>
+        </div>
         {/* Credit summary with Apply button */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex flex-col">

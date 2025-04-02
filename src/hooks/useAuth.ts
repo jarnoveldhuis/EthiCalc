@@ -18,8 +18,8 @@ export function useAuth() {
         setUser(firebaseUser);
       } else {
         setUser(null);
-        if (pathname !== '/sign-in' && !loading) {
-          router.push('/sign-in');
+        if (pathname !== '/signin' && !loading) {
+          router.push('/signin');
         }
       }
       setLoading(false);
@@ -41,12 +41,12 @@ export function useAuth() {
       
       setUser(null);
       setLoading(false);
-      router.push('/sign-in');
+      router.push('/signin');
     } catch (error) {
       console.error("❌ useAuth: Error logging out:", error);
       setUser(null);
       setLoading(false);
-      router.push('/sign-in');
+      router.push('/signin');
     }
   }, [resetStore, router]);
   
