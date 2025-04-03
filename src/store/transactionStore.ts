@@ -1,9 +1,12 @@
-// src/store/transactionStore.ts
-import { create } from 'zustand';
-import { Transaction, AnalyzedTransactionData } from '@/shared/types/transactions'; // Ensure AnalyzedTransactionData is imported
-import { ImpactAnalysis } from '@/core/calculations/type';
-import { calculationService } from '@/core/calculations/impactService';
-import { User } from 'firebase/auth';
+// src/tsx/store/transactionStore.ts
+import { create } from "zustand";
+import {
+  Transaction,
+  AnalyzedTransactionData,
+} from "@/shared/types/transactions";
+import { ImpactAnalysis } from "@/core/calculations/type";
+import { calculationService } from "@/core/calculations/impactService";
+import { User } from "firebase/auth";
 import {
   collection,
   addDoc,
@@ -15,113 +18,153 @@ import {
   Timestamp,
   doc,
   getDoc,
-  setDoc
-} from 'firebase/firestore';
-import { db } from '@/core/firebase/firebase';
-import { mergeTransactions } from '@/core/plaid/transactionMapper';
-// Assuming you have this service or similar logic from your analysis API
-import { analyzeTransactionsCore, processAnalyzedTransactions } from '@/features/analysis/transactionAnalysisService'; // Adjust import path if needed
+  setDoc,
+  // FirestoreError,
+} from "firebase/firestore";
+import { db } from "@/core/firebase/firebase";
+// *** Ensure BOTH mappers are imported ***
+import {
+  mapPlaidTransactions,
+  mergeTransactions,
+} from "@/core/plaid/transactionMapper";
 
+// --- Interface Definitions (Keep as is) ---
 interface BankConnectionStatus {
   isConnected: boolean;
-  isLoading: boolean;
   error: string | null;
 }
-
 interface CreditState {
   availableCredit: number;
   appliedCredit: number;
   lastAppliedAmount: number;
   lastAppliedAt: Timestamp | null;
 }
-
-// REMOVED unused interface: AnalysisResultForSaving
-
-interface TransactionState {
-  // Data
+export interface TransactionState {
   transactions: Transaction[];
   savedTransactions: Transaction[] | null;
   impactAnalysis: ImpactAnalysis | null;
-  totalSocietalDebt: number; // Store the effective debt or net debt? Let's assume effective for display
-
-  // Bank Connection State
+  totalSocietalDebt: number;
   connectionStatus: BankConnectionStatus;
-
-  // Credit State
   creditState: CreditState;
-
-  // Loading States
+  isInitializing: boolean;
+  isConnectingBank: boolean;
+  isFetchingTransactions: boolean;
   isAnalyzing: boolean;
   isSaving: boolean;
   isApplyingCredit: boolean;
+  isLoadingLatest: boolean;
+  isLoadingCreditState: boolean;
   hasSavedData: boolean;
-
-  // Actions
   setTransactions: (transactions: Transaction[]) => void;
   connectBank: (publicToken: string, user: User | null) => Promise<void>;
   disconnectBank: () => void;
   fetchTransactions: (accessToken?: string) => Promise<void>;
   manuallyFetchTransactions: () => Promise<void>;
-  // Update return type here
-  analyzeTransactions: (transactions: Transaction[]) => Promise<AnalyzedTransactionData>; // <-- Return full analysis object
-  // Update signature here
-  saveTransactions: (transactions: Transaction[], totalNegativeDebt: number, userId?: string) => Promise<void>; // <-- Expecting negative debt
+  analyzeTransactions: (
+    transactions: Transaction[]
+  ) => Promise<AnalyzedTransactionData>;
+  saveTransactions: (
+    transactions: Transaction[],
+    totalNegativeDebt: number,
+    userId?: string
+  ) => Promise<void>;
   applyCredit: (amount: number, userId?: string) => Promise<boolean>;
   loadLatestTransactions: (userId: string) => Promise<boolean>;
   loadCreditState: (userId: string) => Promise<CreditState | null>;
   resetState: () => void;
   initializeStore: (user: User | null) => Promise<void>;
 }
+// --- End Interface Definitions ---
 
+// --- Helper Functions (Keep as is) ---
+const isAnyLoading = (state: TransactionState): boolean => {
+  return (
+    state.isInitializing ||
+    state.isConnectingBank ||
+    state.isFetchingTransactions ||
+    state.isAnalyzing ||
+    state.isSaving ||
+    state.isApplyingCredit ||
+    state.isLoadingLatest ||
+    state.isLoadingCreditState
+  );
+};
+function getTransactionIdentifier(transaction: Transaction): string | null {
+
+  const plaidId: string | undefined = transaction.plaidTransactionId;
+  if (plaidId && typeof plaidId === "string" && plaidId.trim() !== "") {
+    return `plaid-${plaidId}`;
+  } else if (
+    transaction.date &&
+    transaction.name &&
+    typeof transaction.amount === "number"
+  ) {
+    const normalizedName = transaction.name.trim().toUpperCase();
+    return `${transaction.date}-${normalizedName}-${transaction.amount.toFixed(
+      2
+    )}`;
+  } else {
+    console.error(
+      `Identifier Error: Cannot create reliable identifier for tx:`,
+      transaction
+    );
+    return null;
+  }
+}
+// --- End Helper Functions ---
+
+// --- Store Implementation ---
 export const useTransactionStore = create<TransactionState>((set, get) => ({
-  // Initial state
+  // --- Initial State (Keep as is) ---
   transactions: [],
   savedTransactions: null,
   impactAnalysis: null,
-  totalSocietalDebt: 0, // Represents effective debt shown in UI
-
-  connectionStatus: {
-    isConnected: false,
-    isLoading: false,
-    error: null,
-  },
-
+  totalSocietalDebt: 0,
+  connectionStatus: { isConnected: false, error: null },
   creditState: {
     availableCredit: 0,
     appliedCredit: 0,
     lastAppliedAmount: 0,
     lastAppliedAt: null,
   },
-
+  isInitializing: false,
+  isConnectingBank: false,
+  isFetchingTransactions: false,
   isAnalyzing: false,
   isSaving: false,
   isApplyingCredit: false,
+  isLoadingLatest: false,
+  isLoadingCreditState: false,
   hasSavedData: false,
 
-  // Actions
+  // --- Actions Implementation ---
+
   setTransactions: (transactions) => {
-    set({ transactions }); // Set raw transactions first
-
-    // Recalculate impact analysis based on current credit state
     const currentAppliedCredit = get().creditState.appliedCredit;
-    const analysis = calculationService.calculateImpactAnalysis(transactions, currentAppliedCredit);
-
+    const analysis = calculationService.calculateImpactAnalysis(
+      transactions,
+      currentAppliedCredit
+    );
     set({
+      transactions: transactions,
       impactAnalysis: analysis,
-      totalSocietalDebt: analysis.effectiveDebt // Update displayed debt
+      totalSocietalDebt: analysis.effectiveDebt,
+      creditState: {
+        ...get().creditState,
+        availableCredit: analysis.availableCredit,
+      },
     });
   },
 
   connectBank: async (publicToken, user) => {
-    if (!user) return;
-
-    const state = get();
-    if (state.connectionStatus.isLoading) return;
-
-    set(state => ({
-      connectionStatus: { ...state.connectionStatus, isLoading: true, error: null }
-    }));
-
+    if (!user || isAnyLoading(get())) {
+      console.log("connectBank: Skipping.");
+      return;
+    }
+    set({
+      isConnectingBank: true,
+      connectionStatus: { isConnected: false, error: null },
+    });
     try {
       const response = await fetch("/api/banking/exchange_token", {
         method: "POST",
@@ -129,510 +172,788 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         body: JSON.stringify({ public_token: publicToken }),
       });
       const data = await response.json();
-      if (!response.ok || !data.access_token) throw new Error(data.error || "Failed to exchange token");
-
-      const tokenInfo = { token: data.access_token, userId: user.uid, timestamp: Date.now() };
-      localStorage.setItem("plaid_access_token_info", JSON.stringify(tokenInfo));
-
-      set(state => ({
-        connectionStatus: { ...state.connectionStatus, isConnected: true, isLoading: false }
+      if (!response.ok || !data.access_token)
+        throw new Error(
+          data.error || `Token exchange failed (${response.status})`
+        );
+      const tokenInfo = {
+        token: data.access_token,
+        userId: user.uid,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(
+        "plaid_access_token_info",
+        JSON.stringify(tokenInfo)
+      );
+      set((state) => ({
+        connectionStatus: { ...state.connectionStatus, isConnected: true },
       }));
-
-      // Fetch transactions triggers analysis and saving internally
+      try {
+        sessionStorage.removeItem("wasManuallyDisconnected");
+      } catch (e) {
+        console.error(e);
+      }
       await get().fetchTransactions(data.access_token);
-
     } catch (error) {
       console.error("Error connecting bank:", error);
-      set(state => ({
-        connectionStatus: { ...state.connectionStatus, isConnected: false, isLoading: false, error: error instanceof Error ? error.message : "Failed to connect bank" }
-      }));
+      set({
+        connectionStatus: {
+          isConnected: false,
+          error:
+            error instanceof Error ? error.message : "Failed to connect bank",
+        },
+      });
+    } finally {
+      set({ isConnectingBank: false });
+      console.log("connectBank: Finished.");
     }
   },
 
-  disconnectBank: () => {
-    localStorage.removeItem("plaid_access_token_info");
-    // Consider clearing other plaid related items if necessary
-    // localStorage.removeItem("plaid_token");
-    // localStorage.removeItem("plaid_access_token");
+  resetState: () => {
+    console.log("resetState: Triggered.");
     try {
-      sessionStorage.setItem('wasManuallyDisconnected', 'true');
-    } catch (e) { console.warn('Error setting manual disconnect flag:', e); }
-
-    // Reset relevant parts of the state
+      sessionStorage.setItem("wasManuallyDisconnected", "true");
+    } catch (e) {
+      console.error(e);
+    }
+    try {
+      localStorage.removeItem("plaid_access_token_info");
+    } catch (e) {
+      console.error(e);
+    }
     set({
+      // Merge, not replace
       transactions: [],
       savedTransactions: null,
       impactAnalysis: null,
       totalSocietalDebt: 0,
-      connectionStatus: { isConnected: false, isLoading: false, error: null },
-      // Optionally reset credit state or keep it? Resetting seems safer.
-      creditState: { availableCredit: 0, appliedCredit: 0, lastAppliedAmount: 0, lastAppliedAt: null },
+      connectionStatus: { isConnected: false, error: null },
+      creditState: {
+        availableCredit: 0,
+        appliedCredit: 0,
+        lastAppliedAmount: 0,
+        lastAppliedAt: null,
+      },
+      isInitializing: false,
+      isConnectingBank: false,
+      isFetchingTransactions: false,
+      isAnalyzing: false,
+      isSaving: false,
+      isApplyingCredit: false,
+      isLoadingLatest: false,
+      isLoadingCreditState: false,
       hasSavedData: false,
     });
+    console.log("Store state reset complete.");
   },
 
+  disconnectBank: () => {
+    get().resetState();
+  },
+
+  // --- fetchTransactions - UPDATED ---
   fetchTransactions: async (accessToken) => {
-    const { connectionStatus } = get();
-    if (connectionStatus.isLoading) return;
-
-    set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: true, error: null } }));
-
+    if (
+      get().isFetchingTransactions ||
+      get().isAnalyzing ||
+      get().isLoadingLatest
+    ) {
+      console.log(
+        "fetchTransactions: Skipping - Operation already in progress."
+      );
+      return;
+    }
+    set({
+      isFetchingTransactions: true,
+      connectionStatus: { ...get().connectionStatus, error: null },
+    });
+    let tokenToUse: string | null = accessToken || null;
     try {
-      let token = accessToken;
-      if (!token) {
-          const storedData = localStorage.getItem("plaid_access_token_info");
-          if (!storedData) throw new Error("No access token available");
-          token = JSON.parse(storedData).token;
+      if (!tokenToUse) {
+        const storedData = localStorage.getItem("plaid_access_token_info");
+        if (!storedData) throw new Error("No access token available");
+        tokenToUse = JSON.parse(storedData).token;
       }
+      if (!tokenToUse) throw new Error("Access token missing");
 
+      console.log("fetchTransactions: Fetching raw transactions...");
       const response = await fetch("/api/banking/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: token }),
+        body: JSON.stringify({ access_token: tokenToUse }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({})); // Try to parse error details
-        throw new Error(`Failed to fetch transactions: ${response.status} ${errorData.details || ''}`);
-      }
-
-      const rawTransactions = await response.json(); // Assume this returns raw Plaid transactions
-
-      if (!Array.isArray(rawTransactions)) {
-           throw new Error("Invalid transaction data format received");
-      }
-
-      // Map Plaid transactions to your internal format if needed here
-      // For now, assuming rawTransactions are in your Transaction format or handled by analysis
-      const transactionsToAnalyze = rawTransactions as Transaction[]; // Adjust mapping if necessary
-
-       set(state => ({
-           connectionStatus: {
-               ...state.connectionStatus,
-               isConnected: true, // Mark as connected even if analysis/saving fails later
-               isLoading: false, // Stop loading indicator for fetch phase
-               error: transactionsToAnalyze.length === 0 ? "Connected, but no transactions found" : null,
-           }
-       }));
-
-
-      // Analyze the fetched transactions
-      // analyzeTransactions internally updates state (transactions, impactAnalysis, totalSocietalDebt)
-      const analysisResult = await get().analyzeTransactions(transactionsToAnalyze);
-
-      // Save the analyzed transactions using the result from analyzeTransactions
-      try {
-        const storedData = localStorage.getItem("plaid_access_token_info");
-        if (storedData) {
-          const tokenInfo = JSON.parse(storedData);
-          if (tokenInfo.userId) {
-             // Pass the NEGATIVE impact component to saveTransactions
-            await get().saveTransactions(analysisResult.transactions, analysisResult.totalNegativeImpact, tokenInfo.userId);
-          }
+        const errorData = await response.json().catch(() => ({}));
+        if (
+          response.status === 400 &&
+          errorData.details?.includes("ITEM_LOGIN_REQUIRED")
+        ) {
+          console.warn(
+            "fetchTransactions: ITEM_LOGIN_REQUIRED received. Resetting state."
+          );
+          get().resetState();
+          throw new Error("Bank connection expired. Please reconnect.");
         }
-      } catch (saveError) {
-        console.error("Error saving transactions after fetch:", saveError);
-        // Optionally set an error state specifically for saving failure
-        set(state => ({ connectionStatus: { ...state.connectionStatus, error: 'Failed to save transactions' } }));
+        throw new Error(
+          `Plaid fetch failed: ${response.status} ${
+            errorData.details || "Unknown Plaid error"
+          }`
+        );
       }
 
-    } catch (error) {
-      console.error("Error fetching/processing transactions:", error);
-      set(state => ({
-        connectionStatus: { ...state.connectionStatus, isLoading: false, error: error instanceof Error ? error.message : "Failed to load transactions" }
+      const rawPlaidTransactions = await response.json();
+      const mappedTransactions = mapPlaidTransactions(rawPlaidTransactions); // Map raw data
+
+      if (!Array.isArray(mappedTransactions))
+        throw new Error("Invalid mapped transaction data format"); // Check mapped data
+      console.log(
+        `WorkspaceTransactions: Received and mapped ${mappedTransactions.length} transactions.`
+      );
+
+      set((state) => ({
+        // Update state after successful fetch and map
+        isFetchingTransactions: false,
+        connectionStatus: {
+          ...state.connectionStatus,
+          isConnected: true,
+          error:
+            mappedTransactions.length === 0 ? "No transactions found" : null,
+        },
       }));
+
+      // Call analyzeTransactions with the *mapped* data
+      if (mappedTransactions.length > 0) {
+        console.log(
+          "fetchTransactions: Calling analyzeTransactions with mapped data..."
+        );
+        await get().analyzeTransactions(mappedTransactions);
+        console.log("fetchTransactions: analyzeTransactions completed.");
+      } else {
+        console.log("fetchTransactions: Skipping analysis (no transactions).");
+        if (get().isAnalyzing) set({ isAnalyzing: false });
+      }
+    } catch (error) {
+      console.error("Error in fetchTransactions:", error);
+      const isTokenError =
+        error instanceof Error &&
+        (error.message.includes("No access token") ||
+          error.message.includes("expired"));
+      set({
+        isFetchingTransactions: false,
+        connectionStatus: {
+          isConnected: isTokenError
+            ? false
+            : get().connectionStatus.isConnected,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load transactions",
+        },
+      });
     }
   },
+  // --- End fetchTransactions ---
 
   manuallyFetchTransactions: async () => {
+    if (isAnyLoading(get())) return;
     try {
       const storedData = localStorage.getItem("plaid_access_token_info");
-      if (!storedData) throw new Error("No stored access token found");
+      if (!storedData)
+        throw new Error("Cannot fetch: No bank connection found.");
       const tokenInfo = JSON.parse(storedData);
       await get().fetchTransactions(tokenInfo.token);
     } catch (error) {
       console.error("Manual fetch error:", error);
-      throw error; // Re-throw for handling in component
+      set((state) => ({
+        connectionStatus: {
+          ...state.connectionStatus,
+          error: error instanceof Error ? error.message : "Manual fetch failed",
+        },
+      }));
     }
   },
 
-  // Updated analyzeTransactions
-  analyzeTransactions: async (transactions): Promise<AnalyzedTransactionData> => {
-    if (!transactions || transactions.length === 0 || get().isAnalyzing) {
-      // If no transactions or already analyzing, return a default/empty analysis based on input
-        const currentAppliedCredit = get().creditState.appliedCredit;
-        const currentAnalysis = calculationService.calculateImpactAnalysis(transactions, currentAppliedCredit);
+  // --- analyzeTransactions - Keep previously corrected version with guard ---
+  analyzeTransactions: async (
+    incomingTransactions
+  ): Promise<AnalyzedTransactionData> => {
+    // Guard against running if still loading saved data or already analyzing
+    const { isLoadingLatest, savedTransactions, hasSavedData, isAnalyzing } =
+      get();
+    if (isAnalyzing) {
+      console.log("analyzeTransactions: Skipping - Already analyzing.");
+      const { transactions: curTxs, impactAnalysis: curIm } = get();
       return {
-          transactions: transactions, // Return original transactions
-          totalPositiveImpact: currentAnalysis.positiveImpact,
-          totalNegativeImpact: currentAnalysis.negativeImpact,
-          totalSocietalDebt: currentAnalysis.negativeImpact, // Return negative impact here as per type? Or net? Let's stick to negative.
-          debtPercentage: currentAnalysis.debtPercentage,
+        transactions: curTxs,
+        totalPositiveImpact: curIm?.positiveImpact ?? 0,
+        totalNegativeImpact: curIm?.negativeImpact ?? 0,
+        totalSocietalDebt: curIm?.negativeImpact ?? 0,
+        debtPercentage: curIm?.debtPercentage ?? 0,
+      };
+    }
+    // If loading is still in progress, OR loading finished but savedTransactions is null AND we expect data
+    if (
+      isLoadingLatest ||
+      (savedTransactions === null && hasSavedData === true && !isAnalyzing)
+    ) {
+      // Added !isAnalyzing to prevent potential loop if load completes mid-analysis
+      console.warn(
+        `analyzeTransactions: Postponing analysis. isLoadingLatest=${isLoadingLatest}, savedTransactions is null=${
+          savedTransactions === null
+        }, hasSavedData=${hasSavedData}`
+      );
+      const { transactions: curTxs, impactAnalysis: curIm } = get();
+      return {
+        transactions: curTxs,
+        totalPositiveImpact: curIm?.positiveImpact ?? 0,
+        totalNegativeImpact: curIm?.negativeImpact ?? 0,
+        totalSocietalDebt: curIm?.negativeImpact ?? 0,
+        debtPercentage: curIm?.debtPercentage ?? 0,
+      };
+    }
+    if (!incomingTransactions || incomingTransactions.length === 0) {
+      console.log("analyzeTransactions: Skipping - No incoming transactions.");
+      // Get current state to return the existing analysis data
+      const { transactions: currentTxs, impactAnalysis: currentImpact } = get();
+      return {
+        transactions: currentTxs,
+        totalPositiveImpact: currentImpact?.positiveImpact ?? 0,
+        totalNegativeImpact: currentImpact?.negativeImpact ?? 0,
+        // Use the raw negative impact sum for consistency with other return paths
+        totalSocietalDebt: currentImpact?.negativeImpact ?? 0,
+        debtPercentage: currentImpact?.debtPercentage ?? 0,
       };
     }
 
-    set({ isAnalyzing: true });
+    set({
+      isAnalyzing: true,
+      connectionStatus: { ...get().connectionStatus, error: null },
+    });
+    // console.log(`analyzeTransactions: Received ${incomingTransactions.length} incoming.`);
 
+    // Filtering logic
+    const savedTransactionMap = new Map<string, Transaction>();
+    (savedTransactions || []).forEach((tx) => {
+      if (tx.analyzed) {
+        const id = getTransactionIdentifier(tx);
+        if (id) savedTransactionMap.set(id, tx);
+      }
+    });
+    console.log(
+      `analyzeTransactions: Built map with ${savedTransactionMap.size} analyzed saved transactions.`
+    );
+
+    const transactionsToSendToApi = incomingTransactions.filter((tx) => {
+      const id = getTransactionIdentifier(tx);
+      return !id || !savedTransactionMap.has(id);
+    });
+    console.log(
+      `analyzeTransactions: Filtered down to ${transactionsToSendToApi.length} transactions for API.`
+    );
+
+    let analysisApiResult: { transactions: Transaction[] } | null = null;
     try {
-        // Use the core analysis logic (which might call OpenAI API)
-        // analyzeTransactionsCore should return the full AnalyzedTransactionData object
-        const analysisResult = await analyzeTransactionsCore(transactions); // Assume this calls your API / OpenAI
-
-        // Merge results if necessary (if core logic doesn't handle merging)
-        const { savedTransactions } = get();
-        const finalTransactions = savedTransactions
-          ? mergeTransactions(savedTransactions, analysisResult.transactions)
-          : analysisResult.transactions;
-
-        // Process the final merged transactions to get the complete analysis data needed
-        const finalProcessedData = processAnalyzedTransactions(finalTransactions);
-
-
-        // Recalculate the UI-facing impact analysis using the final transactions and current credit state
-        const currentAppliedCredit = get().creditState.appliedCredit;
-        const uiImpactAnalysis = calculationService.calculateImpactAnalysis(finalProcessedData.transactions, currentAppliedCredit);
-
-        // Update the store state
-        set({
-          transactions: finalProcessedData.transactions, // Update transactions with analyzed data
-          impactAnalysis: uiImpactAnalysis, // Update the detailed impact analysis for UI
-          totalSocietalDebt: uiImpactAnalysis.effectiveDebt, // Update effective debt for display
-          isAnalyzing: false
+      // API Call
+      if (transactionsToSendToApi.length > 0) {
+        console.log(
+          `analyzeTransactions: Calling API for ${transactionsToSendToApi.length} txs...`
+        );
+        const response = await fetch("/api/analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactions: transactionsToSendToApi }),
         });
+        if (!response.ok) {
+          if (response.status === 405) {
+            throw new Error("API Error 405 - Method Not Allowed.");
+          }
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `API Error: ${response.status}`);
+        }
+        analysisApiResult = await response.json();
+        if (
+          !analysisApiResult ||
+          !Array.isArray(analysisApiResult.transactions)
+        )
+          throw new Error("Invalid API response format");
+        console.log(
+          `analyzeTransactions: Received analysis for ${analysisApiResult.transactions.length} txs.`
+        );
+      } else {
+        console.log("analyzeTransactions: No API call needed.");
+        analysisApiResult = { transactions: [] };
+      }
 
-        // Return the specific structure needed by handleLoadSampleData (if that's the primary consumer)
-        // or the more general AnalyzedTransactionData
-         return {
-            transactions: finalProcessedData.transactions,
-            totalPositiveImpact: finalProcessedData.totalPositiveImpact,
-            totalNegativeImpact: finalProcessedData.totalNegativeImpact,
-            totalSocietalDebt: finalProcessedData.totalSocietalDebt, // Return the negative impact component
-            debtPercentage: finalProcessedData.debtPercentage
-        };
+      // Merging
+      const analyzedSavedTransactions =
+        savedTransactions?.filter((tx) => tx.analyzed) || [];
+      const newlyAnalyzedTransactions = (
+        analysisApiResult?.transactions || []
+      ).map((tx) => ({ ...tx, analyzed: true }));
+      const mergedStage1 = mergeTransactions(
+        analyzedSavedTransactions,
+        newlyAnalyzedTransactions
+      );
+      const incomingNotSent = incomingTransactions.filter(
+        (tx) => transactionsToSendToApi.indexOf(tx) === -1
+      );
+      const allFinalTransactions = mergeTransactions(
+        mergedStage1,
+        incomingNotSent
+      );
+      console.log(
+        `analyzeTransactions: Merged into ${allFinalTransactions.length} final txs.`
+      );
 
-    } catch (error) {
-      console.error('Error analyzing transactions:', error);
-      set(state => ({
+      // Recalculate & Update State
+      const { creditState } = get();
+      const finalUiImpact = calculationService.calculateImpactAnalysis(
+        allFinalTransactions,
+        creditState.appliedCredit
+      );
+      set({
+        transactions: allFinalTransactions,
+        savedTransactions: allFinalTransactions,
+        impactAnalysis: finalUiImpact,
+        totalSocietalDebt: finalUiImpact.effectiveDebt,
+        creditState: {
+          ...creditState,
+          availableCredit: finalUiImpact.availableCredit,
+        },
         isAnalyzing: false,
-        connectionStatus: { ...state.connectionStatus, error: error instanceof Error ? error.message : 'Failed to analyze transactions' }
-      }));
-      // Rethrow or return an error structure if needed by caller
-       throw error; // Propagate the error
+        connectionStatus: { ...get().connectionStatus, error: null },
+      });
+      console.log("analyzeTransactions: Analysis complete, state updated.");
+
+      // Trigger Save
+      if (allFinalTransactions.length > 0) {
+        console.log("analyzeTransactions: Triggering save post-analysis...");
+        const userId = (() => {
+          try {
+            return (
+              JSON.parse(
+                localStorage.getItem("plaid_access_token_info") || "{}"
+              ).userId || null
+            );
+          } catch {
+            return null;
+          }
+        })();
+        if (userId) {
+          const rawNegativeImpact = finalUiImpact.negativeImpact;
+          Promise.resolve().then(() => {
+            get().saveTransactions(
+              allFinalTransactions,
+              rawNegativeImpact,
+              userId
+            );
+          });
+        } else {
+          console.warn(
+            "analyzeTransactions: Cannot trigger save, user ID missing."
+          );
+        }
+      }
+
+      // Return final analysis data
+      return {
+        transactions: allFinalTransactions,
+        totalPositiveImpact: finalUiImpact.positiveImpact,
+        totalNegativeImpact: finalUiImpact.negativeImpact,
+        totalSocietalDebt: finalUiImpact.negativeImpact,
+        debtPercentage: finalUiImpact.debtPercentage,
+      };
+    } catch (error) {
+      console.error("Error during analysis process:", error);
+      const errorMsg =
+        error instanceof Error ? error.message : "Failed to analyze";
+      set({
+        isAnalyzing: false,
+        connectionStatus: { ...get().connectionStatus, error: errorMsg },
+      });
+      const { transactions: curTxs, impactAnalysis: curIm } = get();
+      return {
+        transactions: curTxs,
+        totalPositiveImpact: curIm?.positiveImpact ?? 0,
+        totalNegativeImpact: curIm?.negativeImpact ?? 0,
+        totalSocietalDebt: curIm?.negativeImpact ?? 0,
+        debtPercentage: curIm?.debtPercentage ?? 0,
+      }; // Return current state on error
     }
   },
+  // --- End analyzeTransactions ---
 
-
-  // Updated saveTransactions signature
-  saveTransactions: async (transactions, totalNegativeDebt, userId) => {
-    const state = get();
-    if (state.isSaving) return;
-
-    const currentUserId = userId || (() => {
+  // --- saveTransactions ---
+  saveTransactions: async (transactionsToSave, totalNegativeDebt, userId) => {
+    if (get().isSaving) return;
+    if (!transactionsToSave || transactionsToSave.length === 0) return;
+    const currentUserId =
+      userId ||
+      (() => {
         try {
-            const storedData = localStorage.getItem("plaid_access_token_info");
-            if (!storedData) return null;
-            return JSON.parse(storedData).userId;
-        } catch { return null; }
-    })();
-
+          return (
+            JSON.parse(localStorage.getItem("plaid_access_token_info") || "{}")
+              .userId || null
+          );
+        } catch {
+          return null;
+        }
+      })();
     if (!currentUserId) {
-      console.error("Cannot save transactions: no user ID available");
+      console.error("Save Error: No User ID.");
       return;
     }
-
     set({ isSaving: true });
-
     try {
-      // Calculate debt percentage using the provided negative debt
-      const totalSpent = transactions.reduce((sum, tx) => sum + tx.amount, 0);
-      const debtPercentage = totalSpent > 0 ? (totalNegativeDebt / totalSpent) * 100 : 0;
-
+      const finalizedTransactions = transactionsToSave.map((tx) => ({
+        ...tx,
+        analyzed: tx.analyzed ?? true,
+      }));
+      const totalSpent = finalizedTransactions.reduce(
+        (sum, tx) => sum + tx.amount,
+        0
+      );
+      const debtPercentage =
+        totalSpent > 0 ? (totalNegativeDebt / totalSpent) * 100 : 0;
       const batch = {
         userId: currentUserId,
-        transactions,
-        totalSocietalDebt: totalNegativeDebt, // Save the negative debt component
+        transactions: finalizedTransactions,
+        totalSocietalDebt: totalNegativeDebt,
         debtPercentage,
         createdAt: Timestamp.now(),
       };
-
-      await addDoc(collection(db, "transactionBatches"), batch);
-
-      // Update local state
-      set({
-        savedTransactions: transactions, // Keep track of what was last saved
-        // Don't update totalSocietalDebt here, it reflects effective debt
-        hasSavedData: true,
-        isSaving: false
-      });
+      const docRef = await addDoc(collection(db, "transactionBatches"), batch);
+      set({ savedTransactions: finalizedTransactions, hasSavedData: true }); // Update saved state *after* DB save
+      console.log(`saveTransactions: Saved batch ${docRef.id}. Store updated.`);
     } catch (error) {
-      console.error('Error saving transactions:', error);
-      set(state => ({
-        isSaving: false,
-        connectionStatus: { ...state.connectionStatus, error: 'Failed to save transactions' }
+      console.error("Error saving:", error);
+      set((state) => ({
+        connectionStatus: {
+          ...state.connectionStatus,
+          error: "Failed to save",
+        },
       }));
+    } finally {
+      set({ isSaving: false });
     }
   },
+  // --- End saveTransactions ---
 
+  // --- applyCredit ---
   applyCredit: async (amount, userId) => {
-    const { impactAnalysis, creditState, isApplyingCredit } = get();
+    const { impactAnalysis, creditState, isApplyingCredit, transactions } =
+      get();
     if (isApplyingCredit || !impactAnalysis || amount <= 0) return false;
-
-    const currentUserId = userId || (() => {
-         try {
-            const storedData = localStorage.getItem("plaid_access_token_info");
-            if (!storedData) return null;
-            return JSON.parse(storedData).userId;
-        } catch { return null; }
-    })();
-    if (!currentUserId) { console.error("Cannot apply credit: no user ID available"); return false; }
-
+    const currentUserId =
+      userId ||
+      (() => {
+        try {
+          return (
+            JSON.parse(localStorage.getItem("plaid_access_token_info") || "{}")
+              .userId || null
+          );
+        } catch {
+          return null;
+        }
+      })();
+    if (!currentUserId) return false;
     set({ isApplyingCredit: true });
-
     try {
-      // Calculate credit to apply based on current state
-      const available = impactAnalysis.availableCredit; // Use calculated available credit
-      const currentDebt = impactAnalysis.effectiveDebt; // Use current effective debt
-      const creditToApply = Math.min(amount, available, currentDebt); // Can't apply more than available or needed
-
+      const creditToApply = Math.min(
+        amount,
+        impactAnalysis.availableCredit,
+        impactAnalysis.effectiveDebt
+      );
       if (creditToApply <= 0) {
         set({ isApplyingCredit: false });
-        console.log("No credit to apply or no debt to offset.");
         return false;
-      }
-
-      // Update credit state object optimistically
-      const updatedCreditState: CreditState = {
-        availableCredit: available - creditToApply, // Decrease available
-        appliedCredit: creditState.appliedCredit + creditToApply, // Increase applied
+      } // Exit early if nothing to apply
+      const updatedCreditStateValues = {
+        appliedCredit: creditState.appliedCredit + creditToApply,
         lastAppliedAmount: creditToApply,
         lastAppliedAt: Timestamp.now(),
       };
-
-      // Update Firestore
       const creditDocRef = doc(db, "creditState", currentUserId);
-      await setDoc(creditDocRef, updatedCreditState, { merge: true }); // Use merge to be safe
-
-      // Update local store state
+      await setDoc(creditDocRef, updatedCreditStateValues, { merge: true });
+      const newAnalysis = calculationService.calculateImpactAnalysis(
+        transactions,
+        updatedCreditStateValues.appliedCredit
+      );
       set({
-        creditState: updatedCreditState,
-        isApplyingCredit: false
+        creditState: {
+          ...creditState,
+          ...updatedCreditStateValues,
+          availableCredit: newAnalysis.availableCredit,
+        },
+        impactAnalysis: newAnalysis,
+        totalSocietalDebt: newAnalysis.effectiveDebt,
       });
-
-      // IMPORTANT: Re-calculate impact analysis based on the *new* credit state
-       const newAnalysis = calculationService.calculateImpactAnalysis(get().transactions, updatedCreditState.appliedCredit);
-       set({ impactAnalysis: newAnalysis, totalSocietalDebt: newAnalysis.effectiveDebt });
-
-      console.log(`Applied $${creditToApply.toFixed(2)} credit.`);
       return true;
     } catch (error) {
       console.error("Error applying credit:", error);
-      set({ isApplyingCredit: false });
       return false;
+    } finally {
+      set({ isApplyingCredit: false });
     }
   },
+  // --- End applyCredit ---
 
-  loadLatestTransactions: async (userId) => {
-     if (!userId) return false;
+  // --- loadLatestTransactions ---
+  loadLatestTransactions: async (userId): Promise<boolean> => {
+    if (!userId) {
+      console.warn("loadLatest: No userId");
+      return false;
+    }
+    let wasManuallyDisconnected = false;
+    try {
+      wasManuallyDisconnected =
+        sessionStorage.getItem("wasManuallyDisconnected") === "true";
+    } catch {}
+    if (wasManuallyDisconnected) {
+      set({
+        connectionStatus: {
+          isConnected: false,
+          error: "User manually disconnected.",
+        },
+      });
+      return false;
+    }
+    if (get().isLoadingLatest) {
+      console.log("loadLatest: Already loading.");
+      return get().hasSavedData;
+    }
 
-     // Check session storage flag first
-     const wasManuallyDisconnected = (() => {
-       try { return sessionStorage.getItem('wasManuallyDisconnected') === 'true'; }
-       catch { return false; }
-     })();
-     if (wasManuallyDisconnected) {
-       console.log("Skipping loadLatestTransactions: User manually disconnected.");
-       return false;
-     }
-
-
-    set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: true } }));
-
+    set({
+      isLoadingLatest: true,
+      hasSavedData: false,
+      savedTransactions: null,
+      connectionStatus: { ...get().connectionStatus, error: null },
+    });
+    console.log(`loadLatestTransactions: Loading for ${userId}...`);
+    let success = false; // Track success
     try {
       const q = query(
-        collection(db, 'transactionBatches'),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc'),
+        collection(db, "transactionBatches"),
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc"),
         limit(1)
       );
       const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const docData = querySnapshot.docs[0].data();
+        const loadedTransactions = (
+          (docData.transactions as Transaction[]) || []
+        ).map((tx) => ({ ...tx, analyzed: true }));
+        if (!Array.isArray(loadedTransactions))
+          throw new Error("Invalid data format");
+        console.log(
+          `loadLatestTransactions: Loaded ${loadedTransactions.length} txs.`
+        );
 
-      if (querySnapshot.empty) {
-        set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: false } }));
-        return false; // No saved data found
+        const loadedCreditState = await get().loadCreditState(userId);
+        const initialAppliedCredit = loadedCreditState?.appliedCredit ?? 0;
+        const analysis = calculationService.calculateImpactAnalysis(
+          loadedTransactions,
+          initialAppliedCredit
+        );
+
+        set({
+          // Update store fully
+          transactions: loadedTransactions,
+          savedTransactions: loadedTransactions,
+          impactAnalysis: analysis,
+          totalSocietalDebt: analysis.effectiveDebt,
+          hasSavedData: true,
+          creditState: {
+            ...get().creditState,
+            availableCredit: analysis.availableCredit,
+          },
+          connectionStatus: { isConnected: true, error: null },
+        });
+        success = true; // Mark success
+      } else {
+        console.log("loadLatestTransactions: No data found.");
+        set({ hasSavedData: false, savedTransactions: null, transactions: [] }); // Clear state
+        success = false; // No data found isn't an error, but load wasn't successful in finding data
       }
-
-      const doc = querySnapshot.docs[0];
-      const data = doc.data();
-      const loadedTransactions = data.transactions as Transaction[];
-
-      // Load credit state *before* calculating initial impact
-       const loadedCreditState = await get().loadCreditState(userId);
-       const initialAppliedCredit = loadedCreditState?.appliedCredit ?? 0;
-
-      // Calculate impact analysis based on loaded transactions and credit state
-      const analysis = calculationService.calculateImpactAnalysis(loadedTransactions, initialAppliedCredit);
-
-      // Update state with loaded data and calculated analysis
-      set({
-        transactions: loadedTransactions,
-        savedTransactions: loadedTransactions, // Mark these as saved
-        impactAnalysis: analysis,
-        totalSocietalDebt: analysis.effectiveDebt, // Set initial effective debt
-        hasSavedData: true,
-        connectionStatus: { isConnected: true, isLoading: false, error: null } // Assume connected if data loaded
-        // Credit state is already set by loadCreditState
-      });
-
-      // Optionally re-analyze if needed (e.g., if analysis format changed)
-      // const needsReAnalysis = loadedTransactions.some((tx: Transaction) => !tx.analyzed);
-      // if (needsReAnalysis) {
-      //    await get().analyzeTransactions(loadedTransactions); // This will recalculate and update state again
-      // }
-
-      return true;
     } catch (error) {
-      console.error('❌ loadLatestTransactions: Error:', error);
-      set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: false, error: 'Failed to load saved transactions' } }));
-      return false;
+      console.error("❌ loadLatestTransactions Error:", error);
+      set((state) => ({
+        connectionStatus: {
+          ...state.connectionStatus,
+          error: error instanceof Error ? error.message : "Failed saved data",
+        },
+        hasSavedData: false,
+        savedTransactions: null,
+      }));
+      success = false; // Mark failure
+    } finally {
+      set({ isLoadingLatest: false }); // Clear loading flag regardless of outcome
+      console.log(`loadLatestTransactions: Finished. Success=${success}`);
     }
+    return success; // Return actual success/failure
   },
+  // --- End loadLatestTransactions ---
 
-  loadCreditState: async (userId) => {
-    if (!userId) return null;
-
+  // --- loadCreditState ---
+  loadCreditState: async (userId): Promise<CreditState | null> => {
+    if (!userId || get().isLoadingCreditState) return get().creditState;
+    set({ isLoadingCreditState: true });
+    let finalCreditState: CreditState | null = null; // To return
     try {
       const creditDocRef = doc(db, "creditState", userId);
       const docSnap = await getDoc(creditDocRef);
-      let loadedCreditState: CreditState;
-
+      let loadedAppliedCredit = 0,
+        loadedLastAmount = 0,
+        loadedLastAt: Timestamp | null = null;
       if (docSnap.exists()) {
         const data = docSnap.data();
-        loadedCreditState = {
-          availableCredit: typeof data.availableCredit === "number" ? data.availableCredit : 0, // This might be recalculated based on transactions
-          appliedCredit: typeof data.appliedCredit === "number" ? data.appliedCredit : 0,
-          lastAppliedAmount: typeof data.lastAppliedAmount === "number" ? data.lastAppliedAmount : 0,
-          lastAppliedAt: data.lastAppliedAt instanceof Timestamp ? data.lastAppliedAt : null,
-        };
-         console.log("Loaded credit state from Firestore:", loadedCreditState);
+        loadedAppliedCredit = data.appliedCredit || 0;
+        loadedLastAmount = data.lastAppliedAmount || 0;
+        loadedLastAt =
+          data.lastAppliedAt instanceof Timestamp ? data.lastAppliedAt : null;
       } else {
-        // Initialize new credit state if none exists
-        console.log("No credit state found in Firestore, initializing.");
-        const initialPositiveImpact = calculationService.calculatePositiveImpact(get().transactions); // Base initial available on current transactions
-        loadedCreditState = {
-          availableCredit: initialPositiveImpact,
+        loadedLastAt = Timestamp.now();
+        await setDoc(creditDocRef, {
           appliedCredit: 0,
           lastAppliedAmount: 0,
-          lastAppliedAt: Timestamp.now(),
-        };
-        await setDoc(creditDocRef, loadedCreditState);
+          lastAppliedAt: loadedLastAt,
+        });
       }
 
-      // Update the store's credit state
-      set({ creditState: loadedCreditState });
+      const currentTransactions = get().transactions; // Use current state transactions
+      const analysis = calculationService.calculateImpactAnalysis(
+        currentTransactions,
+        loadedAppliedCredit
+      ); // Recalculate impact
+      finalCreditState = {
+        appliedCredit: loadedAppliedCredit,
+        lastAppliedAmount: loadedLastAmount,
+        lastAppliedAt: loadedLastAt,
+        availableCredit: analysis.availableCredit,
+      };
 
-      // Re-calculate impact analysis based on the potentially updated credit state
-      // Avoids stale calculations if loadCreditState is called after transactions are set
-      const currentTransactions = get().transactions;
-       if (currentTransactions.length > 0) {
-           const analysis = calculationService.calculateImpactAnalysis(currentTransactions, loadedCreditState.appliedCredit);
-           set({ impactAnalysis: analysis, totalSocietalDebt: analysis.effectiveDebt });
-       }
-
-
-      return loadedCreditState;
+      set({
+        creditState: finalCreditState,
+        impactAnalysis: analysis,
+        totalSocietalDebt: analysis.effectiveDebt,
+      }); // Update store
     } catch (error) {
-      console.error("Error loading/initializing credit state:", error);
-       // Optionally set an error state
-      return null;
+      console.error("Error loading credit state:", error);
+      set((state) => ({
+        connectionStatus: {
+          ...state.connectionStatus,
+          error: "Failed credit state",
+        },
+      }));
+      finalCreditState = null;
+    } finally {
+      set({ isLoadingCreditState: false });
     }
+    return finalCreditState; // Return the loaded/calculated state
   },
+  // --- End loadCreditState ---
 
-
-  resetState: () => {
-    set({
-      transactions: [],
-      savedTransactions: null,
-      impactAnalysis: null,
-      totalSocietalDebt: 0,
-      connectionStatus: { isConnected: false, isLoading: false, error: null },
-      creditState: { availableCredit: 0, appliedCredit: 0, lastAppliedAmount: 0, lastAppliedAt: null },
-      isAnalyzing: false,
-      isSaving: false,
-      isApplyingCredit: false,
-      hasSavedData: false,
-    });
-     // Also clear the disconnect flag on reset
-     try { sessionStorage.removeItem('wasManuallyDisconnected'); } catch {}
-     console.log("Store state reset.");
-  },
-
+  // --- initializeStore ---
   initializeStore: async (user: User | null) => {
     if (!user) {
-        get().resetState(); // Reset if user logs out
-        return;
+      get().resetState();
+      return;
     }
-
-    const state = get();
-    // Avoid re-initialization if already loading or has data and connection is ok
-    if (state.connectionStatus.isLoading || (state.transactions.length > 0 && state.connectionStatus.isConnected && !state.connectionStatus.error)) {
-       console.log("Skipping initialization: Already loading or initialized.");
+    if (isAnyLoading(get())) return; // Skip if already busy
+    let wasManuallyDisconnected = false;
+    try {
+      wasManuallyDisconnected =
+        sessionStorage.getItem("wasManuallyDisconnected") === "true";
+    } catch {}
+    if (wasManuallyDisconnected) {
+      set({
+        connectionStatus: {
+          isConnected: false,
+          error: "Manually disconnected.",
+        },
+        isInitializing: false,
+      });
+      try {
+        localStorage.removeItem("plaid_access_token_info");
+      } catch (e) {
+        console.error(e);
+      }
       return;
     }
 
-     // Check manual disconnect flag
-     const wasManuallyDisconnected = (() => {
-       try { return sessionStorage.getItem('wasManuallyDisconnected') === 'true'; }
-       catch { return false; }
-     })();
-     if (wasManuallyDisconnected) {
-       console.log("Skipping initialization: User manually disconnected.");
-       // Ensure UI reflects disconnected state without resetting everything if they just logged in
-        set({ connectionStatus: { isConnected: false, isLoading: false, error: "User manually disconnected." } });
-       return;
-     }
-
-
-    set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: true, error: null } }));
-
+    set({
+      isInitializing: true,
+      connectionStatus: { ...get().connectionStatus, error: null },
+    });
+    console.log(`initializeStore: Starting for ${user.uid}`);
+    let loadedFromFirebase = false;
     try {
-      // 1. Try loading the latest saved data from Firebase first.
-      // loadLatestTransactions now also loads credit state and calculates initial impact.
-      const loadedFromFirebase = await get().loadLatestTransactions(user.uid);
-      console.log("Initialize: Loaded from Firebase:", loadedFromFirebase);
+      console.log("initializeStore: Awaiting loadLatestTransactions...");
+      loadedFromFirebase = await get().loadLatestTransactions(user.uid);
+      console.log(
+        `initializeStore: loadLatestTransactions result: ${loadedFromFirebase}`
+      );
 
-       // 2. If nothing was loaded from Firebase, check for a Plaid token.
-      if (!loadedFromFirebase) {
+      // Check token only *after* load attempt finishes
+      let hasValidStoredToken = false,
+        tokenToFetch: string | null = null;
+      try {
         const storedData = localStorage.getItem("plaid_access_token_info");
         if (storedData) {
           const tokenInfo = JSON.parse(storedData);
           if (tokenInfo.userId === user.uid) {
-            console.log("Initialize: Found valid Plaid token, fetching fresh transactions...");
-            // Fetch fresh transactions - this will analyze and save automatically.
-            // It also sets connectionStatus internally.
-            await get().fetchTransactions(tokenInfo.token);
+            hasValidStoredToken = true;
+            tokenToFetch = tokenInfo.token;
           } else {
-            // Token for different user, clear it
-             console.log("Initialize: Stale Plaid token found, clearing.");
             localStorage.removeItem("plaid_access_token_info");
-             set(state => ({ connectionStatus: { ...state.connectionStatus, isLoading: false } })); // Stop loading
           }
-        } else {
-          // No Firebase data and no Plaid token. User needs to connect.
-          console.log("Initialize: No saved data or token found.");
-          set(state => ({ connectionStatus: { ...state.connectionStatus, isConnected: false, isLoading: false } })); // Ensure disconnected state
         }
+      } catch (e) {
+        localStorage.removeItem("plaid_access_token_info");
+        console.error(e);
       }
-       // If data *was* loaded from Firebase, we're done initializing.
-       // fetchTransactions was NOT called, connectionStatus was set by loadLatestTransactions.
 
+      // Fetch ONLY if load failed AND token exists
+      if (!loadedFromFirebase && hasValidStoredToken && tokenToFetch) {
+        console.log(
+          "initializeStore: No Firebase data, valid token exists. Fetching fresh..."
+        );
+        await get().fetchTransactions(tokenToFetch);
+      } else if (!loadedFromFirebase && !hasValidStoredToken) {
+        console.log("initializeStore: No Firebase data and no valid token.");
+        set((state) => ({
+          connectionStatus: {
+            ...state.connectionStatus,
+            isConnected: false,
+            error: null,
+          },
+        }));
+      } else if (loadedFromFirebase) {
+        console.log(
+          "initializeStore: Loaded from Firebase. Ensure connected status."
+        );
+        set((state) => ({
+          connectionStatus: {
+            ...state.connectionStatus,
+            isConnected: true,
+            error: null,
+          },
+        }));
+      }
     } catch (error) {
-      console.error("❌ initializeStore: Error during initialization:", error);
-      set(state => ({
-        connectionStatus: { ...state.connectionStatus, isLoading: false, error: error instanceof Error ? error.message : "Failed to initialize store" }
-      }));
+      console.error("❌ initializeStore Error:", error);
+      set({
+        connectionStatus: {
+          isConnected: false,
+          error: error instanceof Error ? error.message : "Init failed",
+        },
+      });
     } finally {
-       // Ensure loading is always set to false eventually, unless fetchTransactions sets it again.
-       // We rely on the internal state management of loadLatest/fetchTransactions now.
+      set({ isInitializing: false });
+      console.log("initializeStore: Finished.");
     }
   },
-}));
+  // --- End initializeStore ---
+})); // End create

@@ -2,6 +2,8 @@
 export const transactionAnalysisPrompt = `
 You are an AI designed to evaluate financial transactions to determine the societal debt—the ethical impact—of consumer spending. Evaluate each purchase by considering not just the direct proportion of spending but also the severity, scale, and scope of harm or benefit resulting from the merchant's industry practices. Weigh practices with outsized ethical impacts significantly higher, even if only a small percentage of the cost contributes directly to these practices.
 
+ **IMPORTANT**: You MUST include the original plaidTransactionId field for each transaction is in your output JSON.
+
 Guidelines:
 
 1) Identify practices relevant strictly to the merchant's business model:
@@ -47,6 +49,7 @@ Guidelines:
 {
 "transactions": [
   {
+    "plaidTransactionId": "abc123xyzSAMPLE",
     "date": "YYYY-MM-DD",
     "name": "McDonald's",
     "amount": 12.99,
@@ -70,6 +73,7 @@ Guidelines:
     }
   },
   {
+    "plaidTransactionId": "def456uvwSAMPLE",
     "date": "YYYY-MM-DD",
     "name": "Google One",
     "amount": 9.99,

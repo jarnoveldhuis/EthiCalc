@@ -3,7 +3,7 @@
 
 import { db } from "@/core/firebase/firebase";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, limit, DocumentData } from "firebase/firestore";
-import { Transaction, AnalyzedTransactionData } from "./types";
+import { Transaction, AnalyzedTransactionData } from "@/shared/types/transactions";
 
 export interface TransactionBatch {
   userId: string;

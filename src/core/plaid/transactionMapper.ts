@@ -1,116 +1,94 @@
-// src/features/banking/transactionMapper.ts
+// src/tsx/core/plaid/transactionMapper.ts (Relevant Part)
 import { Transaction } from '@/shared/types/transactions';
 
-/**
- * Interface for Plaid transaction data
- * Only includes fields we actually use
- */
+// Interface for Plaid transaction data (ensure it includes transaction_id)
 interface PlaidTransaction {
-  transaction_id?: string;
+  transaction_id?: string; // <-- Make sure this is included
   date?: string;
   name?: string;
   merchant_name?: string;
   amount?: number;
   category?: string[];
-  [key: string]: unknown; // Allow additional fields
+  [key: string]: unknown;
 }
 
-/**
- * Maps Plaid transaction data to our application's Transaction type
- * @param plaidTransactions Raw transactions from Plaid API
- * @returns Formatted transactions ready for our application
- */
 export function mapPlaidTransactions(plaidTransactions: PlaidTransaction[]): Transaction[] {
   if (!plaidTransactions || !Array.isArray(plaidTransactions)) {
     console.error('Invalid Plaid transaction data:', plaidTransactions);
     return [];
   }
-  
+
   return plaidTransactions.map(tx => {
-    // Get the date in YYYY-MM-DD format
     const date = tx.date || new Date().toISOString().split('T')[0];
-    
-    // Use merchant_name if available, otherwise fall back to name
     const name = tx.merchant_name || tx.name || 'Unknown Merchant';
-    
-    // Plaid amounts are negative for outflows (spending), but we want positive values
-    // Also handle potentially missing amount values
     const rawAmount = typeof tx.amount === 'number' ? tx.amount : 0;
-    const amount = Math.abs(rawAmount);
-    
-    // Map to our Transaction type
+    const amount = Math.abs(rawAmount); // Use absolute amount
+
     return {
       date,
       name,
       amount,
-      // Add placeholder fields for analysis
       societalDebt: 0,
       unethicalPractices: [],
       ethicalPractices: [],
       information: {},
+      practiceWeights: {}, // Initialize potential missing fields
+      practiceDebts: {},
+      practiceSearchTerms: {},
+      practiceCategories: {},
+      charities: {},
       analyzed: false,
-      // Optional: store original Plaid transaction ID for reference
-      plaidTransactionId: tx.transaction_id,
-      // Optional: store categories from Plaid for potential use in analysis
-      plaidCategories: tx.category
-    } as Transaction;
+      // *** ENSURE THIS LINE IS CORRECT ***
+      plaidTransactionId: tx.transaction_id, // Map from Plaid's transaction_id
+      // *** END ENSURE ***
+      plaidCategories: tx.category // Optional: keep plaid categories
+      // Ensure all fields from Transaction type are initialized if not mapped
+    } as Transaction; // Cast to Transaction, ensure all fields are present or optional
   });
 }
 
-/**
- * Deduplicate transactions based on date, name, and amount
- * @param transactions Array of transactions that may contain duplicates
- * @returns Deduplicated array of transactions
- */
+// Keep mergeTransactions and deduplicateTransactions as they are
+// ... rest of the file (mergeTransactions, deduplicateTransactions) ...
+
 export function deduplicateTransactions(transactions: Transaction[]): Transaction[] {
-  // Create a Set of transaction identifiers to track duplicates
   const seen = new Set<string>();
-  
   return transactions.filter(tx => {
-    // Create a unique identifier for each transaction
-    const identifier = `${tx.date}-${tx.name}-${tx.amount}`;
-    
-    // If we've seen this transaction before, filter it out
+
+    const identifier = tx.plaidTransactionId || `${tx.date}-${tx.name}-${tx.amount.toFixed(2)}`;
     if (seen.has(identifier)) {
       return false;
     }
-    
-    // Otherwise, add it to the set and keep it
     seen.add(identifier);
     return true;
   });
 }
 
-/**
- * Merge existing transactions with new ones, avoiding duplicates
- * @param existingTransactions Current transactions in the system
- * @param newTransactions New transactions to add
- * @returns Combined transactions without duplicates
- */
 export function mergeTransactions(
-  existingTransactions: Transaction[], 
+  existingTransactions: Transaction[],
   newTransactions: Transaction[]
 ): Transaction[] {
-  // Convert existing transactions to a Map for quick lookup
-  const existingMap = new Map<string, Transaction>();
-  
+  const transactionMap = new Map<string, Transaction>();
+
+  // Add existing transactions first, prioritizing analyzed ones
   existingTransactions.forEach(tx => {
-    const identifier = `${tx.date}-${tx.name}-${tx.amount}`;
-    existingMap.set(identifier, tx);
+
+    const identifier = tx.plaidTransactionId || `${tx.date}-${tx.name}-${tx.amount.toFixed(2)}`;
+    // If already in map, only overwrite if the new one is analyzed and the old one wasn't
+    if (!transactionMap.has(identifier) || (tx.analyzed && !transactionMap.get(identifier)?.analyzed)) {
+         transactionMap.set(identifier, tx);
+     }
   });
-  
-  // Process new transactions, replacing or adding as needed
+
+  // Add or overwrite with new transactions
   newTransactions.forEach(tx => {
-    const identifier = `${tx.date}-${tx.name}-${tx.amount}`;
-    
-    // If this transaction exists and is already analyzed, keep it
-    // Otherwise, use the new transaction
-    if (!existingMap.has(identifier) || !existingMap.get(identifier)?.analyzed) {
-      existingMap.set(identifier, tx);
-    }
+
+     const identifier = tx.plaidTransactionId || `${tx.date}-${tx.name}-${tx.amount.toFixed(2)}`;
+     // Always prefer the newer transaction data if identifier matches, especially if analyzed
+     if (!transactionMap.has(identifier) || tx.analyzed || !transactionMap.get(identifier)?.analyzed) {
+        transactionMap.set(identifier, tx);
+     }
   });
-  
-  // Convert back to array and sort by date (newest first)
-  return Array.from(existingMap.values())
+
+  return Array.from(transactionMap.values())
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }

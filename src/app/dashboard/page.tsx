@@ -1,172 +1,174 @@
 // src/app/dashboard/page.tsx
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
+// Import TransactionState type along with the store hook
 import { useTransactionStore } from "@/store/transactionStore";
-import { ErrorAlert } from "@/shared/ui/ErrorAlert"; // Ensure this is imported
+import { ErrorAlert } from "@/shared/ui/ErrorAlert";
 import { DashboardLayout } from "@/features/dashboard/DashboardLayout";
 import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
 import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
-// Removed unused import: import { getColorClass } from "@/core/calculations/impactService";
 import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
 import { DashboardSidebar } from "@/features/dashboard/DashboardSidebar";
 import { DashboardLoading, DashboardEmptyState } from "@/features/dashboard/DashboardLoading";
-import { useSampleData } from "@/features/debug/useSampleData";
-import { AnalyzedTransactionData } from "@/shared/types/transactions"; // Import the type
+import { useSampleData } from "@/features/debug/useSampleData"; // Verify this path
+
+// // Helper function - Uses imported TransactionState type
+// const isAnyLoading = (state: TransactionState): boolean => {
+//     // Include all relevant loading flags
+//     return state.isInitializing || state.isConnectingBank || state.isFetchingTransactions ||
+//            state.isAnalyzing || state.isSaving || state.isApplyingCredit ||
+//            state.isLoadingLatest || state.isLoadingCreditState;
+// };
 
 export default function Dashboard() {
-  // Core state - moved to Zustand
-  const [isConnecting, setIsConnecting] = useState<boolean>(false);
-  const [loadingMessage, setLoadingMessage] = useState<string>("Loading your dashboard...");
-  const [fetchError, setFetchError] = useState<string | null>(null);
-
-  // Auth hook
+  const [isPlaidConnecting, setIsPlaidConnecting] = useState<boolean>(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>("Loading dashboard...");
   const { user, loading: authLoading, logout } = useAuth();
-
-  // Zustand store
+  // Select the full impactAnalysis object
+  const impactAnalysis = useTransactionStore(state => state.impactAnalysis);
+  // Safely get effectiveDebt, defaulting to 0 if analysis isn't ready
+  const effectiveDebt = impactAnalysis?.effectiveDebt ?? 0;
+  // Destructure state and actions from store
   const {
     transactions,
     connectionStatus,
-    connectBank,
-    disconnectBank,
-    manuallyFetchTransactions,
-    analyzeTransactions, // This should return Promise<AnalyzedTransactionData> now
-    saveTransactions,
-    initializeStore
+    isInitializing, isConnectingBank, isFetchingTransactions, isAnalyzing,
+    isLoadingLatest, isLoadingCreditState, isSaving, isApplyingCredit, // Destructure all loading flags
+    connectBank, disconnectBank, manuallyFetchTransactions,
+    analyzeTransactions, saveTransactions, initializeStore
   } = useTransactionStore();
 
-  // Sample data utility
-  const { generateSampleTransactions } = useSampleData();
+  const { generateSampleTransactions } = useSampleData(); // Ensure this is exported
 
-  // Derived/computed state
+  // Refs for initialization guard
+  const hasInitialized = useRef(false);
+  const currentUserId = useRef<string | null>(null);
+
+  // Combined Loading State Calculation
+  const isOverallLoading = authLoading || isInitializing || isConnectingBank || isFetchingTransactions || isAnalyzing || isLoadingLatest || isLoadingCreditState || isSaving || isApplyingCredit;
+  useEffect(() => {
+      if (authLoading) setLoadingMessage("Authenticating...");
+      else if (isInitializing) setLoadingMessage("Initializing data...");
+      else if (isConnectingBank) setLoadingMessage("Connecting bank account...");
+      else if (isFetchingTransactions) setLoadingMessage("Fetching transactions...");
+      else if (isLoadingLatest) setLoadingMessage("Loading saved data...");
+      else if (isLoadingCreditState) setLoadingMessage("Loading credit state...");
+      else if (isAnalyzing) setLoadingMessage("Analyzing impact...");
+      else if (isSaving) setLoadingMessage("Saving data...");
+      else if (isApplyingCredit) setLoadingMessage("Applying Credit...");
+      else setLoadingMessage("Loading dashboard...");
+  }, [authLoading, isInitializing, isConnectingBank, isFetchingTransactions, isLoadingLatest, isLoadingCreditState, isAnalyzing, isSaving, isApplyingCredit]);
+
+
+  // Other derived state
   const effectiveConnectionStatus: boolean = connectionStatus.isConnected;
-  const isLoading: boolean = authLoading || connectionStatus.isLoading || isConnecting;
-  const error: string | null = connectionStatus.error || fetchError;
-  const bankConnecting: boolean = connectionStatus.isLoading || isConnecting;
+  const error: string | null = connectionStatus.error;
   const hasData: boolean = transactions.length > 0;
 
-  // Initialize store when user changes and auth is resolved
+  // Initialize store effect - WITH GUARD
   useEffect(() => {
-    // Added connectionStatus.isLoading to dependencies
-    if (user && !authLoading && !connectionStatus.isLoading) {
-      setLoadingMessage("Initializing data...");
-      initializeStore(user).catch((err) => {
-        console.error("❌ Dashboard: Store initialization failed:", err);
-        setFetchError(err instanceof Error ? err.message : "Failed to initialize dashboard");
-      });
+    console.log(`Dashboard Effect Triggered: user=${user?.uid}, authLoading=${authLoading}, hasInitialized=${hasInitialized.current}`);
+    if (!user || (currentUserId.current && user.uid !== currentUserId.current)) {
+        console.log("Dashboard Effect: User logged out or changed, resetting init guard.");
+        hasInitialized.current = false;
+        currentUserId.current = user?.uid ?? null;
     }
-     // Added connectionStatus.isLoading as per linter warning
-  }, [user, authLoading, connectionStatus.isLoading, initializeStore]);
+    if (user && !authLoading && !hasInitialized.current) {
+        const currentlyLoading = isInitializing || isConnectingBank || isFetchingTransactions || isAnalyzing || isLoadingLatest || isLoadingCreditState || isSaving || isApplyingCredit;
+        if (currentlyLoading) {
+             console.log("Dashboard Effect: Skipping initialization call - an operation is already in progress.");
+             return;
+        }
+        console.log(`Dashboard Effect: Conditions met for initialization (User: ${user.uid}). Setting guard and calling initializeStore.`);
+        hasInitialized.current = true;
+        currentUserId.current = user.uid;
+        initializeStore(user).catch((err) => { console.error("Dashboard Effect: initializeStore promise rejected", err); });
+    }
+  // Include necessary dependencies for the loading check inside the effect
+  }, [user, authLoading, initializeStore, isInitializing, isConnectingBank, isFetchingTransactions, isAnalyzing, isLoadingLatest, isLoadingCreditState, isSaving, isApplyingCredit]);
 
 
-  // Handle loading sample data
+  // --- Callbacks with FULL Dependency Arrays ---
   const handleLoadSampleData = useCallback(async () => {
-    if (isLoading) return;
-    setIsConnecting(true);
-    setLoadingMessage("Generating sample data...");
-    setFetchError(null);
-    try {
-      const sampleTransactions = generateSampleTransactions();
-      // Call analyzeTransactions from the store, expecting AnalyzedTransactionData
-      const analysisResult: AnalyzedTransactionData = await analyzeTransactions(sampleTransactions); // Explicitly type result
+     const loadingCheck = isInitializing || isConnectingBank || isFetchingTransactions || isAnalyzing || isLoadingLatest || isLoadingCreditState || isSaving || isApplyingCredit;
+     if (loadingCheck) { console.log("handleLoadSampleData: Skipping..."); return; }
+     setIsPlaidConnecting(true); setLoadingMessage("Generating sample data...");
+     try {
+       const sampleTxs = generateSampleTransactions();
+       const analysisResult = await analyzeTransactions(sampleTxs);
+       if (user && analysisResult && analysisResult.transactions) {
+         await saveTransactions(analysisResult.transactions, analysisResult.totalNegativeImpact, user.uid);
+       }
+     } catch (error) { console.error("Error loading sample data:", error); }
+     finally { setIsPlaidConnecting(false); }
+   // Dependencies for handleLoadSampleData
+   }, [generateSampleTransactions, analyzeTransactions, saveTransactions, user, isInitializing, isConnectingBank, isFetchingTransactions, isAnalyzing, isLoadingLatest, isLoadingCreditState, isSaving, isApplyingCredit]);
 
-      // Save to Firestore if user is logged in, using the correct properties
-      if (user && analysisResult) {
-         // Pass the total NEGATIVE impact component to saveTransactions
-        await saveTransactions(analysisResult.transactions, analysisResult.totalNegativeImpact, user.uid);
-      }
-      // State update happens within analyzeTransactions now
-
-    } catch (error) {
-      console.error("Error loading sample data:", error);
-      setFetchError(error instanceof Error ? error.message : "Failed to load sample data");
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [isLoading, generateSampleTransactions, analyzeTransactions, saveTransactions, user]);
-
-  // Handle Plaid success
   const handlePlaidSuccess = useCallback(async (publicToken: string | null) => {
-    if (isConnecting || connectionStatus.isLoading) return;
+      const loadingCheck = isInitializing || isConnectingBank || isFetchingTransactions || isAnalyzing || isLoadingLatest || isLoadingCreditState || isSaving || isApplyingCredit || isPlaidConnecting;
+     if (loadingCheck) { console.log("handlePlaidSuccess: Skipping..."); return; }
+     setIsPlaidConnecting(true); setLoadingMessage("Connecting bank account...");
+     try {
+       if (publicToken) { await connectBank(publicToken, user); }
+       else { await handleLoadSampleData(); } // Depends on handleLoadSampleData
+     } catch (error) { console.error("Error in handlePlaidSuccess flow:", error); }
+     finally { setIsPlaidConnecting(false); }
+   // Dependencies for handlePlaidSuccess
+   }, [connectBank, user, handleLoadSampleData, isPlaidConnecting, isInitializing, isConnectingBank, isFetchingTransactions, isAnalyzing, isLoadingLatest, isLoadingCreditState, isSaving, isApplyingCredit]);
 
-    setIsConnecting(true);
-    setLoadingMessage("Connecting to your bank...");
-    setFetchError(null);
-
-    try {
-      if (publicToken) {
-        await connectBank(publicToken, user);
-      } else {
-        await handleLoadSampleData();
-      }
-    } catch (error) {
-      console.error("Error connecting bank:", error);
-      setFetchError(error instanceof Error ? error.message : "Unknown error connecting bank");
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [connectBank, user, handleLoadSampleData, isConnecting, connectionStatus.isLoading]);
-
-  // Manual fetch handler
   const handleManualFetch = useCallback(async () => {
-    if (connectionStatus.isLoading) return;
-
-    setFetchError(null);
-    try {
-      await manuallyFetchTransactions();
-    } catch (error) {
-      console.error("Manual fetch error:", error);
-      setFetchError(error instanceof Error ? error.message : "Unknown error fetching transactions");
-    }
-  }, [manuallyFetchTransactions, connectionStatus.isLoading]);
+     const loadingCheck = isInitializing || isConnectingBank || isFetchingTransactions || isAnalyzing || isLoadingLatest || isLoadingCreditState || isSaving || isApplyingCredit;
+     if (loadingCheck) { console.log("handleManualFetch: Skipping..."); return; }
+     try { await manuallyFetchTransactions(); }
+     catch (error) { console.error("Manual fetch failed:", error); } // Errors should be set in store actions
+   // Dependencies for handleManualFetch
+   }, [manuallyFetchTransactions, isInitializing, isConnectingBank, isFetchingTransactions, isAnalyzing, isLoadingLatest, isLoadingCreditState, isSaving, isApplyingCredit]);
+   // --- End Callbacks ---
 
   // --- Render Logic ---
-  if (authLoading) {
-    return <DashboardLoading message="Checking authentication..." />;
-  }
-  if (!user) {
-    return <DashboardLoading message="Redirecting to login..." />;
-  }
+  if (authLoading) { return <DashboardLoading message="Checking authentication..." />; }
+  if (!user) { return <DashboardLoading message="Redirecting to login..." />; }
 
   const renderContent = () => {
-    if (isLoading && !hasData) {
-        return <DashboardLoading message={loadingMessage} />;
+    const displayLoadingMessage = authLoading ? "Authenticating..." : loadingMessage;
+    if (isOverallLoading && !hasData) {
+        return <DashboardLoading message={displayLoadingMessage} />;
     }
-    if (!hasData && !isLoading) {
-      return (
+    if (!hasData && !isOverallLoading) {
+      return ( /* No Data / Connect Bank Section */
         <>
           {!effectiveConnectionStatus && (
             <div className="card p-6 mb-6">
               <h2 className="text-lg font-semibold text-blue-800 dark:text-blue-300 mb-2"> Connect Your Bank </h2>
               <p className="text-[var(--card-foreground)] opacity-80 mb-4"> Connect your bank account to analyze the ethical impact of your spending. </p>
-              <PlaidConnectionSection onSuccess={handlePlaidSuccess} isConnected={false} isLoading={bankConnecting} />
+              <PlaidConnectionSection onSuccess={handlePlaidSuccess} isConnected={false} isLoading={isPlaidConnecting} />
             </div>
           )}
-          {effectiveConnectionStatus && ( <DashboardEmptyState effectiveConnectionStatus={true} bankConnecting={false} isConnecting={false} /> )}
-          {effectiveConnectionStatus && ( <ManualFetchButton onFetch={handleManualFetch} className="mt-6" showAfterTimeout={8000} /> )}
+          {effectiveConnectionStatus && ( <DashboardEmptyState effectiveConnectionStatus={true} bankConnecting={isConnectingBank} isConnecting={isPlaidConnecting} /> )}
+          {effectiveConnectionStatus && !isOverallLoading && ( <ManualFetchButton onFetch={handleManualFetch} className="mt-6" showAfterTimeout={8000} /> )}
         </>
       );
     }
-    return (
-      <div className="card overflow-visible">
-         <BalanceSheetView transactions={transactions} />
-      </div>
-    );
+    // Data Available State
+    return ( <div className="card overflow-visible"> <BalanceSheetView transactions={transactions} /> </div> );
   };
 
   // Main Layout
   return (
-    <DashboardLayout
-      user={user}
-      onLogout={logout}
-      onDisconnectBank={disconnectBank}
-      isBankConnected={effectiveConnectionStatus}
-    >
+    <DashboardLayout user={user} onLogout={logout} onDisconnectBank={disconnectBank } isBankConnected={effectiveConnectionStatus} effectiveDebt={effectiveDebt}>
       {error && <ErrorAlert message={error} />}
+      {/* Outer Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1"> <DashboardSidebar /> </div>
-        <div className="lg:col-span-3"> {renderContent()} </div>
+        {/* Sidebar Column */}
+        <div className="lg:col-span-1">
+          <DashboardSidebar />
+        </div>
+        {/* Main Content Column */}
+        <div className="lg:col-span-3">
+           {renderContent()}
+        </div>
       </div>
     </DashboardLayout>
   );

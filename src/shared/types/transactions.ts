@@ -21,18 +21,24 @@ export interface Transaction {
   information?: Record<string, string>; // Information per practice
   isCreditApplication?: boolean; // Flag to identify when this transaction is a credit application
   creditApplied?: boolean; // Flag to identify when this transaction has been used for credit
+  plaidTransactionId?: string;
+  plaidCategories?: string[];
 }
 
 export interface AnalyzedTransactionData {
   transactions: Transaction[];
-  totalPositiveImpact: number;
-  totalNegativeImpact: number;
   totalSocietalDebt: number;
   debtPercentage: number;
+  totalPositiveImpact: number;
+  totalNegativeImpact: number;
 }
 
 export interface PlaidError {
   error_code: string;
   error_message: string;
   display_message: string | null;
+}
+
+export interface AnalysisRequest {
+  transactions: Transaction[];
 }

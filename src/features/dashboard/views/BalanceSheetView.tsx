@@ -59,7 +59,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
     // --- Derived State from Store ---
     const positiveImpactTotalFromStore = impactAnalysis?.positiveImpact ?? 0;
     const negativeImpactTotalFromStore = impactAnalysis?.negativeImpact ?? 0;
-    const effectiveDebt = impactAnalysis?.effectiveDebt ?? 0; // Use this for offset actions
+    // const effectiveDebt = impactAnalysis?.effectiveDebt ?? 0; // Use this for offset actions
 
     // --- Process Transactions PROP for Detailed View ---
     const { detailedPositiveImpacts, detailedNegativeImpacts, positiveCategoryTotals, negativeCategoryTotals } = useMemo(() => {
@@ -130,9 +130,9 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
     const handleOffsetCategory = (categoryName: string, amount: number) => {
          if(amount > 0) openDonationModal(categoryName, amount);
     };
-    const handleOffsetAll = () => {
-        if(effectiveDebt > 0) openDonationModal("All Societal Debt", effectiveDebt);
-    };
+    // const handleOffsetAll = () => {
+    //     if(effectiveDebt > 0) openDonationModal("All Societal Debt", effectiveDebt);
+    // };
     const togglePositiveCategory = (categoryName: string) => setExpandedPositiveCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }));
     const toggleNegativeCategory = (categoryName: string) => setExpandedNegativeCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }));
 
@@ -283,7 +283,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                         </div>
                     ))}
                      {/* Offset All button */}
-                     {effectiveDebt > 0 && (
+                     {/* {effectiveDebt > 0 && (
                         <div className="mt-6 text-center">
                             <button
                               onClick={handleOffsetAll}
@@ -292,7 +292,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                                 Offset Remaining Debt ({formatCurrency(effectiveDebt)})
                             </button>
                         </div>
-                    )}
+                    )} */}
                 </div>
 
             </div>

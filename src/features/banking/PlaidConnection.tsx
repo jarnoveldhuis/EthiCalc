@@ -1,98 +1,99 @@
-// src/features/banking/PlaidConnectionSection.tsx
+// src/tsx/features/banking/PlaidConnectionSection.tsx
 "use client";
 
-import { useState } from 'react';
-import PlaidLink from "@/features/banking/PlaidLink";
-import { useSampleData } from '@/features/debug/useSampleData';
+import React, { useState } from 'react'; // Added React import
+import PlaidLink from "@/features/banking/PlaidLink"; // Assuming PlaidLink is separate
+import { useSampleData } from '@/features/debug/useSampleData'; // If sample data button is used
 import { config } from '@/config';
 import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
-import { useTransactionStore } from '@/store/transactionStore';
+// Store hook is NOT needed here anymore
 
 // Determine if we're in development/sandbox mode
 const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
 
 interface PlaidConnectionSectionProps {
-  onSuccess: (public_token: string | null) => void;
-  isConnected: boolean;
-  isLoading?: boolean;
+  onSuccess: (public_token: string | null) => void; // Allow null for sample data flow
+  isConnected: boolean; // Status passed from parent
+  isLoading?: boolean; // Loading state passed from parent (e.g., isPlaidConnecting)
 }
 
-export function PlaidConnectionSection({ 
-  onSuccess, 
+export function PlaidConnectionSection({
+  onSuccess,
   isConnected,
-  isLoading = false
+  isLoading = false // Use the prop passed from parent
 }: PlaidConnectionSectionProps) {
-  // Add internal loading state
-  const [linkLoading] = useState(false);
-  // We're keeping showSampleOption state even though we're not modifying it
-  // because it might be needed in the future for UI toggling
+
+  // Internal loading state specifically for the Plaid Link iframe loading, if needed
+  // Set initial state to false
+  const [linkLoading] = useState<boolean>(false);
+
+  // Sample data state (keep if button is used)
   const [showSampleOption] = useState(isSandboxMode);
-  const { generateSampleTransactions } = useSampleData();
-  
-  // Get connection status from store
-  const { connectionStatus } = useTransactionStore();
-  
-  // Sample data handler for development
+  const { generateSampleTransactions } = useSampleData(); // Ensure this hook exports correctly
+
+  // Sample data handler
   const handleUseSampleData = () => {
-    // Generate sample transactions directly
-    const sampleTransactions = generateSampleTransactions();
-    
-    // Call onSuccess with null to indicate we're not using Plaid
-    // The parent component should detect this and use the sample data
-    onSuccess(null);
-    
-    // This is where you would call a function to load the sample data
-    // In the real implementation, you should have a way to pass these
-    // transactions to your analysis service
-    console.log("Sample data loaded:", sampleTransactions);
+    // Ensure generateSampleTransactions exists and is callable
+    if (typeof generateSampleTransactions === 'function') {
+        const sampleTransactions = generateSampleTransactions();
+        onSuccess(null); // Indicate sample data usage
+        console.log("Sample data generated (in PlaidConnectionSection):", sampleTransactions);
+        // Actual loading into the store happens in the parent (Dashboard page)
+    } else {
+        console.error("generateSampleTransactions is not available.");
+        // Optionally show an error to the user
+    }
   };
 
-  // Combined loading state from props and internal state
-  const showLoading = isLoading || linkLoading || connectionStatus.isLoading;
+  // --- Corrected Loading Logic ---
+  // Use the isLoading prop from the parent and the internal linkLoading state
+  const showLoading = isLoading || linkLoading;
+  // REMOVED reference to connectionStatus.isLoading
 
   if (showLoading) {
     return (
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col items-center py-6"> {/* Added padding */}
         <LoadingSpinner message="Connecting to your bank..." />
-        <p className="text-sm text-gray-500 mt-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center"> {/* Added text-center */}
           This might take a moment. Please do not close this window.
         </p>
       </div>
     );
   }
 
-  if (isConnected || connectionStatus.isConnected) {
+  // isConnected prop determines if we show the connected message or the PlaidLink button
+  if (isConnected) {
     return (
-      <div className="flex flex-col items-center">
-        <span className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full">
+      <div className="flex flex-col items-center py-6"> {/* Added padding */}
+        <span className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-sm px-3 py-1 rounded-full">
           ✓ Bank account connected
         </span>
-        <span className="text-xs text-gray-500 mt-1">
+        <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           Your transactions are available for analysis.
         </span>
       </div>
     );
   }
 
+  // If not connected and not loading, show the PlaidLink button
   return (
-    <div className="flex flex-col items-center space-y-3">
-      <PlaidLink 
-        onSuccess={onSuccess} 
+    <div className="flex flex-col items-center space-y-3 py-6"> {/* Added padding */}
+      <PlaidLink
+        onSuccess={onSuccess}
+        // Pass setLinkLoading to PlaidLink if it supports an onLoadingChange prop
         // onLoadingChange={setLinkLoading}
       />
-      
+
       {/* Sample data option for development */}
       {showSampleOption && (
-        <div className="mt-4">
-          <div className="text-center">
-            <div className="text-xs text-gray-500 mb-2">- OR -</div>
+        <div className="mt-4 text-center">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">- OR -</div>
             <button
               onClick={handleUseSampleData}
-              className="text-blue-600 hover:text-blue-800 text-sm underline"
+              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm underline focus:outline-none focus:ring-2 focus:ring-blue-500" // Added focus style
             >
               Use Sample Data (Development Only)
             </button>
-          </div>
         </div>
       )}
     </div>

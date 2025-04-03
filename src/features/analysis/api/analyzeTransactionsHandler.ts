@@ -2,7 +2,7 @@
 // API-specific logic for handling HTTP requests and responses
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeTransactionsCore } from "@/features/analysis/transactionAnalysisService";
-import { AnalysisRequest } from "@/features/analysis/types";
+import { AnalysisRequest } from "@/shared/types/transactions";
 
 export async function analyzeTransactionsHandler(req: NextRequest) {
   try {

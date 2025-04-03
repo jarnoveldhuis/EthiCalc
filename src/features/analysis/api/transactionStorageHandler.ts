@@ -2,7 +2,7 @@
 // API handlers for transaction storage
 import { NextRequest, NextResponse } from "next/server";
 import { saveAnalyzedTransactions, getUserTransactionBatches, getLatestTransactionBatch } from "../transactionStorageService";
-import { AnalyzedTransactionData } from "../types";
+import { AnalyzedTransactionData } from "@/shared/types/transactions"
 // import { getAuth } from "firebase/auth";
 
 interface SaveTransactionsRequest {

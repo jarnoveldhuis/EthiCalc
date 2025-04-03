@@ -1,6 +1,6 @@
 // src/features/analysis/useTransactionAnalysis.ts
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Transaction, AnalyzedTransactionData } from '../features/analysis/types';
+import { Transaction, AnalyzedTransactionData } from '@/shared/types/transactions';
 import { calculationService } from "@/core/calculations/impactService";
 import { mergeTransactions } from "@/core/plaid/transactionMapper";
 
@@ -120,7 +120,7 @@ export function useTransactionAnalysis(
       const analyzedTransactionMap = new Map<string, Transaction>();
       
       // Process each transaction from the API response
-      data.transactions.forEach((tx) => {
+      data.transactions.forEach((tx: Transaction) => {
         const identifier = getTransactionIdentifier(tx);
         analyzedTransactionMap.set(identifier, {
           ...tx,
