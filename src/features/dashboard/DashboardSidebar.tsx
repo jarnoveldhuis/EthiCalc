@@ -1,215 +1,208 @@
 // src/features/dashboard/DashboardSidebar.tsx
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react"; // Added useRef
 import { useTransactionStore } from "@/store/transactionStore";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
 import { useAuth } from "@/hooks/useAuth";
 
-// No props needed anymore!
 export function DashboardSidebar() {
   const { user } = useAuth();
-  // Get everything from the store
-  const { impactAnalysis, applyCredit, isApplyingCredit } =
-    useTransactionStore();
+  const { impactAnalysis, applyCredit, isApplyingCredit } = useTransactionStore();
+  const { modalState, openDonationModal, closeDonationModal } = useDonationModal();
 
-  // In DashboardSidebar.tsx
-  const { modalState, openDonationModal, closeDonationModal } =
-    useDonationModal();
+  // --- State for Animation Control ---
+  // Start with animation ready state as false
+  const [isAnimationReady, setIsAnimationReady] = useState(false);
+  // Store the calculated percentage separately to apply after mount
+  const [currentAppliedPercentage, setCurrentAppliedPercentage] = useState(0);
+  // Ref to prevent running effect multiple times unnecessarily on fast updates
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // --- End State for Animation Control ---
 
-  // Local state
+
   const [showFeedback, setShowFeedback] = useState<boolean>(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string>("");
-  const [backgroundClass, setBackgroundClass] =
-    useState<string>("bg-green-500");
+  const [topCardBackgroundClass, setTopCardBackgroundClass] = useState<string>("bg-gray-500");
 
-  // Credit button disabled logic
-  const creditButtonDisabled: boolean =
-    !impactAnalysis ||
-    impactAnalysis.availableCredit <= 0 ||
-    isApplyingCredit ||
-    impactAnalysis.effectiveDebt <= 0;
+  // --- Calculations ---
+  const applied = impactAnalysis?.appliedCredit ?? 0;
+  const effective = impactAnalysis?.effectiveDebt ?? 0;
+  const available = impactAnalysis?.availableCredit ?? 0;
+  const totalProgress = applied + effective;
+  // Calculate the target percentage
+  const targetAppliedPercentage = totalProgress > 0
+      ? Math.min((applied / totalProgress) * 100, 100)
+      : (effective <= 0 ? 100 : 0);
 
-  // Set background color based on debt level
+  const progressBarTrackColor = effective > 0
+    ? 'bg-red-200 dark:bg-red-900'
+    : 'bg-green-200 dark:bg-green-900';
+
+  // --- Effects ---
+  // Update top card background
   useEffect(() => {
-    if (!impactAnalysis) return;
-
-    if (impactAnalysis.effectiveDebt <= 0) {
-      setBackgroundClass("bg-green-500");
-    } else if (impactAnalysis.effectiveDebt < 50) {
-      setBackgroundClass("bg-yellow-500");
-    } else {
-      setBackgroundClass("bg-red-500");
-    }
-  }, [impactAnalysis]);
-
-  // Handle applying social credit to debt
-  const handleApplyCredit = useCallback(async () => {
-    // Check for user, loading state, and if credit <= 0
-    if (
-      !user ||
-      creditButtonDisabled ||
-      !impactAnalysis ||
-      impactAnalysis.availableCredit <= 0
-    ) {
+    if (!impactAnalysis) {
+      setTopCardBackgroundClass("bg-[var(--secondary)] text-[var(--secondary-foreground)]");
       return;
     }
-    try {
-      // Use the available credit amount directly from impactAnalysis
-      const amountToApply = impactAnalysis.availableCredit;
-      const success = await applyCredit(amountToApply, user.uid); // Pass user.uid
+    const currentEffectiveDebt = impactAnalysis.effectiveDebt ?? 0;
+    if (currentEffectiveDebt <= 0) setTopCardBackgroundClass("bg-[var(--success)] text-[var(--success-foreground)]");
+    else if (currentEffectiveDebt < 50) setTopCardBackgroundClass("bg-[var(--warning)] text-[var(--warning-foreground)]");
+    else setTopCardBackgroundClass("bg-[var(--destructive)] text-[var(--destructive-foreground)]");
+  }, [impactAnalysis]);
 
-      if (success) {
-        setFeedbackMessage(
-          `Applied $${amountToApply.toFixed(2)} credit to your social debt`
-        );
-        setShowFeedback(true);
-        setTimeout(() => setShowFeedback(false), 3000);
-      } else {
-        // Handle the case where applyCredit returns false but doesn't throw
-        setFeedbackMessage("Failed to apply credit.");
-        setShowFeedback(true);
-        setTimeout(() => setShowFeedback(false), 3000);
+  // Effect to handle the progress bar animation initialization and updates
+  useEffect(() => {
+    // Clear any previous timeout to handle rapid updates
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+    }
+
+    // Only proceed if impactAnalysis data is available
+    if (impactAnalysis) {
+       // Use a minimal timeout (or requestAnimationFrame) to allow the initial render
+       // with 0% width before applying the actual percentage and starting the transition.
+      animationTimeoutRef.current = setTimeout(() => {
+        setCurrentAppliedPercentage(targetAppliedPercentage); // Set the actual percentage
+        setIsAnimationReady(true); // Mark that the animation can now run
+      }, 50); // 50ms delay - adjust if needed
+    } else {
+      // Reset if data is not available
+      setIsAnimationReady(false);
+      setCurrentAppliedPercentage(0);
+    }
+
+    // Cleanup timeout on unmount or before next run
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
       }
+    };
+  // Depend only on the target percentage value derived from impactAnalysis
+  }, [targetAppliedPercentage, impactAnalysis]); // Rerun when target % changes or impactAnalysis loads
+
+
+  // --- Action Handlers ---
+  const creditButtonDisabled: boolean = !impactAnalysis || available <= 0 || isApplyingCredit || effective <= 0;
+
+  const handleApplyCredit = useCallback(async () => {
+    // (Keep existing apply credit logic)
+    if (!user || creditButtonDisabled || !impactAnalysis || available <= 0) return;
+    try {
+      const amountToApply = available;
+      const success = await applyCredit(amountToApply, user.uid);
+      // Reset animation ready state briefly to re-trigger animation on update
+      // setIsAnimationReady(false); // Commented out: let the useEffect handle percentage update naturally
+      setFeedbackMessage(success ? `Applied ${formatCurrency(amountToApply)} credit.` : "Failed to apply credit.");
+      setShowFeedback(true);
+      setTimeout(() => setShowFeedback(false), 3000);
     } catch (error) {
       console.error("Error applying credit:", error);
       setFeedbackMessage("Failed to apply credit.");
       setShowFeedback(true);
       setTimeout(() => setShowFeedback(false), 3000);
     }
-    // Dependencies now include user and impactAnalysis (for availableCredit)
-  }, [applyCredit, user, impactAnalysis, creditButtonDisabled]);
+  }, [applyCredit, user, impactAnalysis, available, creditButtonDisabled]);
 
-  // Handle opening donation modal
-  const handleOpenDonationModal = useCallback(
-    (practice: string, amount: number) => {
-      openDonationModal(practice, amount);
-    },
-    [openDonationModal]
-  );
-
-  // Handle "Offset All" button click
   const handleOffsetAll = useCallback(() => {
-    handleOpenDonationModal(
-      "All Societal Debt",
-      impactAnalysis?.effectiveDebt || 0
-    );
-  }, [handleOpenDonationModal, impactAnalysis]);
+    if (effective > 0) openDonationModal("All Societal Debt", effective);
+  }, [openDonationModal, effective]);
 
+  // Helper to format currency
+  const formatCurrency = (value: number): string => `$${value.toFixed(2)}`;
+
+  // --- Render ---
   return (
     <div className="w-full lg:col-span-1">
-      {/* Societal Credit Score */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-        <div
-          className={`${backgroundClass} transition-colors duration-1000 p-4 sm:p-6 text-white`}
-        >
-          <div className="text-center">
-            <h2 className="text-lg sm:text-xl font-bold mb-1">
-              Total Social Debt
-            </h2>
-            <div className="text-4xl sm:text-5xl font-black mb-2">
-              <AnimatedCounter
-                value={impactAnalysis?.effectiveDebt || 0}
-                className="transition-all duration-1000"
-              />
-            </div>
-            <div>
-              Credit applied: $
-              {impactAnalysis?.appliedCredit.toFixed(2) || "0.00"}
-            </div>
+      <div className="card mb-6">
+        <div className={`${topCardBackgroundClass} transition-colors duration-500 p-4 sm:p-6 rounded-t-xl`}>
+          {/* Top Card Content... */}
+           <div className="text-center">
+             <h2 className="text-lg sm:text-xl font-bold mb-1 opacity-90">
+               Effective Social Debt
+             </h2>
+             <AnimatedCounter
+               value={effective}
+               prefix="$"
+               className="text-4xl sm:text-5xl font-black mb-2"
+             />
+              <div className="text-sm opacity-80">
+                Credit applied: {formatCurrency(applied)}
+              </div>
+             {effective > 0 && (
+               <button
+                 onClick={handleOffsetAll}
+                 className="mt-4 bg-white/80 hover:bg-white text-black px-4 sm:px-6 py-2 rounded-lg font-bold shadow transition-colors text-sm sm:text-base"
+               >
+                 Offset Debt
+               </button>
+             )}
+           </div>
+        </div>
 
-            {/* Only show Offset button if there's effective debt */}
-            {(impactAnalysis?.effectiveDebt || 0) > 0 && (
-              <button
-                onClick={handleOffsetAll}
-                className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 py-2 rounded-lg font-bold shadow transition-colors text-sm sm:text-base"
-              >
-                Offset All
-              </button>
-            )}
-          </div>
-        </div>
-        {/* Balance Sheet Header with progress bar */}
-        <div className="mb-8">
-          <div className="flex justify-between text-sm mb-1">
-            <div className="text-green-600 font-medium">
-              ${impactAnalysis?.appliedCredit.toFixed(2)} Applied Credit
-            </div>
-            <div className="text-red-600 font-medium">
-              ${impactAnalysis?.effectiveDebt} Negative Impact
-            </div>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-            {(() => { // Use an IIFE to calculate values cleanly
-              const applied = parseFloat(impactAnalysis?.appliedCredit?.toFixed(2) || '0');
-              const effective = impactAnalysis?.effectiveDebt || 0;
-              const total = applied + effective || 1; // Ensure total is not 0 for division
-              const appliedWidth = total > 0 ? Math.min((applied / total) * 100, 100) : 0;
-              const effectiveWidth = total > 0 ? Math.min((effective / total) * 100, 100) : 0;
-              
-              return (
-                <>
-                  {/* Positive impact (green) */}
-                  <div
-                    className="bg-green-500 h-full float-left"
-                    style={{
-                      width: `${appliedWidth}%`,
-                    }}
-                  />
-                  {/* Negative impact (red) */}
-                  <div
-                    className="bg-red-500 h-full float-right"
-                    style={{
-                      width: `${effectiveWidth}%`,
-                    }}
-                  />
-                </>
-              );
-            })()}
-          </div>
-        </div>
-        {/* Credit summary with Apply button */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex flex-col">
-            {/* Available Credit with Apply button */}
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-gray-600 text-sm sm:text-base">
-                  Available Credit
-                </span>
-              </div>
-              <div className="flex items-center">
-                <span className="font-bold text-green-600 mr-2 text-sm sm:text-base">
-                  ${(impactAnalysis?.availableCredit || 0).toFixed(2)}
-                </span>
-                <button
-                  onClick={handleApplyCredit}
-                  disabled={creditButtonDisabled}
-                  className={`px-3 py-1 rounded-full text-xs text-white ${
-                    creditButtonDisabled
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-green-600 hover:bg-green-700"
-                  }`}
-                  title={
-                    (impactAnalysis?.availableCredit || 0) <= 0
-                      ? "No credit available"
-                      : (impactAnalysis?.effectiveDebt || 0) <= 0
-                      ? "No debt to offset"
-                      : "Apply credit to reduce your social debt"
-                  }
-                >
-                  {isApplyingCredit ? "Applying..." : "Apply"}
-                </button>
-              </div>
-            </div>
+        {/* Progress Bar Section */}
+        <div className="p-4 space-y-2 border-b border-[var(--border-color)]">
+          <div className="flex justify-between text-xs sm:text-sm mb-1">
+            <span className="font-medium text-[var(--muted-foreground)]">Applied Credit</span>
+            <span className="font-medium text-[var(--muted-foreground)]">Remaining Debt</span>
           </div>
 
-          {/* Feedback message after applying credit */}
-          {showFeedback && (
-            <div className="mt-2 text-xs text-green-600 animate-fadeIn">
-              ✓ {feedbackMessage}
-            </div>
-          )}
+          {/* Progress Bar Container */}
+          <div className={`w-full ${progressBarTrackColor} rounded-full h-3 overflow-hidden relative transition-colors duration-500`}>
+            {/* Applied Credit Bar (Foreground) */}
+            <div
+              className="bg-[var(--success)] h-3 rounded-l-full transition-all duration-500 ease-in-out absolute top-0 left-0"
+              // Apply width based on animation readiness
+              style={{ width: isAnimationReady ? `${currentAppliedPercentage}%` : '0%' }}
+            />
+          </div>
+          <div className="flex justify-between text-xs sm:text-sm">
+            <span className="font-semibold text-[var(--success)]">{formatCurrency(applied)}</span>
+            <span className={`font-semibold ${effective > 0 ? 'text-[var(--destructive)]' : 'text-[var(--success)]'}`}>
+              {formatCurrency(effective)}
+            </span>
+          </div>
+        </div>
+
+        {/* Credit summary */}
+        <div className="p-4">
+            {/* Apply Button Section... */}
+            <div className="flex flex-col">
+             <div className="flex items-center justify-between">
+               <div>
+                 <span className="text-[var(--muted-foreground)] text-sm sm:text-base">
+                   Available Credit
+                 </span>
+               </div>
+               <div className="flex items-center">
+                 <span className="font-bold text-[var(--success)] mr-2 text-sm sm:text-base">
+                   {formatCurrency(available)}
+                 </span>
+                 <button
+                   onClick={handleApplyCredit}
+                   disabled={creditButtonDisabled}
+                   className={`px-3 py-1 rounded-full text-xs text-white transition-colors ${
+                     creditButtonDisabled
+                       ? "bg-gray-400 dark:bg-gray-500 cursor-not-allowed"
+                       : "bg-[var(--success)] hover:opacity-80"
+                   }`}
+                   title={ /* Tooltip logic... */
+                     available <= 0 ? "No credit available"
+                     : effective <= 0 ? "No debt to offset"
+                     : "Apply credit to reduce your social debt"
+                   }
+                 >
+                   {isApplyingCredit ? "Applying..." : "Apply"}
+                 </button>
+               </div>
+             </div>
+           </div>
+           {showFeedback && (
+             <div className="mt-2 text-xs text-[var(--success)] animate-pulse">
+               {feedbackMessage}
+             </div>
+           )}
         </div>
       </div>
 

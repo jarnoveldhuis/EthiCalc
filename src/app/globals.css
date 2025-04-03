@@ -7,27 +7,88 @@
   button {
     @apply cursor-pointer;
   }
+  /* Apply Geist Sans font by default */
+  body {
+    @apply font-sans; /* Use the font-sans variable */
+  }
+  /* Apply Geist Mono for code elements if needed */
+  code, pre, kbd, samp {
+    @apply font-mono; /* Use the font-mono variable */
+  }
 }
+
 @theme {
+  /* These definitions help Tailwind understand the variables, but the actual application happens above */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+/* --- Color Scheme Variables --- */
 :root {
-  --background: #000000;
-  --foreground: #171717;
+  /* Light Mode Defaults */
+  --background: #f9fafb; /* Tailwind gray-50 (Very Light Gray) */
+  --foreground: #111827; /* Tailwind gray-900 (Dark Gray) */
+  --card-background: #ffffff; /* White */
+  --card-foreground: #111827; /* Tailwind gray-900 */
+  --border-color: #e5e7eb; /* Tailwind gray-200 */
+  --header-background: #ffffff; /* White */
+  --muted-foreground: #6b7280; /* Tailwind gray-500 */
+  --primary: #2563eb; /* Tailwind blue-600 */
+  --primary-foreground: #ffffff; /* White */
+  --secondary: #f3f4f6; /* Tailwind gray-100 */
+  --secondary-foreground: #111827; /* Tailwind gray-900 */
+  --accent: #ecfccb; /* Tailwind lime-100 */
+  --accent-foreground: #4d7c0f; /* Tailwind lime-800 */
+  --destructive: #dc2626; /* Tailwind red-600 */
+  --destructive-foreground: #ffffff; /* White */
+  --success: #16a34a; /* Tailwind green-600 */
+  --success-foreground: #ffffff; /* White */
+  --warning: #f59e0b; /* Tailwind amber-500 */
+  --warning-foreground: #ffffff; /* White */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #000000;
-    --foreground: 
-  #000000;
+    /* Dark Mode Overrides */
+    --background: #111827; /* Tailwind gray-900 (Dark Gray/Near Black) */
+    --foreground: #f9fafb; /* Tailwind gray-50 (Very Light Gray) */
+    --card-background: #1f2937; /* Tailwind gray-800 (Slightly Lighter Dark) */
+    --card-foreground: #f9fafb; /* Tailwind gray-50 */
+    --border-color: #374151; /* Tailwind gray-700 */
+    --header-background: #1f2937; /* Tailwind gray-800 */
+    --muted-foreground: #9ca3af; /* Tailwind gray-400 */
+    --primary: #3b82f6; /* Tailwind blue-500 */
+    --primary-foreground: #ffffff; /* White */
+    --secondary: #374151; /* Tailwind gray-700 */
+    --secondary-foreground: #f9fafb; /* Tailwind gray-50 */
+    --accent: #365314; /* Tailwind lime-900 */
+    --accent-foreground: #d9f99d; /* Tailwind lime-300 */
+    --destructive: #ef4444; /* Tailwind red-500 */
+    --destructive-foreground: #ffffff; /* White */
+    --success: #22c55e; /* Tailwind green-500 */
+    --success-foreground: #ffffff; /* White */
+    --warning: #facc15; /* Tailwind yellow-400 */
+    --warning-foreground: #422006; /* Tailwind yellow-950 */
   }
 }
+/* --- End Color Scheme Variables --- */
+
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Apply transition for smoother color changes */
+  @apply transition-colors duration-200;
+}
+
+/* Update card utility to use new variables */
+@layer components {
+  .card {
+    @apply bg-[var(--card-background)] text-[var(--card-foreground)] border border-[var(--border-color)] rounded-xl shadow-sm overflow-hidden transition-colors duration-200;
+  }
+}
+
+/* Update Header background */
+header {
+    @apply bg-[var(--header-background)] transition-colors duration-200;
 }
