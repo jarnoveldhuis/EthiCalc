@@ -13,8 +13,8 @@ export const config = {
     apiKey: process.env.OPENAI_API_KEY,
     model: "gpt-4o",
     timeout: 170000, // 3 minutes - increased for web search operations
-    webSearchEnabled: false, // Flag to indicate we're using web search capabilities
-    // searchContextSize: "high", // Use minimal search context to reduce costs and speed up response
+    webSearchEnabled: true, // Flag to indicate we're using web search capabilities
+    searchContextSize: "high", // Use minimal search context to reduce costs and speed up response
 
   },
   firebase: {
@@ -30,5 +30,10 @@ export const config = {
     apiKey: process.env.EVERY_ORG_API_KEY,
     baseUrl: "https://partners.every.org/v0.2",
     defaultDonationUrl: "https://www.every.org/donate",
-  }
+  },
+  charityNavigator: {
+    apiKey: process.env.CHARITY_NAVIGATOR_API_KEY || "YOUR_CHARITY_NAVIGATOR_API_KEY",
+    appId: process.env.CHARITY_NAVIGATOR_APP_ID || "YOUR_CHARITY_NAVIGATOR_APP_ID",
+    apiUrl: "https://api.charitynavigator.org/graphql",
+  },
 };

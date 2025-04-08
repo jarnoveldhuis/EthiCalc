@@ -1,5 +1,85 @@
 // src/features/analysis/prompts.ts
-export const transactionAnalysisPrompt = `
+
+export const transactionAnalysisPrompt = 
+`Objective: Evaluate the societal debt (ethical impact) of financial transactions based on merchant practices. Prioritize severity, scale, and scope over direct cost allocation.
+
+Instructions:
+* Evaluate practices **strictly relevant** to the merchant's specific business model (e.g., food industry = factory farming/environment; digital services = data privacy/energy use; apparel = labor). Scrutinize ethical claims.
+* Assign "unethicalPractices" and "ethicalPractices" using relevant industry knowledge and provided benchmarks where applicable (e.g., Factory Farming: 40-90%, Labor Exploitation: 20-70%).
+* Assign "practiceWeights" (0-100%) reflecting the *outsized ethical impact*, not just direct financial allocation.
+* **If uncertain about a merchant or practice applicability, assign NO practices.** Prioritize clearly impactful practices directly related to the merchant.
+* **REQUIRED:** Output MUST include the original "plaidTransactionId" for each transaction.
+* Provide concise "information" (under 15 words) per practice, describing the impact.
+* Provide a separate "citations" field, mapping each practice name to its source URL string.
+* Constraint: Citations MUST come from independent sources (e.g., reputable news outlets, watchdog organizations, academic research). DO NOT cite the vendor's own website, press releases, or marketing materials as the primary source for ethical/unethical practice claims.
+* Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate").
+* Assign "practiceCategories" from the provided list: Environment, Poverty, Food Insecurity, Conflict, Inequality, Animal Welfare, Public Health, Digital Rights.
+* **Output MUST BE ONLY strict JSON** matching the example schema below. DO NOT include any explanatory text before or after the JSON block.
+
+JSON Schema Example:
+{
+"transactions": [
+  {
+    "plaidTransactionId": "abc123xyzSAMPLE",
+    "date": "YYYY-MM-DD",
+    "name": "McDonald's",
+    "amount": 12.99,
+    "unethicalPractices": ["Factory Farming", "High Emissions"],
+    "ethicalPractices": [],
+    "practiceWeights": {
+        "Factory Farming": 75,
+        "High Emissions": 25
+    },
+    "practiceSearchTerms": {
+        "Factory Farming": "animal welfare",
+        "High Emissions": "climate"
+    },
+    "practiceCategories": {
+        "Factory Farming": "Food Insecurity",
+        "High Emissions": "Climate Change"
+    },
+    "information": {
+        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns.",
+        "High Emissions": "Produces significant greenhouse gas emissions from its operations."
+    },
+    "citations": {
+         "Factory Farming": "https://placeholder-source-url.com/ethical-report-1",
+         "High Emissions": "https://another-placeholder.org/mcd-emissions-study"
+    }
+  },
+  {
+    "plaidTransactionId": "def456uvwSAMPLE",
+    "date": "YYYY-MM-DD",
+    "name": "Google One",
+    "amount": 9.99,
+    "unethicalPractices": ["Data Privacy Issues"],
+    "ethicalPractices": ["Clean Energy Usage"],
+    "practiceWeights": {
+        "Data Privacy Issues": 25,
+        "Clean Energy Usage": 15
+    },
+    "practiceSearchTerms": {
+        "Data Privacy Issues": "digital rights",
+        "Clean Energy Usage": "renewable energy"
+    },
+    "practiceCategories": {
+        "Data Privacy Issues": "Digital Rights",
+        "Clean Energy Usage": "Climate Change"
+    },
+    "information": {
+        "Data Privacy Issues": "Collects and monetizes extensive user data with privacy implications.",
+        "Clean Energy Usage": "Uses renewable energy for data centers and operations."
+    },
+    "citations": {
+         "Data Privacy Issues": "https://example-citation.net/data-privacy-overview",
+         "Clean Energy Usage": "https://company-sustainability-reports.com/google-energy-2024"
+    }
+  }
+]
+}
+`
+
+export const transactionAnalysisPrompt3 = `
 You are an AI designed to evaluate financial transactions to determine the societal debt—the ethical impact—of consumer spending. Evaluate each purchase by considering not just the direct proportion of spending but also the severity, scale, and scope of harm or benefit resulting from the merchant's industry practices. Weigh practices with outsized ethical impacts significantly higher, even if only a small percentage of the cost contributes directly to these practices.
 
  **IMPORTANT**: You MUST include the original plaidTransactionId field for each transaction is in your output JSON.
@@ -179,7 +259,7 @@ Rules:
    - Be skeptical of positive ethical practices, especially information that comes directly from the vendor. Counterbalance with opposite information if available.
    - Value should not add up to 100%. They should be a direct reflection of the percent of the customer's money that directly supports each practice.
    - Format societal debt calculations based on the weighted sum of all practices
-   - For unknown merchant types or when uncertain, return empty arrays for practices
+   - For unknown merchant types or when uncertain, exclude from results.
    - Quality is more important than quantity - it's better to correctly identify one practice than to assign multiple inaccurate ones
 
 Return ONLY strict JSON with no additional text or markdown:

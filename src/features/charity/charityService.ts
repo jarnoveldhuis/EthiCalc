@@ -15,7 +15,8 @@ export interface CharitySearchResult {
   category: string;
   logoUrl?: string;
   donationUrl?: string;
-  slug?: string;  // Added slug for direct URL construction
+  slug?: string;
+  websiteUrl?: string;
 }
 
 // Search for charities by cause or keyword

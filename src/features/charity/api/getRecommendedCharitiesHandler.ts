@@ -34,6 +34,7 @@ interface EveryOrgNonprofit {
   description?: string;
   tags?: string[];
   logoUrl?: string;
+  websiteUrl?: string; 
 }
 
 interface EveryOrgResponse {
@@ -111,14 +112,11 @@ export async function getRecommendedCharitiesHandler(req: NextRequest) {
           mission: charity.description || "No description available",
           category: charity.tags?.[0] || "Charity",
           logoUrl: charity.logoUrl,
-          // Use slug format for donation URL if available
-          donationUrl: slug 
-            ? `https://www.every.org/${slug}/donate` 
-            : charity.ein 
-              ? `https://www.every.org/ein/${charity.ein}/donate`
-              : `https://www.every.org/donate`
+          donationUrl: slug ? `https://www.every.org/${slug}/donate` : charity.ein ? `https://www.every.org/ein/${charity.ein}/donate` : `https://www.every.org/donate`,
+          websiteUrl: charity.websiteUrl || undefined // <-- MAP THE FIELD HERE
         };
       }) || [];
+
       
       return NextResponse.json({ charities });
     } catch {

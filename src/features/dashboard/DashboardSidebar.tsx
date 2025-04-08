@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 // Helper function to determine the tier based on the score ratio
 const getTierInfo = (appliedCredit: number, totalPositiveImpact: number, totalNegativeImpact: number, effectiveDebt: number): { name: string; description: string; colorClass: string; ratio?: number } => {
   if (effectiveDebt <= 0 && (appliedCredit > 0 || totalPositiveImpact > 0)) {
-      return { name: "S", description: "Impact Surplus", colorClass: "text-cyan-400" };
+      return { name: "S", description: "The Paradigm Dissolver", colorClass: "text-cyan-400" };
   }
   if (totalNegativeImpact <= 0 && appliedCredit <= 0 && totalPositiveImpact <= 0) {
       return { name: "N", description: "Neutral / No Data", colorClass: "text-gray-500" };
@@ -18,13 +18,13 @@ const getTierInfo = (appliedCredit: number, totalPositiveImpact: number, totalNe
       return { name: "S", description: "Impact Positive", colorClass: "text-cyan-400" };
    }
   const scoreRatio = appliedCredit / totalNegativeImpact;
-  if (scoreRatio >= 1.0) return { name: "A+", description: "Debt Fully Offset", ratio: scoreRatio, colorClass: "text-green-500" };
-  if (scoreRatio >= 0.75) return { name: "A", description: "Mostly Offset", ratio: scoreRatio, colorClass: "text-lime-500" };
-  if (scoreRatio >= 0.50) return { name: "B", description: "Partially Offset", ratio: scoreRatio, colorClass: "text-yellow-500" };
-  if (scoreRatio >= 0.25) return { name: "C", description: "Some Offset", ratio: scoreRatio, colorClass: "text-amber-500" };
-  if (scoreRatio >= 0.10) return { name: "D", description: "Minimal Offset", ratio: scoreRatio, colorClass: "text-orange-500" };
-  if (scoreRatio >= 0) return { name: "F", description: "Offset Needed", ratio: scoreRatio, colorClass: "text-red-500" };
-  return { name: "F", description: "Offset Needed", ratio: scoreRatio, colorClass: "text-red-500" };
+  if (scoreRatio >= 1.0) return { name: "A+", description: "Transformative Steward", ratio: scoreRatio, colorClass: "text-green-500" };
+  if (scoreRatio >= 0.75) return { name: "A", description: "Conscious Cultivator", ratio: scoreRatio, colorClass: "text-lime-500" };
+  if (scoreRatio >= 0.50) return { name: "B", description: "Mindful Participant", ratio: scoreRatio, colorClass: "text-yellow-500" };
+  if (scoreRatio >= 0.25) return { name: "C", description: "Awakening Consumer", ratio: scoreRatio, colorClass: "text-amber-500" };
+  if (scoreRatio >= 0.10) return { name: "D", description: "Passive Participant", ratio: scoreRatio, colorClass: "text-orange-500" };
+  if (scoreRatio >= 0) return { name: "F", description: "Willfully Negligent", ratio: scoreRatio, colorClass: "text-red-500" };
+  return { name: "F", description: "Willfully Negligent", ratio: scoreRatio, colorClass: "text-red-500" };
 };
 
 

@@ -12,6 +12,7 @@ interface EveryOrgNonprofit {
   description?: string;
   tags?: string[];
   logoUrl?: string;
+  websiteUrl?: string;
 }
 
 interface EveryOrgResponse {
@@ -49,61 +50,30 @@ function extractSlug(url: string): string | null {
 
 export async function searchCharitiesHandler(req: NextRequest) {
   try {
-    // Get search query from URL parameters
     const searchParams = req.nextUrl.searchParams;
     const query = searchParams.get("query");
-    
-    if (!query) {
-      return NextResponse.json(
-        { error: "Missing search query" },
-        { status: 400 }
-      );
-    }
-    
-    // Clean query
+    if (!query) { return NextResponse.json({ error: "Missing search query" }, { status: 400 }); }
+
     const cleanQuery = cleanText(query);
-      
-    if (!cleanQuery) {
-      // If query is empty after cleaning, return empty results
-      return NextResponse.json({ charities: [] });
-    }
-    
+    if (!cleanQuery) { return NextResponse.json({ charities: [] }); }
+
     console.log(`Charity search for: "${cleanQuery}"`);
-    
+
     try {
-      // Call the Every.org API
       const apiUrl = `${config.charity.baseUrl}/search/${encodeURIComponent(cleanQuery)}?apiKey=${config.charity.apiKey}&take=10`;
       console.log(`Calling Every.org API: ${apiUrl}`);
-      
       const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        console.error(`API error: ${response.status}`);
-        return NextResponse.json({ charities: [] });
-      }
-      
-      // Check content type
+
+      if (!response.ok) { console.error(`API error: ${response.status}`); return NextResponse.json({ charities: [] }); }
       const contentType = response.headers.get('content-type');
-      
-      if (!contentType || !contentType.includes('application/json')) {
-        console.error(`Received non-JSON response: ${contentType}`);
-        return NextResponse.json({ charities: [] });
-      }
-      
-      // Parse response as JSON
+      if (!contentType || !contentType.includes('application/json')) { console.error(`Received non-JSON response: ${contentType}`); return NextResponse.json({ charities: [] }); }
+
       const data = await response.json() as EveryOrgResponse;
-      
-      // Fallback to empty array if nonprofits is missing
-      if (!data.nonprofits || !Array.isArray(data.nonprofits)) {
-        console.warn("API response missing nonprofits array");
-        return NextResponse.json({ charities: [] });
-      }
-      
-      // Transform the response to our desired format
+      if (!data.nonprofits || !Array.isArray(data.nonprofits)) { console.warn("API response missing nonprofits array"); return NextResponse.json({ charities: [] }); }
+
+      // Transform the response, including websiteUrl
       const charities = data.nonprofits.map((charity: EveryOrgNonprofit) => {
-        // Extract slug from profile URL if available
         const slug = charity.slug || (charity.profileUrl ? extractSlug(charity.profileUrl) : null);
-        
         return {
           id: charity.ein || charity.id || "",
           name: charity.name || "Unknown Charity",
@@ -112,24 +82,18 @@ export async function searchCharitiesHandler(req: NextRequest) {
           mission: charity.description || "No description available",
           category: charity.tags?.[0] || "Charity",
           logoUrl: charity.logoUrl,
-          // Use slug format for donation URL if available
-          donationUrl: slug 
-            ? `https://www.every.org/${slug}/donate` 
-            : charity.ein 
-              ? `https://www.every.org/ein/${charity.ein}/donate`
-              : `https://www.every.org/donate`
+          donationUrl: slug ? `https://www.every.org/${slug}/donate` : charity.ein ? `https://www.every.org/ein/${charity.ein}/donate` : `https://www.every.org/donate`,
+          websiteUrl: charity.websiteUrl || undefined // <-- MAP THE FIELD HERE
         };
       });
-      
+
       return NextResponse.json({ charities });
     } catch (apiError) {
       console.error("API request failed:", apiError);
-      // Return empty results instead of error
       return NextResponse.json({ charities: [] });
     }
   } catch (error) {
     console.error("Charity search error:", error);
-    // Return empty results as a fallback
     return NextResponse.json({ charities: [] }, { status: 200 });
   }
 }

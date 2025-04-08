@@ -19,6 +19,7 @@ export interface Transaction {
   practiceCategories?: Record<string, string>; // categories for practices like "Climate Change", "Poverty", etc.
   charities?: Record<string, Charity>;
   information?: Record<string, string>; // Information per practice
+  citations?: Record<string, string>; // <<< ADDED: Map practice name to URL string
   isCreditApplication?: boolean; // Flag to identify when this transaction is a credit application
   creditApplied?: boolean; // Flag to identify when this transaction has been used for credit
   plaidTransactionId?: string;

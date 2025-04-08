@@ -1,15 +1,12 @@
+// src/features/dashboard/views/BalanceSheetView.jsx
 "use client";
 
 import React, { useState, useMemo } from "react";
 import { useTransactionStore } from "@/store/transactionStore";
-// Removed unused import: import { calculationService } from "@/core/calculations/impactService";
-import { Transaction } from "@/shared/types/transactions";
+import { Transaction } from "@/shared/types/transactions"; // Make sure Transaction type includes 'citations'
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
-// Removed unused variable: import { useAuth } from "@/hooks/useAuth";
-// Assuming LoadingSpinner and ErrorAlert are correctly imported
 import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
-// import { ErrorAlert } from "@/shared/ui/ErrorAlert"; // If you want to show errors here
 
 // Define props expected from Dashboard parent
 interface BalanceSheetViewProps {
@@ -25,6 +22,7 @@ interface ImpactDetail {
     transactionAmount: number;
     impactAmount: number;
     information?: string;
+    // We don't need citation here as we'll look it up from the main transaction list
 }
 
 // Helper function to format currency
@@ -47,9 +45,8 @@ const getCategoryIcon = (category: string) => {
 
 
 export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
-    // Removed unused variable: const { user } = useAuth();
     // --- Get impactAnalysis and other relevant states from the store ---
-    const { impactAnalysis } = useTransactionStore(); // Removed unused applyCredit, isApplyingCredit
+    const { impactAnalysis } = useTransactionStore();
     const { modalState, openDonationModal, closeDonationModal } = useDonationModal();
 
     // State for expanding categories
@@ -59,7 +56,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
     // --- Derived State from Store ---
     const positiveImpactTotalFromStore = impactAnalysis?.positiveImpact ?? 0;
     const negativeImpactTotalFromStore = impactAnalysis?.negativeImpact ?? 0;
-    // const effectiveDebt = impactAnalysis?.effectiveDebt ?? 0; // Use this for offset actions
+    // const effectiveDebt = impactAnalysis?.effectiveDebt ?? 0; // If needed for offset all
 
     // --- Process Transactions PROP for Detailed View ---
     const { detailedPositiveImpacts, detailedNegativeImpacts, positiveCategoryTotals, negativeCategoryTotals } = useMemo(() => {
@@ -84,6 +81,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                     category, practice, transactionDate: tx.date, transactionName: tx.name,
                     transactionAmount: tx.amount, impactAmount: impactAmount,
                     information: tx.information?.[practice] || undefined,
+                    // No citation here, we look it up later
                 });
             });
 
@@ -101,6 +99,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                     category, practice, transactionDate: tx.date, transactionName: tx.name,
                     transactionAmount: tx.amount, impactAmount: impactAmount,
                     information: tx.information?.[practice] || undefined,
+                    // No citation here, we look it up later
                 });
             });
         });
@@ -130,16 +129,12 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
     const handleOffsetCategory = (categoryName: string, amount: number) => {
          if(amount > 0) openDonationModal(categoryName, amount);
     };
-    // const handleOffsetAll = () => {
-    //     if(effectiveDebt > 0) openDonationModal("All Societal Debt", effectiveDebt);
-    // };
     const togglePositiveCategory = (categoryName: string) => setExpandedPositiveCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }));
     const toggleNegativeCategory = (categoryName: string) => setExpandedNegativeCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }));
 
 
     // --- Loading / No Data State ---
     if (!impactAnalysis || !transactions || transactions.length === 0) {
-        // Use a standardized loading spinner
         return (
           <div className="flex items-center justify-center h-64">
             <LoadingSpinner message="Calculating balance sheet..." />
@@ -165,10 +160,10 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                      )}
                      {positiveCategoryTotals.map(({ name: categoryName, amount: categoryTotalAmount }) => (
                          <div key={`pos-cat-${categoryName}`} className="card"> {/* Use .card */}
-                             {/* Category Header - Changed to div, still clickable */}
+                             {/* Category Header */}
                              <div
-                                role="button" // Add role for accessibility
-                                tabIndex={0} // Make it focusable
+                                role="button" // Accessibility
+                                tabIndex={0} // Focusable
                                 className="w-full bg-gray-50 dark:bg-gray-700/[.5] p-3 flex justify-between items-center text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-t-xl cursor-pointer"
                                 onClick={() => togglePositiveCategory(categoryName)}
                                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') togglePositiveCategory(categoryName); }} // Keyboard accessibility
@@ -186,25 +181,47 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                              {/* Expanded Detail List */}
                              {expandedPositiveCategories[categoryName] && (
                                  <div className="p-4 border-t border-[var(--border-color)] space-y-3 max-h-96 overflow-y-auto">
-                                     {(detailedPositiveImpacts[categoryName] || []).map((detail, index) => (
-                                         // Transaction Detail Row
-                                         <div key={`pos-detail-${index}`} className="border-b border-[var(--border-color)] pb-3 last:border-b-0 last:pb-0">
-                                             <div className="flex justify-between items-start text-sm mb-1">
-                                                 <div>
-                                                     <span className="font-medium text-[var(--card-foreground)]">{detail.transactionName}</span>
-                                                     <span className="text-xs text-[var(--card-foreground)] opacity-70 ml-2">({detail.transactionDate})</span>
-                                                     <p className="text-xs text-blue-600 dark:text-blue-400">{detail.practice}</p>
+                                     {(detailedPositiveImpacts[categoryName] || []).map((detail, index) => {
+                                         // Find the corresponding full transaction to get the citation
+                                         const fullTransaction = transactions.find(tx =>
+                                             tx.date === detail.transactionDate &&
+                                             tx.name === detail.transactionName &&
+                                             tx.amount === detail.transactionAmount && // Add amount check for better matching
+                                             tx.ethicalPractices?.includes(detail.practice) // Ensure this practice is in the list
+                                         );
+                                         const citationUrl = fullTransaction?.citations?.[detail.practice];
+
+                                         return (
+                                             <div key={`pos-detail-${index}`} className="border-b border-[var(--border-color)] pb-3 last:border-b-0 last:pb-0">
+                                                 <div className="flex justify-between items-start text-sm mb-1">
+                                                     <div>
+                                                         <span className="font-medium text-[var(--card-foreground)]">{detail.transactionName}</span>
+                                                         <span className="text-xs text-[var(--card-foreground)] opacity-70 ml-2">({detail.transactionDate})</span>
+                                                         <p className="text-xs text-blue-600 dark:text-blue-400">{detail.practice}</p>
+                                                     </div>
+                                                     <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(detail.impactAmount)}</span>
                                                  </div>
-                                                 <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(detail.impactAmount)}</span>
+                                                 {/* Practice Information & Citation */}
+                                                 {detail.information && (
+                                                     <p className="mt-1 pl-2 border-l-2 border-gray-300 dark:border-gray-600 text-xs text-[var(--card-foreground)] opacity-80 italic">
+                                                         ℹ️ {detail.information}
+                                                         {/* Display Citation Link */}
+                                                         {citationUrl && (
+                                                             <a
+                                                                 href={citationUrl}
+                                                                 target="_blank"
+                                                                 rel="noopener noreferrer"
+                                                                 className="ml-2 text-blue-500 hover:text-blue-700 underline text-[10px]"
+                                                                 onClick={(e) => e.stopPropagation()} // Prevent card toggle
+                                                             >
+                                                                 [Source]
+                                                             </a>
+                                                         )}
+                                                     </p>
+                                                 )}
                                              </div>
-                                             {/* Practice Information */}
-                                             {detail.information && (
-                                                 <p className="mt-1 pl-2 border-l-2 border-gray-300 dark:border-gray-600 text-xs text-[var(--card-foreground)] opacity-80 italic">
-                                                     ℹ️ {detail.information}
-                                                 </p>
-                                             )}
-                                         </div>
-                                     ))}
+                                         );
+                                     })}
                                      {detailedPositiveImpacts[categoryName]?.length === 0 && <p className="text-xs text-center text-[var(--card-foreground)] opacity-70">No specific transactions found for this category.</p>}
                                  </div>
                              )}
@@ -225,10 +242,10 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                      )}
                     {negativeCategoryTotals.map(({ name: categoryName, amount: categoryTotalAmount }) => (
                         <div key={`neg-cat-${categoryName}`} className="card"> {/* Use .card */}
-                             {/* Category Header - Changed to div, still clickable */}
+                             {/* Category Header */}
                              <div
-                                role="button" // Add role for accessibility
-                                tabIndex={0} // Make it focusable
+                                role="button" // Accessibility
+                                tabIndex={0} // Focusable
                                 className="w-full bg-gray-50 dark:bg-gray-700/[.5] p-3 flex justify-between items-center text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-t-xl cursor-pointer"
                                 onClick={() => toggleNegativeCategory(categoryName)}
                                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleNegativeCategory(categoryName); }} // Keyboard accessibility
@@ -237,20 +254,21 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                                      <span className="text-lg mr-3">{getCategoryIcon(categoryName)}</span>
                                      <span className="font-semibold text-gray-700 dark:text-gray-200">{categoryName}</span>
                                  </div>
-                                 {/* Moved Button OUTSIDE the clickable div's main content, but within the flex container */}
                                  <div className="flex items-center">
                                      <span className="font-bold text-red-600 dark:text-red-400 mr-2">{formatCurrency(categoryTotalAmount)}</span>
-                                     {/* Offset Button for Category - NOW NOT NESTED in a button */}
-                                     <button
-                                       onClick={(e) => {
-                                            e.stopPropagation(); // Prevent the div's onClick from firing
-                                            handleOffsetCategory(categoryName, categoryTotalAmount);
-                                        }}
-                                       className="bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-1 rounded-full mr-2 transition-colors whitespace-nowrap z-10" // Added z-10 just in case
-                                       title={`Offset ${categoryName} impact`}
-                                     >
-                                        Offset
-                                     </button>
+                                     {/* Offset Button for Category */}
+                                     {categoryTotalAmount > 0 && ( // Only show offset if there's debt
+                                       <button
+                                         onClick={(e) => {
+                                              e.stopPropagation(); // Prevent the div's onClick
+                                              handleOffsetCategory(categoryName, categoryTotalAmount);
+                                          }}
+                                         className="bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-1 rounded-full mr-2 transition-colors whitespace-nowrap z-10"
+                                         title={`Offset ${categoryName} impact`}
+                                       >
+                                          Offset
+                                       </button>
+                                     )}
                                      {/* Chevron Icon */}
                                      <svg className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${expandedNegativeCategories[categoryName] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                  </div>
@@ -258,41 +276,53 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                             {/* Expanded Detail List */}
                             {expandedNegativeCategories[categoryName] && (
                                 <div className="p-4 border-t border-[var(--border-color)] space-y-3 max-h-96 overflow-y-auto">
-                                     {(detailedNegativeImpacts[categoryName] || []).map((detail, index) => (
-                                         // Transaction Detail Row
-                                         <div key={`neg-detail-${index}`} className="border-b border-[var(--border-color)] pb-3 last:border-b-0 last:pb-0">
-                                             <div className="flex justify-between items-start text-sm mb-1">
-                                                 <div>
-                                                     <span className="font-medium text-[var(--card-foreground)]">{detail.transactionName}</span>
-                                                     <span className="text-xs text-[var(--card-foreground)] opacity-70 ml-2">({detail.transactionDate})</span>
-                                                     <p className="text-xs text-blue-600 dark:text-blue-400">{detail.practice}</p>
+                                     {(detailedNegativeImpacts[categoryName] || []).map((detail, index) => {
+                                          // Find the corresponding full transaction to get the citation
+                                          const fullTransaction = transactions.find(tx =>
+                                             tx.date === detail.transactionDate &&
+                                             tx.name === detail.transactionName &&
+                                             tx.amount === detail.transactionAmount && // Add amount check
+                                             tx.unethicalPractices?.includes(detail.practice) // Ensure practice match
+                                          );
+                                          const citationUrl = fullTransaction?.citations?.[detail.practice];
+
+                                          return (
+                                             <div key={`neg-detail-${index}`} className="border-b border-[var(--border-color)] pb-3 last:border-b-0 last:pb-0">
+                                                 <div className="flex justify-between items-start text-sm mb-1">
+                                                     <div>
+                                                         <span className="font-medium text-[var(--card-foreground)]">{detail.transactionName}</span>
+                                                         <span className="text-xs text-[var(--card-foreground)] opacity-70 ml-2">({detail.transactionDate})</span>
+                                                         <p className="text-xs text-blue-600 dark:text-blue-400">{detail.practice}</p>
+                                                     </div>
+                                                     <span className="font-medium text-red-600 dark:text-red-400">{formatCurrency(detail.impactAmount)}</span>
                                                  </div>
-                                                 <span className="font-medium text-red-600 dark:text-red-400">{formatCurrency(detail.impactAmount)}</span>
+                                                 {/* Practice Information & Citation */}
+                                                 {detail.information && (
+                                                     <p className="mt-1 pl-2 border-l-2 border-gray-300 dark:border-gray-600 text-xs text-[var(--card-foreground)] opacity-80 italic">
+                                                         ℹ️ {detail.information}
+                                                         {/* Display Citation Link */}
+                                                         {citationUrl && (
+                                                             <a
+                                                                 href={citationUrl}
+                                                                 target="_blank"
+                                                                 rel="noopener noreferrer"
+                                                                 className="ml-2 text-blue-500 hover:text-blue-700 underline text-[10px]"
+                                                                 onClick={(e) => e.stopPropagation()} // Prevent card toggle
+                                                             >
+                                                                 [Source]
+                                                             </a>
+                                                         )}
+                                                     </p>
+                                                 )}
                                              </div>
-                                             {/* Practice Information */}
-                                             {detail.information && (
-                                                 <p className="mt-1 pl-2 border-l-2 border-gray-300 dark:border-gray-600 text-xs text-[var(--card-foreground)] opacity-80 italic">
-                                                     ℹ️ {detail.information}
-                                                 </p>
-                                             )}
-                                         </div>
-                                     ))}
+                                          );
+                                      })}
                                      {detailedNegativeImpacts[categoryName]?.length === 0 && <p className="text-xs text-center text-[var(--card-foreground)] opacity-70">No specific transactions found for this category.</p>}
                                 </div>
                             )}
                         </div>
                     ))}
-                     {/* Offset All button */}
-                     {/* {effectiveDebt > 0 && (
-                        <div className="mt-6 text-center">
-                            <button
-                              onClick={handleOffsetAll}
-                              className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow transition-colors"
-                            >
-                                Offset Remaining Debt ({formatCurrency(effectiveDebt)})
-                            </button>
-                        </div>
-                    )} */}
+                     {/* Offset All button can be added here if needed */}
                 </div>
 
             </div>
