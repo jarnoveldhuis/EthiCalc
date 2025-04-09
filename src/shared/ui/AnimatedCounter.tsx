@@ -1,41 +1,44 @@
+// src/shared/ui/AnimatedCounter.jsx
 import React from 'react';
-import { useCountUp } from '@/hooks/useCountUp';
+import { useCountUp } from '@/hooks/useCountUp'; //
 
 interface AnimatedCounterProps {
   value: number;
   prefix?: string;
   suffix?: string;
   className?: string;
+  decimalPlaces?: number; // <-- ADDED prop
 }
 
 export function AnimatedCounter({
   value,
-  prefix = '$',
+  prefix = '', // Default prefix to empty (important!)
   suffix = '',
-  className = ''
+  className = '',
+  decimalPlaces // <-- Use the new prop
 }: AnimatedCounterProps) {
-  // Convert negative values to positive for display, but track the sign
 
-  const isNegative = value < 0;
-  const absValue = Math.abs(value);
-  
-  // Use the count up hook with our options
-  const displayValue = useCountUp(absValue, {
-    duration: 1000, // A bit faster than default for snappiness
-    easing: 'easeOut', // Feels more natural for money
-    decimalPlaces: 2,  // Standard for currency
-  });
-  
-  // Determine color based on debt/credit status
-  const getTextColorClass = () => {
-    if (value <= 0) return 'text-green-200'; // Credit/benefit
-    if (value > 50) return "text-orange-200";
-    return 'text-red-200'; // Debt
+  // Determine options for useCountUp, including decimalPlaces
+  const countUpOptions = {
+    duration: 1000,
+    easing: "easeOut" as const,
+    // Use passed decimalPlaces, fallback to 0 if undefined
+    decimalPlaces: decimalPlaces !== undefined ? decimalPlaces : 0,
   };
 
+  // useCountUp handles the animation and formatting based on options
+  const displayValue = useCountUp(value, countUpOptions); // Pass options
+
+  // REMOVED internal color logic (getTextColorClass)
+  // Color is now fully controlled by the passed className
+
   return (
-    <span className={`font-bold ${getTextColorClass()} ${className}`}>
-      {isNegative ? '-' : ''}{prefix}{displayValue}{suffix}
+    // Apply the passed className directly. Ensure font-bold is kept if desired.
+    // The prefix is now handled by useCountUp if needed, or rendered outside.
+    // Rendering prefix/suffix outside gives more control.
+    <span className={`font-bold ${className}`}>
+       {/* Prefix is often handled outside now, but kept if useCountUp formatter needs it */}
+       {prefix}{displayValue}{suffix}
     </span>
   );
 }

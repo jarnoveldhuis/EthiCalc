@@ -112,7 +112,6 @@ export function DonationModal({
     setSelectedCharity(null); // Reset selected charity
     console.log(`[DonationModal] Fetching recommendations using term: "${searchTerm}"`);
     try {
-      // eslint-disable-next-line prefer-const
       let charities = await getRecommendedCharities(searchTerm);
       if (charities.length === 0) {
         const fallbackTerm = cleanedPractice === "All Societal Debt" ? "environment" : "charity";
