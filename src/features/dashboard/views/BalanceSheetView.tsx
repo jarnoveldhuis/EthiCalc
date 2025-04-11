@@ -217,7 +217,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                                        </button>
                                      )}
                                      {/* Chevron Icon */}
-                                     <svg className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${expandedNegativeCategories[categoryName] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                     <svg className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-2000 ${expandedNegativeCategories[categoryName] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                  </div>
                             </div>
                             {/* Expanded Detail List */}
@@ -289,7 +289,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
                                 <div className="flex items-center">
                                     <span className="font-bold text-green-600 dark:text-green-400 mr-3 text-sm sm:text-base">{formatCurrency(categoryTotalAmount)}</span>
                                     {/* Chevron Icon */}
-                                    <svg className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${expandedPositiveCategories[categoryName] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    <svg className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-2000 ${expandedPositiveCategories[categoryName] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                 </div>
                              </div>
                              {/* Expanded Detail List */}

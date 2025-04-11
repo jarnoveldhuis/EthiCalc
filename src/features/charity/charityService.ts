@@ -1,22 +1,11 @@
 // src/features/charity/charityService.ts
+import { CharitySearchResult, EnrichedCharityResult } from './types';
 
 // Helper to clean practice names by removing emojis and trimming whitespace
 export function cleanPracticeName(practice: string): string {
   return practice
     .replace(/[\u{1F300}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
     .trim();
-}
-
-export interface CharitySearchResult {
-  id: string;
-  name: string;
-  url: string;
-  mission: string;
-  category: string;
-  logoUrl?: string;
-  donationUrl?: string;
-  slug?: string;
-  websiteUrl?: string;
 }
 
 // Search for charities by cause or keyword
@@ -65,6 +54,68 @@ export async function getRecommendedCharities(practice: string): Promise<Charity
     return data.charities || [];
   } catch {
     return []; // Return empty array instead of throwing
+  }
+}
+
+export async function getRecommendedCharitiesWithRatings(practice: string): Promise<EnrichedCharityResult[]> {
+  try {
+    // First get recommended charities from Every.org
+    const everyOrgCharities = await getRecommendedCharities(practice);
+    
+    if (!everyOrgCharities.length) {
+      return [];
+    }
+    
+    // For top 3 charities, try to get ratings
+    const charityPromises = everyOrgCharities.slice(0, 3).map(async (charity) => {
+      // Extract EIN if available
+      let ein = charity.id;
+      if (ein.includes('ein:')) {
+        ein = ein.split(':')[1];
+      }
+      
+      // Validate EIN format before making the request
+      const einPattern = /^\d{2}-?\d{7}$/;
+      if (!einPattern.test(ein)) {
+        return { ...charity, cnRating: null };
+      }
+      
+      try {
+        const response = await fetch(`/api/charity/ratings?ein=${ein}`);
+        if (response.ok) {
+          const data = await response.json();
+          return {
+            ...charity,
+            cnRating: data.rating
+          };
+        }
+        return { ...charity, cnRating: null };
+      } catch {
+        return { ...charity, cnRating: null };
+      }
+    });
+    
+    const enrichedCharities = await Promise.all(charityPromises);
+    
+    // Sort charities by ratings (if available)
+    return enrichedCharities.sort((a, b) => {
+      // If both have ratings, sort by score
+      if (a.cnRating?.encompass_score && b.cnRating?.encompass_score) {
+        return b.cnRating.encompass_score - a.cnRating.encompass_score;
+      }
+      
+      // Prioritize charities with ratings
+      if (a.cnRating?.encompass_score) return -1;
+      if (b.cnRating?.encompass_score) return 1;
+      
+      // Keep original order for unrated charities
+      return 0;
+    });
+  } catch {
+    // Fallback to original recommendations if rating lookup fails
+    return getRecommendedCharities(practice).then(charities => 
+      charities.map(charity => ({ ...charity, cnRating: null }))
+    );
   }
 }
 

@@ -34,6 +34,6 @@ export const config = {
   charityNavigator: {
     apiKey: process.env.CHARITY_NAVIGATOR_API_KEY || "YOUR_CHARITY_NAVIGATOR_API_KEY",
     appId: process.env.CHARITY_NAVIGATOR_APP_ID || "YOUR_CHARITY_NAVIGATOR_APP_ID",
-    apiUrl: "https://api.charitynavigator.org/graphql",
+    apiUrl: process.env.CHARITY_NAVIGATOR_API_URL || "https://api.charitynavigator.org/graphql",
   },
 };

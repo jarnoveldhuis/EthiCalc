@@ -8,6 +8,7 @@ interface AnimatedCounterProps {
   suffix?: string;
   className?: string;
   decimalPlaces?: number; // <-- ADDED prop
+  title?: string; // Add title prop
 }
 
 export function AnimatedCounter({
@@ -20,7 +21,7 @@ export function AnimatedCounter({
 
   // Determine options for useCountUp, including decimalPlaces
   const countUpOptions = {
-    duration: 1000,
+    duration: 2000,
     easing: "easeOut" as const,
     // Use passed decimalPlaces, fallback to 0 if undefined
     decimalPlaces: decimalPlaces !== undefined ? decimalPlaces : 0,

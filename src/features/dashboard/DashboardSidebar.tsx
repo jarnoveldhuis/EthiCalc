@@ -1,7 +1,8 @@
 // src/features/dashboard/DashboardSidebar.jsx
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTransactionStore } from "@/store/transactionStore";
-import { AnimatedCounter } from "@/shared/ui/AnimatedCounter"; // Ensure this is imported
+import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
+import { useCountUp } from '@/hooks/useCountUp';
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,41 +18,47 @@ const categoryIcons: Record<string, string> = {
     "Default Category": "❓" // Fallback icon
 };
 
-// --- Helper: Tier Calculation ---
-// Calculates the user's overall tier based on impact and credit usage
-const getTierInfo = (appliedCredit: number, totalPositiveImpact: number, totalNegativeImpact: number): { name: string; description: string; colorClass: string; ratio?: number } => {
-    if (totalNegativeImpact <= 0) { // Handle cases with no negative impact
-        if (totalPositiveImpact > 0 || appliedCredit > 0) {
-            // If positive impact exists or credit was applied, assign highest tier
-            return { name: "S", description: "Impact Positive", colorClass: "text-cyan-400" }; // Example S-tier color
+// --- Helper: Tier Calculation (Reverted to Letters, new D desc, white text) ---
+const getTierInfo = (
+    scoreRatio: number | null, // Accept calculated ratio (can be null if no debt)
+    totalPositiveImpact: number,
+    totalNegativeImpact: number
+): { name: string; description: string; colorClass: string; displayRatio?: number } => {
+    // Handle cases with no negative impact
+    if (totalNegativeImpact <= 0) {
+        if (totalPositiveImpact > 0) {
+            // Highest Tier - Impact Positive
+            return { name: "S", description: "Beacon of Virtue", colorClass: "text-white", displayRatio: undefined }; // No ratio needed if no debt
         }
-        // If no impact at all, neutral
-        return { name: "N", description: "Neutral / No Data", colorClass: "text-gray-500" };
+        // Neutral / No Data
+        return { name: "", description: "", colorClass: "text-white", displayRatio: undefined };
     }
 
-    // Calculate offset ratio only if there's negative impact to offset
-    const scoreRatio = appliedCredit / totalNegativeImpact;
+    // If scoreRatio is null (because totalNegativeImpact was 0 initially), treat as 0 for tier calc
+    const ratio = scoreRatio ?? 0;
+
+    // Set text color to white for all tiers
+    const textColor = "text-white";
 
     // Determine tier based on how much of the negative impact has been offset
-    if (scoreRatio >= 1.0) return { name: "A+", description: "Transformative Steward", ratio: scoreRatio, colorClass: "text-green-500" };
-    if (scoreRatio >= 0.75) return { name: "A", description: "Conscious Cultivator", ratio: scoreRatio, colorClass: "text-lime-500" };
-    if (scoreRatio >= 0.50) return { name: "B", description: "Mindful Participant", ratio: scoreRatio, colorClass: "text-yellow-500" };
-    if (scoreRatio >= 0.25) return { name: "C", description: "Awakening Consumer", ratio: scoreRatio, colorClass: "text-amber-500" };
-    if (scoreRatio >= 0.10) return { name: "D", description: "Passive Participant", ratio: scoreRatio, colorClass: "text-orange-500" };
-    // Default to lowest tier if offset ratio is less than 0.10
-    return { name: "F", description: "Passive Consumer", ratio: scoreRatio, colorClass: "text-red-500" };
+    if (ratio >= 1.0) return { name: "S", description: "Beacon of Virtue", displayRatio: ratio, colorClass: textColor };
+    if (ratio >= 0.75) return { name: "A", description: "Conscious Contributor", displayRatio: ratio, colorClass: textColor };
+    if (ratio >= 0.50) return { name: "B", description: "Neutral Navigator", displayRatio: ratio, colorClass: textColor };
+    if (ratio >= 0.35) return { name: "C", description: "Passive Liability", displayRatio: ratio, colorClass: textColor };
+    if (ratio >= 0.20) return { name: "D", description: "Dead Weight", displayRatio: ratio, colorClass: textColor }; // Updated D description
+    // F Tier: Keep Societal Leech description
+    return { name: "F", description: "Societal Parasite", displayRatio: ratio, colorClass: textColor };
 };
 
-// Gets text and bar color based on the net score
+
+// Gets text and bar color based on the net score (Keep as is)
 const getScoreColorClasses = (score: number): { textColor: string; bgColor: string } => {
-    // Use a small threshold around zero for neutral color
     if (score > 0.5) return { textColor: "text-[var(--success)]", bgColor: "bg-[var(--success)]" };
     if (score < -0.5) return { textColor: "text-[var(--destructive)]", bgColor: "bg-[var(--destructive)]" };
-    // Neutral (close to zero)
     return { textColor: "text-[var(--muted-foreground)]", bgColor: "bg-gray-400 dark:bg-gray-500" };
 };
 
-// Formats currency
+// Formats currency (Keep as is)
 const formatCurrency = (value: number): string => `$${value.toFixed(2)}`;
 
 
@@ -76,145 +83,131 @@ export function DashboardSidebar() {
   const [feedbackMessage, setFeedbackMessage] = useState<string>("");
 
   // --- Calculations ---
-  // Overall impact figures from store analysis
   const applied = impactAnalysis?.appliedCredit ?? 0;
-  const effective = impactAnalysis?.effectiveDebt ?? 0;
+  const effective = impactAnalysis?.effectiveDebt ?? 0; // Use effective debt for some logic
   const available = impactAnalysis?.availableCredit ?? 0;
   const totalPositiveImpact = impactAnalysis?.positiveImpact ?? 0;
   const totalNegativeImpact = impactAnalysis?.negativeImpact ?? 0;
 
-  // Tier Calculation based on overall figures
-  const tierInfo = useMemo(() => {
-    if (!impactAnalysis) {
-       return { name: "?", description: "Calculating...", colorClass: "text-gray-500" };
-    }
-    return getTierInfo(applied, totalPositiveImpact, totalNegativeImpact);
-  }, [impactAnalysis, applied, totalPositiveImpact, totalNegativeImpact, effective]);
+  // Calculate TARGET Score Ratio (Used for background color and tier calculation)
+  const targetScoreRatio = useMemo(() => {
+      if (!impactAnalysis || totalNegativeImpact <= 0) {
+          return null; // Ratio isn't applicable if no debt
+      }
+      return applied / totalNegativeImpact;
+  }, [impactAnalysis, applied, totalNegativeImpact]);
 
-  // Calculate TARGET category data for bars and text score display
+  // Animate the Score Ratio using useCountUp (Keep as is)
+  const animatedRatioPercentString = useCountUp(
+      targetScoreRatio !== null ? Math.max(0, targetScoreRatio * 100) : 0,
+      { duration: 2000, decimalPlaces: 1, easing: 'easeOut' }
+  );
+
+  // Dynamic Tier Calculation based on ANIMATED value (Keep as is)
+  const currentTierInfo = useMemo(() => {
+      const currentAnimatedRatioValue = parseFloat(animatedRatioPercentString) / 100;
+      const ratioForTierCalc = isNaN(currentAnimatedRatioValue) ? targetScoreRatio : currentAnimatedRatioValue;
+      // Pass the ratio *being animated* to getTierInfo
+      return getTierInfo(ratioForTierCalc, totalPositiveImpact, totalNegativeImpact);
+  }, [animatedRatioPercentString, targetScoreRatio, totalPositiveImpact, totalNegativeImpact]); // Recalculate when animation updates
+
+  // Calculate category data (Keep as is)
   const targetCategoryBarData = useMemo(() => {
-    // Calculate Total Spending Associated with ANY Value (used as denominator for scores/bars)
-    const totalSpendingWithAnyValue = transactions.reduce((sum, tx) => {
-        const hasValue = (tx.ethicalPractices && tx.ethicalPractices.length > 0) ||
-                         (tx.unethicalPractices && tx.unethicalPractices.length > 0);
-        return sum + (hasValue ? (tx.amount || 0) : 0);
-    }, 0);
+      const totalSpendingWithAnyValue = transactions.reduce((sum, tx) => {
+          const hasValue = (tx.ethicalPractices && tx.ethicalPractices.length > 0) ||
+                           (tx.unethicalPractices && tx.unethicalPractices.length > 0);
+          return sum + (hasValue ? (tx.amount || 0) : 0);
+      }, 0);
+      const catImpacts = calculationService.calculateCategoryImpacts(transactions);
+      const results: Record<string, { score: number; targetBarWidthPercent: number; tooltip: string; }> = {};
+      const definedCategories = ["Environment", "Labor Ethics", "Animal Welfare", "Political Ethics", "Transparency"];
+      definedCategories.forEach(category => {
+         const values = catImpacts[category] || { positiveImpact: 0, negativeImpact: 0 };
+         const { positiveImpact, negativeImpact } = values;
+         let posPercent = 0; let negPercent = 0;
+         if (totalSpendingWithAnyValue > 0) {
+             posPercent = (positiveImpact / totalSpendingWithAnyValue) * 100;
+             negPercent = (negativeImpact / totalSpendingWithAnyValue) * 100;
+         }
+         const score = posPercent - negPercent;
+         const targetBarWidthPercent = Math.min(100, Math.abs(score)) / 2;
+         const tooltipText = `Net Score: ${score > 0 ? '+' : ''}${score.toFixed(1)}% (Pos: ${posPercent.toFixed(0)}%, Neg: ${negPercent.toFixed(0)}% of value spend)`;
+         results[category] = { score, targetBarWidthPercent, tooltip: tooltipText };
+      });
+      return results;
+  }, [transactions]);
 
-    // Get category-specific impacts { positiveImpact, negativeImpact } per category
-    const catImpacts = calculationService.calculateCategoryImpacts(transactions);
-    const results: Record<string, {
-        score: number; // NET difference score (pos% - neg%) for text display & bar color
-        targetBarWidthPercent: number; // Target width for animation (0-50 based on abs(score))
-        tooltip: string; // Tooltip text
-     }> = {};
-    // Define categories to ensure all are processed
-    const definedCategories = ["Environment", "Labor Ethics", "Animal Welfare", "Political Ethics", "Transparency"];
-
-     definedCategories.forEach(category => {
-       const values = catImpacts[category] || { positiveImpact: 0, negativeImpact: 0 };
-       const { positiveImpact, negativeImpact } = values;
-
-       // Calculate percentages relative to VALUE-ASSOCIATED spending
-       let posPercent = 0;
-       let negPercent = 0;
-       if (totalSpendingWithAnyValue > 0) {
-           posPercent = (positiveImpact / totalSpendingWithAnyValue) * 100;
-           negPercent = (negativeImpact / totalSpendingWithAnyValue) * 100;
-       } // Handle edge cases like 0 denominator if needed
-
-       // Calculate final SCORE: net difference of the percentages
-       const score = posPercent - negPercent;
-
-       // Calculate TARGET BAR WIDTH: absolute value of the score (0-100), halved for visual space (0-50)
-       const targetBarWidthPercent = Math.min(100, Math.abs(score)) / 2;
-
-       // Create Tooltip text explaining score basis
-       const tooltipText = `Net Score: ${score > 0 ? '+' : ''}${score.toFixed(1)}% (Pos: ${posPercent.toFixed(0)}%, Neg: ${negPercent.toFixed(0)}% of value spend)`;
-
-       results[category] = {
-           score,
-           targetBarWidthPercent,
-           tooltip: tooltipText
-       };
-    });
-    return results;
-  }, [transactions]); // Recalculate only when transactions change
-
-  // Determine Top Card Background Color based on overall effective debt
+  // --- Determine Top Card Background Color BASED ON SCORE RATIO/TIER ---
   const topCardBackgroundClass = useMemo(() => {
-       if (!impactAnalysis) return "bg-[var(--secondary)] text-[var(--secondary-foreground)]";
-       if (effective <= 0) return "bg-[var(--success)] text-[var(--success-foreground)]";
-       if (effective < 50) return "bg-[var(--warning)] text-[var(--warning-foreground)]";
-       return "bg-[var(--destructive)] text-[var(--destructive-foreground)]";
-   }, [impactAnalysis, effective]);
+       if (!impactAnalysis) return "bg-gray-400 dark:bg-gray-600"; // Neutral while loading
 
-  // Overall Progress Bar Target Percentage for animation
+       // Case 1: No debt or positive impact exists
+       if (totalNegativeImpact <= 0) {
+           if (totalPositiveImpact > 0) return "bg-sky-500 dark:bg-sky-700"; // Impact positive
+           return "bg-gray-400 dark:bg-gray-600"; // Neutral / No Data
+       }
+
+       // Case 2: Debt exists, use targetScoreRatio
+       const ratio = targetScoreRatio ?? 0; // Use 0 if null
+
+       if (ratio >= 1.0) return "bg-green-500 dark:bg-green-700"; // A+
+       if (ratio >= 0.75) return "bg-lime-500 dark:bg-lime-700"; // A
+       if (ratio >= 0.50) return "bg-yellow-400 dark:bg-yellow-600"; // B
+       if (ratio >= 0.25) return "bg-amber-400 dark:bg-amber-600"; // C
+       if (ratio >= 0.10) return "bg-orange-500 dark:bg-orange-700"; // D
+       return "bg-red-600 dark:bg-red-800"; // F (Leech)
+   }, [impactAnalysis, totalNegativeImpact, totalPositiveImpact, targetScoreRatio]);
+
+  // Overall Progress Bar Target Percentage (Keep as is)
   const targetAppliedPercentage = useMemo(() => {
-      const totalTarget = applied + effective; // Total potential progress = applied + remaining debt
+      const totalTarget = applied + effective;
       return totalTarget > 0 ? Math.min((applied / totalTarget) * 100, 100) : (effective <= 0 ? 100 : 0);
   }, [applied, effective]);
 
-  // Progress Bar Track Color based on remaining debt
+  // Progress Bar Track Color (Keep as is)
   const progressBarTrackColor = effective > 0 ? 'bg-red-200 dark:bg-red-900' : 'bg-green-200 dark:bg-green-900';
 
-  // --- Effects ---
-  // Effect for Overall Progress Bar animation
+  // --- Effects --- (Keep as is)
   useEffect(() => {
      if (overallAnimationTimeoutRef.current) clearTimeout(overallAnimationTimeoutRef.current);
-     if (impactAnalysis) { // Only animate if analysis data is ready
+     if (impactAnalysis) {
        overallAnimationTimeoutRef.current = setTimeout(() => {
          setCurrentAppliedPercentage(targetAppliedPercentage);
          setIsOverallAnimationReady(true);
-       }, 50); // Short delay to allow CSS transition setup
-     } else { // Reset if analysis data disappears
+       }, 50);
+     } else {
        setIsOverallAnimationReady(false);
        setCurrentAppliedPercentage(0);
      }
-     // Cleanup timeout on unmount or dependency change
      return () => { if (overallAnimationTimeoutRef.current) clearTimeout(overallAnimationTimeoutRef.current); };
    }, [targetAppliedPercentage, impactAnalysis]);
 
-  // Effect for Category Bar animation
   useEffect(() => {
       if (categoryAnimationTimeoutRef.current) clearTimeout(categoryAnimationTimeoutRef.current);
-
-      // Create the target state object (category -> target width 0-50)
       const targetWidths: Record<string, number> = {};
       Object.entries(targetCategoryBarData).forEach(([category, data]) => {
           targetWidths[category] = data.targetBarWidthPercent;
       });
-
-      // Set a timeout to update the animated widths state after a brief delay
       categoryAnimationTimeoutRef.current = setTimeout(() => {
           setCurrentCategoryWidths(targetWidths);
       }, 50);
+      return () => { if (categoryAnimationTimeoutRef.current) clearTimeout(categoryAnimationTimeoutRef.current); };
+  }, [targetCategoryBarData]);
 
-      // Cleanup function
-      return () => {
-          if (categoryAnimationTimeoutRef.current) {
-              clearTimeout(categoryAnimationTimeoutRef.current);
-          }
-      };
-  }, [targetCategoryBarData]); // Re-run when target data changes
-
-  // --- Action Handlers ---
-  // Determine if Credit Apply button should be disabled
+  // --- Action Handlers --- (Keep as is)
   const creditButtonDisabled = useMemo(() => {
        return !impactAnalysis || available <= 0 || isApplyingCredit || effective <= 0;
    }, [impactAnalysis, available, isApplyingCredit, effective]);
 
-  // Determine if Debt Offset button should be disabled
   const offsetButtonDisabled = useMemo(() => {
         return !impactAnalysis || effective <= 0;
   }, [impactAnalysis, effective]);
 
-  // Handler to apply available credit
   const handleApplyCredit = useCallback(async () => {
      if (!user || creditButtonDisabled || !impactAnalysis || available <= 0) return;
      try {
        const amountToApply = available;
-       const success = await applyCredit(amountToApply, user.uid); // Call store action
-       // Show feedback to user
+       const success = await applyCredit(amountToApply, user.uid);
        setFeedbackMessage(success ? `Applied ${formatCurrency(amountToApply)} credit.` : "Failed to apply credit.");
        setShowFeedback(true);
        setTimeout(() => setShowFeedback(false), 3000);
@@ -224,45 +217,46 @@ export function DashboardSidebar() {
         setShowFeedback(true);
         setTimeout(() => setShowFeedback(false), 3000);
      }
-   }, [applyCredit, user, impactAnalysis, available, creditButtonDisabled, isApplyingCredit]); // Include all dependencies
+   }, [applyCredit, user, impactAnalysis, available, creditButtonDisabled, isApplyingCredit]);
 
-  // Handler to open the donation modal for offsetting debt
   const handleOpenOffsetModal = useCallback(() => {
     if (effective > 0) {
-        // Pass the remaining debt amount to the modal
         openDonationModal("All Societal Debt", effective);
     }
   }, [openDonationModal, effective]);
 
-
   // --- Render Logic ---
   return (
     <div className="w-full lg:col-span-1">
-      {/* Card container */}
       <div className="card mb-6">
 
-         {/* Section 1: Tier Display */}
-         <div className={`${topCardBackgroundClass} transition-colors duration-500 p-4 sm:p-6 rounded-t-xl`}>
+         {/* Section 1: Tier Display - Uses letter grade name, specified descriptions, and WHITE text color */}
+         <div className={`${topCardBackgroundClass} transition-colors duration-2000 p-4 sm:p-6 rounded-t-xl`}>
               <div className="text-center">
                  <div className="mb-2">
-                    <h2 className={`text-4xl sm:text-5xl font-bold tracking-tight text-white drop-shadow-md`}>{tierInfo.name}</h2>
-                    <p className="text-sm font-medium text-white opacity-90 mt-1">{tierInfo.description}</p>
-                    {tierInfo.ratio !== undefined && isFinite(tierInfo.ratio) && tierInfo.ratio >= 0 && (
-                        <p className="text-xs text-white opacity-70">({(tierInfo.ratio * 100).toFixed(0)}% Offset)</p>
-                    )}
+                    {/* Display the tier name (letter) and color (white) */}
+                    <h2 className={`text-4xl sm:text-5xl font-bold tracking-tight drop-shadow-md ${currentTierInfo.colorClass} transition-colors duration-2000 ease-in-out`}>{currentTierInfo.name}</h2>
+                    {/* Display the description */}
+                    <p className={`text-sm font-medium ${currentTierInfo.colorClass === 'text-white' ? 'text-white opacity-90' : 'text-gray-200'} mt-1`}>{currentTierInfo.description}</p>
+                    {/* Display the ANIMATED percentage value */}
+                    {targetScoreRatio !== null && ( // Only show ratio if applicable (debt exists)
+                        <p className={`text-xs ${currentTierInfo.colorClass === 'text-white' ? 'text-white opacity-70' : 'text-gray-300'}`}>
+                             (<span className="font-semibold">{animatedRatioPercentString}</span>% Offset)
+                         </p>
+                     )}
                  </div>
               </div>
          </div>
 
-        {/* Section 2: Overall Progress Bar */}
-        <div className="p-4 space-y-2 border-b border-[var(--border-color)]">
+         {/* Section 2: Overall Progress Bar (Keep as is) */}
+         <div className="p-4 space-y-2 border-b border-[var(--border-color)]">
              <div className="flex justify-between text-xs sm:text-sm mb-1">
                <span className="font-medium text-[var(--muted-foreground)]">Applied Credit</span>
                <span className="font-medium text-[var(--muted-foreground)]">{effective > 0 ? 'Remaining Debt' : 'Debt Offset'}</span>
              </div>
-             <div className={`w-full ${progressBarTrackColor} rounded-full h-3 overflow-hidden relative transition-colors duration-500`}>
+             <div className={`w-full ${progressBarTrackColor} rounded-full h-3 overflow-hidden relative transition-colors duration-2000`}>
                 <div
-                    className="bg-[var(--success)] h-3 rounded-l-full absolute top-0 left-0 transition-all duration-500 ease-out"
+                    className="bg-[var(--success)] h-3 rounded-l-full absolute top-0 left-0 transition-all duration-2000 ease-out"
                     style={{ width: isOverallAnimationReady ? `${currentAppliedPercentage}%` : '0%' }}
                     title={`Applied: ${formatCurrency(applied)}`}
                 />
@@ -273,18 +267,17 @@ export function DashboardSidebar() {
                     {formatCurrency(effective)}
                 </span>
              </div>
-        </div>
-{/* Section 4: Debt Offset & Available Credit Actions */}
-<div className="p-4 space-y-3">
-            {/* Row for Remaining Debt & Offset Button */}
-             <div className="flex items-center justify-between">
+         </div>
+
+        {/* Section 4: Debt Offset & Available Credit Actions (Keep as is) */}
+        <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
                  <div><span className="text-[var(--muted-foreground)] text-sm sm:text-base">Remaining Debt</span></div>
                  <div className="flex items-center gap-2">
                     <span className={`font-bold text-sm sm:text-base ${effective > 0 ? 'text-[var(--destructive)]' : 'text-[var(--success)]'}`}>{formatCurrency(effective)}</span>
                     <button onClick={handleOpenOffsetModal} disabled={offsetButtonDisabled} className={`px-3 py-1 rounded-full text-xs font-medium text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-background)] focus:ring-[var(--primary)] ${ offsetButtonDisabled ? "bg-gray-400 dark:bg-gray-500 cursor-not-allowed opacity-50" : "bg-[var(--primary)] hover:opacity-80" }`} title={effective <= 0 ? "No remaining debt to offset" : `Offset ${formatCurrency(effective)} remaining debt` }>Offset</button>
                  </div>
             </div>
-           {/* Row for Available Credit & Apply Button */}
            <div className="flex items-center justify-between">
              <div><span className="text-[var(--muted-foreground)] text-sm sm:text-base">Available Credit</span></div>
              <div className="flex items-center gap-2">
@@ -292,79 +285,48 @@ export function DashboardSidebar() {
                 <button onClick={handleApplyCredit} disabled={creditButtonDisabled} className={`px-3 py-1 rounded-full text-xs font-medium text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-background)] focus:ring-[var(--success)] ${ creditButtonDisabled ? "bg-gray-400 dark:bg-gray-500 cursor-not-allowed opacity-50" : "bg-[var(--success)] hover:opacity-80" }`} title={ available <= 0 ? "No credit available" : effective <= 0 ? "No debt to offset" : `Apply ${formatCurrency(available)} credit` }>{isApplyingCredit ? "Applying..." : "Apply"}</button>
              </div>
            </div>
-           {/* Feedback Message Area */}
            {showFeedback && ( <div className="mt-2 text-xs text-center text-[var(--success)] animate-pulse"> {feedbackMessage} </div> )}
         </div>
-        {/* Section 3: Category Values Breakdown (Single Diverging Animated Bar) */}
+
+        {/* Section 3: Category Values Breakdown (Keep as is) */}
         <div className="p-4 sm:p-6 border-b border-[var(--border-color)]">
-            <h3 className="text-base sm:text-lg font-semibold text-[var(--card-foreground)] mb-4 text-center">Values Breakdown</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-[var(--card-foreground)] mb-4 text-center">Your Values</h3>
             {Object.keys(targetCategoryBarData).length === 0 && (
                <p className="text-sm text-center text-[var(--muted-foreground)] py-4">{impactAnalysis ? "No category data available." : "Calculating..."}</p>
             )}
             <div className="space-y-3">
                 {Object.entries(targetCategoryBarData)
                    .sort(([catA], [catB]) => catA.localeCompare(catB))
-                   .map(([category, { score, tooltip }]) => { // Get score & tooltip from target data
-                       // Get animated width from state (default to 0)
+                   .map(([category, { score, tooltip }]) => {
                        const animatedBarWidth = currentCategoryWidths[category] || 0;
-                       // Get colors based on score
                        const { textColor, bgColor } = getScoreColorClasses(score);
                        const showPlusSign = score > 0.5;
 
                        return (
                            <div key={category} className="flex items-center justify-between gap-2 sm:gap-4">
-                               {/* Category Name + Icon */}
                                <span className="flex-shrink-0 w-[110px] sm:w-[130px] inline-flex items-center text-[var(--card-foreground)] text-xs sm:text-sm truncate" title={category}>
                                    <span className="mr-1.5 sm:mr-2">{categoryIcons[category] || "❓"}</span>
                                    <span className="truncate">{category}</span>
                                </span>
-
-                               {/* Single Diverging Bar Container */}
                                <div className="flex-grow h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full relative overflow-hidden" title={tooltip} >
-                                   {/* Center Line */}
                                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-400 dark:bg-gray-500 transform -translate-x-1/2 z-10"></div>
-                                   {/* Conditional Bar - Renders red OR green OR grey dot */}
-                                   {score < -0.5 && (
-                                       <div
-                                           className={`absolute right-1/2 top-0 bottom-0 ${bgColor} rounded-l-full transition-all duration-500 ease-out`} // CSS transition
-                                           style={{ width: `${animatedBarWidth}%` }} // Animated width
-                                       ></div>
-                                   )}
-                                   {score > 0.5 && (
-                                        <div
-                                            className={`absolute left-1/2 top-0 bottom-0 ${bgColor} rounded-r-full transition-all duration-500 ease-out`} // CSS transition
-                                            style={{ width: `${animatedBarWidth}%` }} // Animated width
-                                        ></div>
-                                   )}
-                                   {score >= -0.5 && score <= 0.5 && animatedBarWidth < 1 && (
-                                       <div className={`absolute left-1/2 top-1/2 w-1 h-1 ${bgColor} rounded-full transform -translate-x-1/2 -translate-y-1/2`} ></div>
-                                   )}
+                                   {score < -0.5 && ( <div className={`absolute right-1/2 top-0 bottom-0 ${bgColor} rounded-l-full transition-all duration-2000 ease-out`} style={{ width: `${animatedBarWidth}%` }} ></div> )}
+                                   {score > 0.5 && ( <div className={`absolute left-1/2 top-0 bottom-0 ${bgColor} rounded-r-full transition-all duration-2000 ease-out`} style={{ width: `${animatedBarWidth}%` }} ></div> )}
+                                   {score >= -0.5 && score <= 0.5 && animatedBarWidth < 1 && ( <div className={`absolute left-1/2 top-1/2 w-1 h-1 ${bgColor} rounded-full transform -translate-x-1/2 -translate-y-1/2`} ></div> )}
                                </div>
-
-                               {/* Animated Percentage Score Text */}
                                <div className={`flex-shrink-0 w-[45px] sm:w-[50px] text-right font-semibold text-xs sm:text-sm ${textColor} flex items-center justify-end`}>
-                                    {showPlusSign && <span className="opacity-80">+</span>} {/* Conditional '+' */}
-                                    <AnimatedCounter
-                                        value={score} // The net score
-                                        suffix="%"
-                                        prefix="" // NO dollar sign
-                                        decimalPlaces={0} // Rounded
-                                        className="value-text-score" // Apply additional styling if needed
-                                    />
+                                    {showPlusSign && <span className="opacity-80">+</span>}
+                                    <AnimatedCounter value={score} suffix="%" prefix="" decimalPlaces={0} className="value-text-score" />
                                </div>
                            </div>
                        );
                    })}
              </div>
           </div>
+      </div>
 
-        
-
-
-      </div> {/* End of card */}
-
-      {/* Donation Modal */}
+      {/* Donation Modal (Keep as is) */}
       {modalState.isOpen && ( <DonationModal isOpen={modalState.isOpen} practice={modalState.practice || ''} amount={modalState.amount || 0} onClose={closeDonationModal} /> )}
-    </div> // End of sidebar container
+    </div>
   );
 }

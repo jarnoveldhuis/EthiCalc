@@ -78,17 +78,17 @@ body {
   color: var(--foreground);
   background: var(--background);
   /* Apply transition for smoother color changes */
-  @apply transition-colors duration-200;
+  @apply transition-colors duration-3000;
 }
 
 /* Update card utility to use new variables */
 @layer components {
   .card {
-    @apply bg-[var(--card-background)] text-[var(--card-foreground)] border border-[var(--border-color)] rounded-xl shadow-sm overflow-hidden transition-colors duration-200;
+    @apply bg-[var(--card-background)] text-[var(--card-foreground)] border border-[var(--border-color)] rounded-xl shadow-sm overflow-hidden transition-colors duration-3000;
   }
 }
 
 /* Update Header background */
 header {
-    @apply bg-[var(--header-background)] transition-colors duration-200;
+    @apply bg-[var(--header-background)] transition-colors duration-3000;
 }

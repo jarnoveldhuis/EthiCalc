@@ -11,9 +11,11 @@
     "test": "echo \"No tests specified\" && exit 0"
   },
   "dependencies": {
+    "@apollo/client": "^3.13.6",
     "@next/font": "^14.2.15",
     "chart.js": "^4.4.8",
     "firebase": "^11.4.0",
+    "graphql": "^16.10.0",
     "lucide-react": "^0.479.0",
     "next": "^15.2.0",
     "openai": "^4.86.0",
