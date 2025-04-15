@@ -4,8 +4,8 @@ import { Transaction, Charity } from "@/shared/types/transactions";
 import { VendorAnalysis } from "@/shared/types/vendors";
 import { ImpactAnalysis } from "@/core/calculations/type";
 import { calculationService } from "@/core/calculations/impactService";
-import { User } from "firebase/auth"; // Import User type
-import { auth } from "@/core/firebase/firebase"; // Import auth itself for current user access
+import { User } from "firebase/auth";
+import { auth } from "@/core/firebase/firebase";
 import {
   collection,
   addDoc,
@@ -41,13 +41,11 @@ interface CreditState {
   lastAppliedAmount: number;
   lastAppliedAt: Timestamp | null;
 }
-// Type for Plaid Token stored in localStorage
 interface StoredTokenInfo {
   token: string;
   userId: string;
   timestamp: number;
 }
-// Type for API analysis results
 interface ApiAnalysisResultItem {
   plaidTransactionId?: string;
   societalDebt?: number;
@@ -73,7 +71,6 @@ export interface TransactionState {
   impactAnalysis: ImpactAnalysis | null;
   connectionStatus: BankConnectionStatus;
   creditState: CreditState;
-  // Loading states
   isInitializing: boolean;
   isConnectingBank: boolean;
   isFetchingTransactions: boolean;
@@ -83,9 +80,7 @@ export interface TransactionState {
   isApplyingCredit: boolean;
   isLoadingLatest: boolean;
   isLoadingCreditState: boolean;
-  // Status flags
   hasSavedData: boolean;
-  // Actions
   setTransactions: (transactions: Transaction[]) => void;
   connectBank: (publicToken: string, user: User | null) => Promise<void>;
   disconnectBank: () => void;
@@ -109,7 +104,7 @@ export interface TransactionState {
 
 // --- Helper Functions ---
 const isAnyLoading = (state: TransactionState): boolean => {
-  /* ... */ return (
+  return (
     state.isInitializing ||
     state.isConnectingBank ||
     state.isFetchingTransactions ||
@@ -122,7 +117,7 @@ const isAnyLoading = (state: TransactionState): boolean => {
   );
 };
 function getTransactionIdentifier(transaction: Transaction): string | null {
-  /* ... */ const plaidId = transaction.plaidTransactionId;
+  const plaidId = transaction.plaidTransactionId;
   if (plaidId) return `plaid-${plaidId}`;
   if (
     transaction.date &&
@@ -134,11 +129,47 @@ function getTransactionIdentifier(transaction: Transaction): string | null {
       .toUpperCase()}-${transaction.amount.toFixed(2)}`;
   return null;
 }
+
+// *** UPDATED: sanitizeDataForFirestore function with stricter types ***
+function sanitizeDataForFirestore<T>(data: T): T | null {
+  if (data === undefined) {
+    return null; // Replace top-level undefined with null
+  }
+  if (data === null || typeof data !== "object") {
+    return data; // Primitives, null are fine
+  }
+
+  // Firestore Timestamps are objects, but safe to return directly
+  if (data instanceof Timestamp) {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    // Process arrays recursively
+    // Type assertion needed as map might return (T[number] | null)[]
+    return data.map((item) => sanitizeDataForFirestore(item)) as T;
+  }
+
+  // Process objects recursively
+  // FIX: Use 'unknown' for the value type instead of 'any'
+  const sanitizedObject: { [key: string]: unknown } = {};
+  for (const key in data) {
+    // Ensure it's an own property and not from prototype chain
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      // FIX: Assert 'data' as Record<string, unknown> to allow string indexing safely
+      const value = (data as Record<string, unknown>)[key];
+      // Assign sanitized value (recursive call correctly returns T[key] | null)
+      sanitizedObject[key] = sanitizeDataForFirestore(value);
+    }
+  }
+  // Cast the result back to T (assuming structure is preserved, only undefined changed to null)
+  return sanitizedObject as T;
+}
 // --- End Helper Functions ---
 
 // --- Store Implementation ---
 export const useTransactionStore = create<TransactionState>((set, get) => ({
-  // --- Initial State ---
+  // --- Initial State (Unchanged) ---
   transactions: [],
   savedTransactions: null,
   impactAnalysis: null,
@@ -162,8 +193,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   // --- Actions ---
 
-  // --- setTransactions ---
-  // Recalculates impact when transactions are set directly (e.g., after loading)
   setTransactions: (transactions) => {
     const currentAppliedCredit = get().creditState.appliedCredit;
     const analysis = calculationService.calculateImpactAnalysis(
@@ -173,15 +202,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({
       transactions: transactions,
       impactAnalysis: analysis,
-      // totalSocietalDebt: analysis.effectiveDebt, // Update if needed
       creditState: {
         ...get().creditState,
-        availableCredit: analysis.availableCredit, // Update available credit based on new list
+        availableCredit: analysis.availableCredit,
       },
     });
   },
-
-  // --- connectBank ---
   connectBank: async (publicToken, user) => {
     if (!user || isAnyLoading(get())) {
       console.log("connectBank: Skipping.");
@@ -206,7 +232,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           data.error || `Token exchange failed (${response.status})`
         );
       }
-      const tokenInfo = {
+      const tokenInfo: StoredTokenInfo = {
         token: data.access_token,
         userId: user.uid,
         timestamp: Date.now(),
@@ -237,8 +263,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({ isConnectingBank: false });
     }
   },
-
-  // --- resetState / disconnectBank ---
   resetState: () => {
     console.log("resetState: Triggered.");
     try {
@@ -277,7 +301,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   disconnectBank: () => {
     get().resetState();
   },
-
   fetchTransactions: async (accessToken) => {
     if (
       get().isFetchingTransactions ||
@@ -289,12 +312,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       isFetchingTransactions: true,
       connectionStatus: { ...get().connectionStatus, error: null },
     });
-
     let tokenToUse: string | null = accessToken || null;
-    const currentUserId = auth.currentUser?.uid; // Get current user from auth
-
+    const currentUserId = auth.currentUser?.uid;
     try {
-      // If no access token was passed in, try getting it from storage
       if (!tokenToUse) {
         const storedData = localStorage.getItem("plaid_access_token_info");
         if (!storedData) {
@@ -302,40 +322,33 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         }
         try {
           const tokenInfo = JSON.parse(storedData) as StoredTokenInfo;
-          // *** ADDED CHECK: Verify stored token belongs to the CURRENT user ***
           if (!currentUserId || tokenInfo.userId !== currentUserId) {
             console.warn(
-              "Stored Plaid token belongs to a different user or user is not logged in. Clearing invalid token."
+              "Stored Plaid token belongs to a different/no user. Clearing."
             );
-            localStorage.removeItem("plaid_access_token_info"); // Clear invalid token
-            throw new Error("Invalid access token for current user."); // Prevent using wrong token
+            localStorage.removeItem("plaid_access_token_info");
+            throw new Error("Invalid access token for current user.");
           }
-          // Token is valid for the current user
           tokenToUse = tokenInfo.token;
           console.log(
             "fetchTransactions: Using valid token from localStorage."
           );
         } catch (parseError) {
           console.error("Error parsing stored token info:", parseError);
-          localStorage.removeItem("plaid_access_token_info"); // Clear corrupted token
+          localStorage.removeItem("plaid_access_token_info");
           throw new Error("Failed to read stored access token.");
         }
       }
-
       if (!tokenToUse) {
-        // This should ideally not be reached if logic above is correct, but handle defensively
         throw new Error("Access token missing after checks.");
       }
-
       console.log("fetchTransactions: Fetching raw transactions...");
       const response = await fetch("/api/banking/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ access_token: tokenToUse }),
       });
-
       if (!response.ok) {
-        // ... (error handling for Plaid API errors remains the same) ...
         const errorData = await response.json().catch(() => ({}));
         if (
           response.status === 400 &&
@@ -350,15 +363,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           }`
         );
       }
-
       const rawPlaidTransactions = await response.json();
       const mappedTransactions = mapPlaidTransactions(rawPlaidTransactions);
       if (!Array.isArray(mappedTransactions))
         throw new Error("Invalid mapped transaction data format");
       console.log(
-        `WorkspaceTransactions: Received and mapped ${mappedTransactions.length} transactions.`
+        `fetchTransactions: Received and mapped ${mappedTransactions.length} transactions.`
       );
-
       set((state) => ({
         isFetchingTransactions: false,
         connectionStatus: {
@@ -368,63 +379,39 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             mappedTransactions.length === 0 ? "No transactions found" : null,
         },
       }));
-
-      // Trigger analysis for the fetched transactions
       if (mappedTransactions.length > 0) {
         await get().analyzeAndCacheTransactions(mappedTransactions);
       } else {
-        // Ensure analysis state is cleared if no transactions are fetched
         if (get().isAnalyzing) set({ isAnalyzing: false });
-        await get().analyzeAndCacheTransactions([]); // Process empty list to potentially clear state
+        await get().analyzeAndCacheTransactions([]);
       }
     } catch (error) {
       console.error("Error in fetchTransactions:", error);
+      let errorMessage: string;
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else {
+        errorMessage = String(error ?? "Failed to load transactions");
+      }
       const isTokenError =
-        error instanceof Error &&
-        (error.message.includes("No access token") ||
-          error.message.includes("expired") ||
-          error.message.includes("Invalid access token"));
-      set({
+        errorMessage.includes("No access token") ||
+        errorMessage.includes("expired") ||
+        errorMessage.includes("Invalid access token");
+      set((state) => ({
         isFetchingTransactions: false,
-        // If it was a token error, ensure connection status reflects not connected
         connectionStatus: {
           isConnected: isTokenError
             ? false
-            : get().connectionStatus.isConnected,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Failed to load transactions",
+            : state.connectionStatus.isConnected,
+          error: errorMessage,
         },
-      });
+      }));
     }
   },
-
-  // --- manuallyFetchTransactions ---
   manuallyFetchTransactions: async () => {
     if (isAnyLoading(get())) return;
     try {
-      const storedData = localStorage.getItem("plaid_access_token_info");
-      if (!storedData)
-        throw new Error("Cannot fetch: No bank connection found.");
-      const tokenInfo = JSON.parse(storedData);
-      await get().fetchTransactions(tokenInfo.token);
-    } catch (error) {
-      console.error("Manual fetch error:", error);
-      set((state) => ({
-        connectionStatus: {
-          ...state.connectionStatus,
-          error: error instanceof Error ? error.message : "Manual fetch failed",
-        },
-      }));
-      throw error;
-    }
-    if (isAnyLoading(get())) return;
-    try {
-      const storedData = localStorage.getItem("plaid_access_token_info");
-      if (!storedData)
-        throw new Error("Cannot fetch: No bank connection found.");
-      /* No need to re-verify user here, fetchTransactions will do it */ await get().fetchTransactions();
+      await get().fetchTransactions();
     } catch (error) {
       console.error("Manual fetch error:", error);
       set((state) => ({
@@ -436,20 +423,16 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       throw error;
     }
   },
-
-  // --- analyzeAndCacheTransactions ---
   analyzeAndCacheTransactions: async (incomingTransactions) => {
     if (get().isAnalyzing) {
-      console.log("analyzeAndCacheTransactions: Skipping, already analyzing.");
+      console.log("analyzeAndCacheTransactions: Skipping...");
       return;
     }
     set({
       isAnalyzing: true,
       connectionStatus: { ...get().connectionStatus, error: null },
     });
-    console.log(
-      `analyzeAndCacheTransactions: Starting analysis/cache check for ${incomingTransactions.length} transactions.`
-    );
+    console.log(`Analyze: Starting for ${incomingTransactions.length} txs.`);
     const currentSavedTx = get().savedTransactions || [];
     const mergedInitialTransactions = mergeTransactions(
       currentSavedTx,
@@ -465,7 +448,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const cacheLookupPromises = transactionsToProcess
       .filter((tx) => !tx.analyzed)
       .map(async (tx) => {
-        /* ... cache lookup logic ... */
         const vendorName = tx.name;
         const normalizedName = normalizeVendorName(vendorName);
         if (normalizedName !== "unknown_vendor") {
@@ -473,26 +455,24 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             const cachedData = await getVendorAnalysis(normalizedName);
             return { tx, cachedData };
           } catch (error) {
-            console.error(`Error fetching cache for ${normalizedName}:`, error);
+            console.error(`Cache fetch error for ${normalizedName}:`, error);
             return { tx, cachedData: null };
           }
         }
         return { tx, cachedData: null };
       });
-    console.log(
-      `analyzeAndCacheTransactions: Performing ${cacheLookupPromises.length} cache lookups.`
-    );
+    console.log(`Analyze: Cache lookups: ${cacheLookupPromises.length}.`);
     const cacheResults = await Promise.all(cacheLookupPromises);
     const transactionsById = new Map(
       transactionsToProcess.map((tx) => [getTransactionIdentifier(tx), tx])
     );
     cacheResults.forEach(({ tx, cachedData }) => {
-      /* ... process cache results ... */
       const txId = getTransactionIdentifier(tx);
       if (!txId) return;
       if (cachedData) {
         const updatedTx: Transaction = {
-          /* merge */ ...tx,
+          ...tx,
+          analyzed: true,
           unethicalPractices: cachedData.unethicalPractices || [],
           ethicalPractices: cachedData.ethicalPractices || [],
           practiceWeights: cachedData.practiceWeights || {},
@@ -500,7 +480,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           practiceCategories: cachedData.practiceCategories || {},
           information: cachedData.information || {},
           citations: cachedData.citations || {},
-          analyzed: true,
         };
         transactionsFromCache.push(updatedTx);
         transactionsById.set(txId, updatedTx);
@@ -509,7 +488,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
     });
     transactionsToProcess.forEach((tx) => {
-      /* ... populate alreadyAnalyzed list ... */
       const txId = getTransactionIdentifier(tx);
       if (tx.analyzed && txId && !transactionsById.get(txId)?.analyzed) {
         alreadyAnalyzed.push(tx);
@@ -524,16 +502,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
     });
     console.log(
-      `analyzeAndCacheTransactions: ${transactionsFromCache.length} txs from cache, ${alreadyAnalyzed.length} already analyzed.`
-    );
-    console.log(
-      `analyzeAndCacheTransactions: ${transactionsForApi.length} txs require API call.`
+      `Analyze: ${transactionsFromCache.length} from cache, ${alreadyAnalyzed.length} already done, ${transactionsForApi.length} for API.`
     );
     let apiAnalyzedResults: Transaction[] = [];
     try {
       if (transactionsForApi.length > 0) {
         console.log(
-          `analyzeAndCacheTransactions: Calling API for ${transactionsForApi.length} txs...`
+          `Analyze: Calling API for ${transactionsForApi.length} txs...`
         );
         const response = await fetch("/api/analysis", {
           method: "POST",
@@ -544,7 +519,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.error || `API Error: ${response.status}`);
         }
-        const analysisResponse = (await response.json()) as ApiAnalysisResponse; // Use defined type
+        const analysisResponse = (await response.json()) as ApiAnalysisResponse;
         if (
           !analysisResponse ||
           !Array.isArray(analysisResponse.transactions)
@@ -552,12 +527,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           throw new Error("Invalid API response format");
         }
         console.log(
-          `analyzeAndCacheTransactions: Received analysis for ${analysisResponse.transactions.length} txs from API.`
+          `Analyze: Received ${analysisResponse.transactions.length} results from API.`
         );
-        const openAiResultsMap = new Map<string, ApiAnalysisResultItem>(); // Use defined type
+        const openAiResultsMap = new Map<string, ApiAnalysisResultItem>();
         analysisResponse.transactions.forEach(
           (analyzedTx: ApiAnalysisResultItem) => {
-            /* populate map */ if (analyzedTx.plaidTransactionId) {
+            if (analyzedTx.plaidTransactionId) {
               openAiResultsMap.set(analyzedTx.plaidTransactionId, analyzedTx);
             }
           }
@@ -565,13 +540,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         set({ isSavingCache: true });
         const cacheSavePromises: Promise<void>[] = [];
         apiAnalyzedResults = transactionsForApi.map((originalTx) => {
-          /* ... merge API results and prepare cache saves ... */
           const originalId = originalTx.plaidTransactionId;
           if (originalId && openAiResultsMap.has(originalId)) {
             const analyzedVersion: ApiAnalysisResultItem =
               openAiResultsMap.get(originalId)!;
             const finalTxData: Transaction = {
-              /* merge */ ...originalTx,
+              ...originalTx,
+              analyzed: true,
               societalDebt: analyzedVersion.societalDebt,
               unethicalPractices: analyzedVersion.unethicalPractices || [],
               ethicalPractices: analyzedVersion.ethicalPractices || [],
@@ -582,14 +557,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
               charities: analyzedVersion.charities || {},
               information: analyzedVersion.information || {},
               citations: analyzedVersion.citations || {},
-              analyzed: true,
             };
             const vendorNameForCache = originalTx.name;
             const normalizedNameForCache =
               normalizeVendorName(vendorNameForCache);
             if (normalizedNameForCache !== "unknown_vendor") {
               const vendorDataToSave: Omit<VendorAnalysis, "analyzedAt"> = {
-                /* data */ originalName: vendorNameForCache,
+                originalName: vendorNameForCache,
                 analysisSource: "openai",
                 unethicalPractices: finalTxData.unethicalPractices,
                 ethicalPractices: finalTxData.ethicalPractices,
@@ -608,18 +582,22 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           return { ...originalTx, analyzed: false };
         });
         if (cacheSavePromises.length > 0) {
+          console.log(
+            `Analyze: Saving ${cacheSavePromises.length} results to cache...`
+          );
           await Promise.allSettled(cacheSavePromises);
+          console.log(`Analyze: Finished saving to cache.`);
         }
         set({ isSavingCache: false });
       } else {
-        console.log("analyzeAndCacheTransactions: No API call needed.");
+        console.log("Analyze: No API call needed.");
       }
       const finalTransactions = mergeTransactions(
         [...alreadyAnalyzed, ...transactionsFromCache],
         apiAnalyzedResults
       );
       console.log(
-        `analyzeAndCacheTransactions: Final merged list has ${finalTransactions.length} transactions.`
+        `Analyze: Final merged list: ${finalTransactions.length} txs.`
       );
       const currentCreditState = get().creditState;
       const finalImpact = calculationService.calculateImpactAnalysis(
@@ -628,6 +606,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       );
       set({
         transactions: finalTransactions,
+        savedTransactions: finalTransactions,
         impactAnalysis: finalImpact,
         creditState: {
           ...currentCreditState,
@@ -636,38 +615,21 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         isAnalyzing: false,
         connectionStatus: { ...get().connectionStatus, error: null },
       });
-      console.log(
-        "analyzeAndCacheTransactions: Analysis complete, state updated."
-      );
-      // Trigger Save AFTER analysis and state update is complete
-      const userId = (() => {
-        try {
-          return (
-            JSON.parse(localStorage.getItem("plaid_access_token_info") || "{}")
-              .userId || null
-          );
-        } catch {
-          return null;
-        }
-      })();
-      if (userId && finalTransactions.length > 0) {
-        console.log(
-          "analyzeAndCacheTransactions: Triggering save transaction batch..."
-        );
-        // Call saveTransactionBatch asynchronously (don't necessarily need to wait for it)
+      console.log("Analyze: Analysis complete, state updated.");
+      const currentUserId = auth.currentUser?.uid;
+      if (currentUserId && finalTransactions.length > 0) {
+        console.log("Analyze: Triggering save transaction batch...");
         get()
           .saveTransactionBatch(
             finalTransactions,
             finalImpact.negativeImpact,
-            userId
+            currentUserId
           )
           .catch((err) =>
             console.error("Failed to save transaction batch:", err)
-          ); // Log errors if save fails
-      } else if (!userId) {
-        console.warn(
-          "analyzeAndCacheTransactions: Cannot trigger save, user ID missing."
-        );
+          );
+      } else if (!currentUserId) {
+        console.warn("Analyze: Cannot trigger batch save, user ID missing.");
       }
     } catch (error) {
       console.error("Error during analysis orchestration:", error);
@@ -681,30 +643,19 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       });
     }
   },
-  // --- End analyzeAndCacheTransactions ---
-
-  // --- saveTransactionBatch ---
   saveTransactionBatch: async (
     transactionsToSave,
     totalNegativeDebt,
     userId
   ) => {
     if (get().isSaving) return;
-    if (!transactionsToSave || transactionsToSave.length === 0) return;
-    const currentUserId =
-      userId ||
-      (() => {
-        try {
-          return (
-            JSON.parse(localStorage.getItem("plaid_access_token_info") || "{}")
-              .userId || null
-          );
-        } catch {
-          return null;
-        }
-      })();
+    if (!transactionsToSave || transactionsToSave.length === 0) {
+      console.log("saveTransactionBatch: No transactions to save.");
+      return;
+    }
+    const currentUserId = userId || auth.currentUser?.uid;
     if (!currentUserId) {
-      console.error("Save Error: No User ID.");
+      console.error("Save Batch Error: No User ID provided or found.");
       return;
     }
     set({ isSaving: true });
@@ -714,52 +665,47 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         analyzed: tx.analyzed ?? true,
       }));
       const totalSpent = finalizedTransactions.reduce(
-        (sum, tx) => sum + tx.amount,
+        (sum, tx) => sum + (tx.amount || 0),
         0
       );
       const debtPercentage =
-        totalSpent > 0 ? (totalNegativeDebt / totalSpent) * 100 : 0;
-      const batch = {
+        totalSpent > 0 ? ((totalNegativeDebt || 0) / totalSpent) * 100 : 0;
+      const batchDataToSave = sanitizeDataForFirestore({
         userId: currentUserId,
         transactions: finalizedTransactions,
-        totalSocietalDebt: totalNegativeDebt,
-        debtPercentage,
+        totalSocietalDebt: totalNegativeDebt ?? 0,
+        debtPercentage: isNaN(debtPercentage) ? 0 : debtPercentage,
         createdAt: Timestamp.now(),
-      };
-      const docRef = await addDoc(collection(db, "transactionBatches"), batch);
-      set({ hasSavedData: true }); // Indicate data exists in DB
+      });
+      if (!batchDataToSave) {
+        throw new Error("Failed to sanitize batch data before saving.");
+      }
+      console.log(
+        `saveTransactionBatch: Attempting to save batch for user ${currentUserId}...`
+      );
+      const docRef = await addDoc(
+        collection(db, "transactionBatches"),
+        batchDataToSave
+      );
+      set({ hasSavedData: true });
       console.log(`saveTransactionBatch: Saved batch ${docRef.id}.`);
     } catch (error) {
       console.error("Error saving batch:", error);
       set((state) => ({
         connectionStatus: {
           ...state.connectionStatus,
-          error: "Failed to save batch",
+          error: "Failed to save batch history",
         },
       }));
     } finally {
       set({ isSaving: false });
     }
-    
   },
-
-  // --- applyCredit ---
   applyCredit: async (amount, userId) => {
     const { impactAnalysis, creditState, isApplyingCredit, transactions } =
       get();
     if (isApplyingCredit || !impactAnalysis || amount <= 0) return false;
-    const currentUserId =
-      userId ||
-      (() => {
-        try {
-          return (
-            JSON.parse(localStorage.getItem("plaid_access_token_info") || "{}")
-              .userId || null
-          );
-        } catch {
-          return null;
-        }
-      })();
+    const currentUserId = userId || auth.currentUser?.uid;
     if (!currentUserId) return false;
     set({ isApplyingCredit: true });
     try {
@@ -799,8 +745,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({ isApplyingCredit: false });
     }
   },
-
-  // --- loadLatestTransactions ---
   loadLatestTransactions: async (userId): Promise<boolean> => {
     if (!userId) return false;
     let wasManuallyDisconnected = false;
@@ -837,7 +781,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         const docData = querySnapshot.docs[0].data();
         const loadedTransactions = (
           (docData.transactions as Transaction[]) || []
-        ).map((tx) => ({ ...tx, analyzed: true })); // Assume saved are analyzed
+        ).map((tx) => ({ ...tx, analyzed: true }));
         if (!Array.isArray(loadedTransactions))
           throw new Error("Invalid data format in loaded batch");
         const loadedCreditState = await get().loadCreditState(userId);
@@ -884,8 +828,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
     return success;
   },
-
-  // --- loadCreditState ---
   loadCreditState: async (userId): Promise<CreditState | null> => {
     if (!userId || get().isLoadingCreditState) return get().creditState;
     set({ isLoadingCreditState: true });
@@ -936,8 +878,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
     return finalCreditState;
   },
-
-  // --- initializeStore ---
   initializeStore: async (user: User | null) => {
     if (!user) {
       get().resetState();
@@ -981,7 +921,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       try {
         const storedData = localStorage.getItem("plaid_access_token_info");
         if (storedData) {
-          const tokenInfo = JSON.parse(storedData);
+          const tokenInfo = JSON.parse(storedData) as StoredTokenInfo;
           if (tokenInfo.userId === user.uid) {
             hasValidStoredToken = true;
             tokenToFetch = tokenInfo.token;

@@ -8,6 +8,7 @@ interface PlaidTransaction {
   merchant_name?: string;
   amount?: number;
   category?: string[];
+  location?: string[];
   [key: string]: unknown;
 }
 
@@ -45,6 +46,7 @@ export function mapPlaidTransactions(plaidTransactions: PlaidTransaction[]): Tra
       creditApplied: false,
       plaidTransactionId: tx.transaction_id,
       plaidCategories: tx.category || [], // Ensure array
+      location: tx.location || []
     };
     return newTransaction;
   });
