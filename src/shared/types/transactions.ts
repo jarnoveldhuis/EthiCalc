@@ -25,6 +25,7 @@ export interface Transaction {
   creditApplied?: boolean;
   plaidTransactionId?: string;
   plaidCategories?: string[];
+  location?: string[];
 }
 
 // Keep other interfaces (AnalyzedTransactionData, PlaidError, AnalysisRequest)

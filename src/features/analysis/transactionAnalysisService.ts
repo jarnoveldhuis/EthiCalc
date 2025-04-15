@@ -48,6 +48,8 @@ export async function analyzeTransactionsViaAPI(
           date: tx.date || "N/A",
           name: tx.name || "Unknown Merchant", // Use tx.name
           amount: typeof tx.amount === "number" ? tx.amount : 0,
+          plaidCategories: tx.plaidCategories || [],
+          location: tx.location || []
       }));
 
       const systemPrompt = transactionAnalysisPrompt;

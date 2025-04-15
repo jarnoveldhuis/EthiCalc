@@ -96,7 +96,7 @@ export function ShareImpactButton({
         onClick={handleShare}
         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
       >
-        Copy Values to Clipboard
+        Share Values
       </button>
       {feedback && (
         <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">{feedback}</p>
