@@ -7,7 +7,7 @@ import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
 import { useAuth } from "@/hooks/useAuth";
 import { calculationService } from "@/core/calculations/impactService";
-import { ShareImpactButton } from './ShareImpactButton'; // Assuming you added this
+import { ShareImpactButton } from './ShareImpactButton';
 
 // --- Category Icons ---
 const categoryIcons: Record<string, string> = {
@@ -16,7 +16,7 @@ const categoryIcons: Record<string, string> = {
     "Animal Welfare": "🐮",
     "Political Ethics": "🗳️",
     Transparency: "🔍",
-    "Default Category": "❓" // Fallback icon
+    "Default Category": "❓"
 };
 
 // --- Helper: Tier Calculation ---
@@ -26,9 +26,7 @@ const getTierInfo = (
     totalNegativeImpact: number
 ): { name: string; description: string; colorClass: string; displayRatio?: number } => {
     if (totalNegativeImpact <= 0) {
-        if (totalPositiveImpact > 0) {
-            return { name: "S", description: "Beacon of Virtue", colorClass: "text-white", displayRatio: undefined };
-        }
+        if (totalPositiveImpact > 0) return { name: "S", description: "Beacon of Virtue", colorClass: "text-white", displayRatio: undefined };
         return { name: "", description: "", colorClass: "text-white", displayRatio: undefined };
     }
     const ratio = scoreRatio ?? 0;
@@ -101,8 +99,10 @@ export function DashboardSidebar() {
   }, [animatedRatioPercentString, targetScoreRatio, totalPositiveImpact, totalNegativeImpact]);
 
   // Calculate category data for display and sharing
-  // FIX: Removed targetBarWidthPercent from the returned object structure
   const targetCategoryBarData = useMemo(() => {
+      // --- Optional Debug Log 1 ---
+      // console.log("Sidebar Transactions Input:", JSON.stringify(transactions.slice(0, 5), null, 2)); // Log first 5 transactions
+
       const totalSpendingWithAnyValue = transactions.reduce((sum, tx) => {
          const hasEthical = tx.ethicalPractices && tx.ethicalPractices.length > 0;
          const hasUnethical = tx.unethicalPractices && tx.unethicalPractices.length > 0;
@@ -110,7 +110,9 @@ export function DashboardSidebar() {
       }, 0);
 
       const catImpacts = calculationService.calculateCategoryImpacts(transactions);
-      // Define the type for the results object
+      // --- Optional Debug Log 2 ---
+      // console.log("Calculated Category Impacts:", catImpacts);
+
       const results: Record<string, { score: number; tooltip: string; targetWidthForState: number; }> = {};
       const definedCategories = ["Environment", "Labor Ethics", "Animal Welfare", "Political Ethics", "Transparency"];
 
@@ -125,35 +127,33 @@ export function DashboardSidebar() {
              negPercent = (negativeImpact / denominator) * 100;
          }
          const score = posPercent - negPercent;
-         // Calculate the width needed for the animation state, but don't store it directly in the main result if unused
          const targetWidthForState = Math.min(50, Math.abs(score) / 2 * (50/50));
          const tooltipText = `Net Score: ${score > 0 ? '+' : ''}${score.toFixed(1)}% (Pos Impact: ${formatCurrency(positiveImpact)}, Neg Impact: ${formatCurrency(negativeImpact)})`;
 
+         // --- Optional Debug Log 3 ---
+         // if (Math.abs(score) > 0.01) {
+         //    console.log(`Category: ${category}, Score: ${score.toFixed(2)}, Denom: ${denominator}, Pos%: ${posPercent.toFixed(2)}, Neg%: ${negPercent.toFixed(2)}`);
+         // }
+
          if (Math.abs(score) > 0.01) {
-             // FIX: Only include score and tooltip in the returned object for targetCategoryBarData
              results[category] = { score, tooltip: tooltipText, targetWidthForState };
          }
       });
       return results;
-   }, [transactions]);
+   }, [transactions]); // Dependency on transactions
 
-   // useEffect hook to update animated widths based on targetCategoryBarData
-   // This remains unchanged, but now uses targetWidthForState internally
+   // useEffect hook to update animated widths
    useEffect(() => {
         if (categoryAnimationTimeoutRef.current) clearTimeout(categoryAnimationTimeoutRef.current);
         const targetWidths: Record<string, number> = {};
         Object.entries(targetCategoryBarData).forEach(([category, data]) => {
-            // Read the calculated target width for animation state
             targetWidths[category] = data.targetWidthForState;
         });
-        // Set a timeout to apply the widths for animation effect
         categoryAnimationTimeoutRef.current = setTimeout(() => {
             setCurrentCategoryWidths(targetWidths);
-        }, 50); // Short delay to allow rendering before animation starts
-
-        // Cleanup function to clear the timeout if the component unmounts or dependencies change
+        }, 50);
         return () => { if (categoryAnimationTimeoutRef.current) clearTimeout(categoryAnimationTimeoutRef.current); };
-    }, [targetCategoryBarData]); // Dependency on targetCategoryBarData ensures this runs when calculated data changes
+    }, [targetCategoryBarData]);
 
 
   // --- Determine Top Card Background Color ---
@@ -218,7 +218,7 @@ export function DashboardSidebar() {
         setShowFeedback(true);
         setTimeout(() => setShowFeedback(false), 3000);
      }
-   }, [applyCredit, user, impactAnalysis, available, creditButtonDisabled]); // Removed isApplyingCredit
+   }, [applyCredit, user, impactAnalysis, available, creditButtonDisabled]);
 
   const handleOpenOffsetModal = useCallback(() => {
     if (effective > 0) {
@@ -226,7 +226,7 @@ export function DashboardSidebar() {
     }
   }, [openDonationModal, effective]);
 
-    // Data needed for sharing (simplified - only needs score)
+    // Data needed for sharing
     const categoryDataForSharing = useMemo(() => {
         const sharingData: Record<string, { score: number }> = {};
         Object.entries(targetCategoryBarData).forEach(([category, data]) => {
@@ -296,7 +296,7 @@ export function DashboardSidebar() {
         </div>
 
         {/* Section 3: Category Values Breakdown */}
-        <div className="p-4 sm:p-6 border-t border-[var(--border-color)]"> {/* Use border-t here */}
+        <div className="p-4 sm:p-6 border-t border-[var(--border-color)]">
             <h3 className="text-base sm:text-lg font-semibold text-[var(--card-foreground)] mb-4 text-center">Your Values</h3>
             {Object.keys(targetCategoryBarData).length === 0 && (
                <p className="text-sm text-center text-[var(--muted-foreground)] py-4">{impactAnalysis ? "No category data available." : "Calculating..."}</p>
@@ -304,8 +304,7 @@ export function DashboardSidebar() {
             <div className="space-y-3">
                 {Object.entries(targetCategoryBarData)
                    .sort(([catA], [catB]) => catA.localeCompare(catB))
-                   // FIX: Destructure only used properties (score, tooltip)
-                   .map(([category, { score, tooltip }]) => {
+                   .map(([category, { score, tooltip }]) => { // Destructure only needed score, tooltip
                        const animatedBarWidth = currentCategoryWidths[category] || 0;
                        const { textColor, bgColor } = getScoreColorClasses(score);
                        const showPlusSign = score > 1;
@@ -327,7 +326,9 @@ export function DashboardSidebar() {
                                {/* Score Text */}
                                <div className={`flex-shrink-0 w-[45px] sm:w-[50px] text-right font-semibold text-xs sm:text-sm ${textColor} flex items-center justify-end`}>
                                     {showPlusSign && <span className="opacity-80">+</span>}
-                                    <AnimatedCounter value={score} suffix="%" prefix="" decimalPlaces={0} className="value-text-score" />
+                                    
+                                    {/* FIX: Change decimalPlaces to 1 */}
+                                    <AnimatedCounter value={score} suffix="%" prefix="" decimalPlaces={1} className="value-text-score" />
                                </div>
                            </div>
                        );
@@ -335,7 +336,7 @@ export function DashboardSidebar() {
              </div>
              {/* Share Button Integration */}
               <ShareImpactButton
-                 categoryData={categoryDataForSharing} // Use the simplified data
+                 categoryData={categoryDataForSharing}
                  overallRatio={targetScoreRatio}
                  totalPositiveImpact={totalPositiveImpact}
              />

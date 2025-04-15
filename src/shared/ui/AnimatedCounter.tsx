@@ -1,44 +1,51 @@
 // src/shared/ui/AnimatedCounter.jsx
-import React from 'react';
-import { useCountUp } from '@/hooks/useCountUp'; //
+import React, { useEffect } from 'react'; // Import useEffect for logging
+import { useCountUp } from '@/hooks/useCountUp';
 
 interface AnimatedCounterProps {
   value: number;
   prefix?: string;
   suffix?: string;
   className?: string;
-  decimalPlaces?: number; // <-- ADDED prop
-  title?: string; // Add title prop
+  decimalPlaces?: number;
+  title?: string; // Keep title prop if used
 }
 
 export function AnimatedCounter({
   value,
-  prefix = '', // Default prefix to empty (important!)
+  prefix = '',
   suffix = '',
   className = '',
-  decimalPlaces // <-- Use the new prop
+  decimalPlaces = 0, // Default to 0 if not provided
+  title // Keep title prop if used
 }: AnimatedCounterProps) {
 
-  // Determine options for useCountUp, including decimalPlaces
+  // Define options for the hook
   const countUpOptions = {
-    duration: 2000,
+    duration: 1500, // Slightly shorter duration might feel better for lists
     easing: "easeOut" as const,
-    // Use passed decimalPlaces, fallback to 0 if undefined
-    decimalPlaces: decimalPlaces !== undefined ? decimalPlaces : 0,
+    decimalPlaces: decimalPlaces, // Use the passed prop
   };
 
-  // useCountUp handles the animation and formatting based on options
-  const displayValue = useCountUp(value, countUpOptions); // Pass options
+  // Get the animated value string from the hook
+  const displayValue = useCountUp(value, countUpOptions);
 
-  // REMOVED internal color logic (getTextColorClass)
-  // Color is now fully controlled by the passed className
+  // --- Add Debug Log ---
+  // Log the value received and the formatted string from the hook
+  useEffect(() => {
+    // Only log if it's potentially for the category scores (e.g., has decimal places or specific class)
+    // You might adjust this condition based on where you use the counter
+    if (decimalPlaces > 0 || className?.includes('value-text-score')) {
+       console.log(`AnimatedCounter - Input value: ${value}, Output displayValue: ${displayValue}`);
+    }
+  // Log whenever the displayValue changes
+  }, [displayValue, value, decimalPlaces, className]);
+  // --- End Debug Log ---
 
+
+  // Render the value
   return (
-    // Apply the passed className directly. Ensure font-bold is kept if desired.
-    // The prefix is now handled by useCountUp if needed, or rendered outside.
-    // Rendering prefix/suffix outside gives more control.
-    <span className={`font-bold ${className}`}>
-       {/* Prefix is often handled outside now, but kept if useCountUp formatter needs it */}
+    <span className={`font-bold ${className}`} title={title}> {/* Add title attribute */}
        {prefix}{displayValue}{suffix}
     </span>
   );
