@@ -5,27 +5,29 @@ export interface Charity {
 }
 
 export interface Transaction {
-  id?: string; // Optional since some transactions might not have an ID yet
-  analyzed?: boolean;
+  id?: string;
+  analyzed: boolean; // <<< CHANGED: Made required
   date: string;
   name: string;
+  merchant_name?: string; // Keep optional merchant name
   amount: number;
   societalDebt?: number;
   unethicalPractices?: string[];
   ethicalPractices?: string[];
-  practiceWeights?: Record<string, number>; // percentages
-  practiceDebts?: Record<string, number>; // + or -
-  practiceSearchTerms?: Record<string, string>; // search terms for charity lookup
-  practiceCategories?: Record<string, string>; // categories for practices like "Climate Change", "Poverty", etc.
+  practiceWeights?: Record<string, number>;
+  practiceDebts?: Record<string, number>;
+  practiceSearchTerms?: Record<string, string>;
+  practiceCategories?: Record<string, string>;
   charities?: Record<string, Charity>;
-  information?: Record<string, string>; // Information per practice
-  citations?: Record<string, string>; // <<< ADDED: Map practice name to URL string
-  isCreditApplication?: boolean; // Flag to identify when this transaction is a credit application
-  creditApplied?: boolean; // Flag to identify when this transaction has been used for credit
+  information?: Record<string, string>;
+  citations?: Record<string, string>;
+  isCreditApplication?: boolean;
+  creditApplied?: boolean;
   plaidTransactionId?: string;
   plaidCategories?: string[];
 }
 
+// Keep other interfaces (AnalyzedTransactionData, PlaidError, AnalysisRequest)
 export interface AnalyzedTransactionData {
   transactions: Transaction[];
   totalSocietalDebt: number;
