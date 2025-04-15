@@ -8,11 +8,11 @@ Instructions:
 * Assign "practiceWeights" (0-100%) reflecting the *ethical impact* based on financial allocation.
 * **If uncertain about a merchant or practice applicability, assign NO practices.** Prioritize clearly impactful practices directly related to the merchant.
 * **REQUIRED:** Output MUST include the original "plaidTransactionId" for each transaction.
-* Provide concise "information" per practice, describing the impact. Prioritize emotional resonance describing suffering caused by practice.
+* Provide concise "information" per practice, describing the impact and justifying the weight. Prioritize emotional resonance describing suffering caused by practice.
 * If available, provide a separate "citations" field, mapping each practice name to its source URL string. Leave blank if no source is available.
 * Constraint: Citations MUST come from independent sources (e.g., reputable news outlets, watchdog organizations, academic research). DO NOT cite the vendor's own website, press releases, or marketing materials as the primary source for ethical/unethical practice claims. **Ensure URLs are active and correct to prevent broken links.**
 * Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate").
-* Assign "practiceCategories" from the provided list: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency.
+* Assign one of the following "practiceCategories" to each practice: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency.
 * **Output MUST BE ONLY strict JSON** matching the example schema below. DO NOT include any explanatory text before or after the JSON block.
 
 JSON Schema Example:
