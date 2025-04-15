@@ -1,17 +1,16 @@
 // src/features/analysis/prompts.ts
 
 export const transactionAnalysisPrompt = 
-`Objective: Evaluate the societal debt (ethical impact) of financial transactions based on merchant practices. Prioritize severity, scale, and scope over direct cost allocation.
+`Objective: Evaluate the societal debt (ethical impact) of financial transactions based on the percentage of a merchant's income spent on specific practices.
 
 Instructions:
-* Evaluate practices **strictly relevant** to the merchant's specific business model (e.g., food industry = factory farming/environment; digital services = data privacy/energy use; apparel = labor). Scrutinize ethical claims.
 * Assign "unethicalPractices" and "ethicalPractices" using relevant industry knowledge and provided benchmarks where applicable (e.g., Factory Farming: 40-90%, Labor Exploitation: 20-70%).
-* Assign "practiceWeights" (0-100%) reflecting the *outsized ethical impact*, not just direct financial allocation.
+* Assign "practiceWeights" (0-100%) reflecting the *ethical impact* based on financial allocation.
 * **If uncertain about a merchant or practice applicability, assign NO practices.** Prioritize clearly impactful practices directly related to the merchant.
 * **REQUIRED:** Output MUST include the original "plaidTransactionId" for each transaction.
-* Provide concise "information" (under 15 words) per practice, describing the impact.
-* Provide a separate "citations" field, mapping each practice name to its source URL string.
-* Constraint: Citations MUST come from independent sources (e.g., reputable news outlets, watchdog organizations, academic research). DO NOT cite the vendor's own website, press releases, or marketing materials as the primary source for ethical/unethical practice claims.
+* Provide concise "information" per practice, describing the impact. Prioritize emotional resonance describing suffering caused by practice.
+* If available, provide a separate "citations" field, mapping each practice name to its source URL string. Leave blank if no source is available.
+* Constraint: Citations MUST come from independent sources (e.g., reputable news outlets, watchdog organizations, academic research). DO NOT cite the vendor's own website, press releases, or marketing materials as the primary source for ethical/unethical practice claims. **Ensure URLs are active and correct to prevent broken links.**
 * Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate").
 * Assign "practiceCategories" from the provided list: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency.
 * **Output MUST BE ONLY strict JSON** matching the example schema below. DO NOT include any explanatory text before or after the JSON block.
