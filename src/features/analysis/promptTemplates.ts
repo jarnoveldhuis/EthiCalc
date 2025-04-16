@@ -12,7 +12,7 @@ Instructions:
 * If available, provide a separate "citations" field, mapping each practice name to its source URL string. Leave blank if no source is available.
 * Constraint: Citations MUST come from independent sources (e.g., reputable news outlets, watchdog organizations, academic research). DO NOT cite the vendor's own website, press releases, or marketing materials as the primary source for ethical/unethical practice claims. **Ensure URLs are active and correct to prevent broken links.**
 * Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate").
-* Assign one of the following "practiceCategories" to each practice: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency.
+* Assign one of the following "practiceCategories" to each practice: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency, Digital Rights.
 * **Output MUST BE ONLY strict JSON** matching the example schema below. DO NOT include any explanatory text before or after the JSON block.
 
 JSON Schema Example:
