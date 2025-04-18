@@ -1,7 +1,7 @@
 // src/features/analysis/transactionAnalysisService.ts
 import OpenAI from "openai";
 // Import necessary types from @google/genai
-import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Tool, FinishReason } from "@google/genai";
+import { GoogleGenAI, Tool, FinishReason } from "@google/genai";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import {
   Transaction,
@@ -59,12 +59,12 @@ export async function analyzeTransactionsViaAPI(
 
       // Define config components
       const tools: Tool[] = [{ googleSearch: {} }]; // Use documented structure
-      const safetySettings = [
-            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        ];
+      // const safetySettings = [
+      //       { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      //       { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      //       { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      //       { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      //   ];
       // NOTE: User specified 'text/plain' earlier, but we need JSON. Reverting.
       const contents = [ { role: "user", parts: [{ text: `${systemPrompt}\n\n${userMessage}` }] } ];
 
@@ -79,7 +79,6 @@ export async function analyzeTransactionsViaAPI(
           // Group optional settings under the 'config' object
           config: {
               tools: tools,
-              safetySettings: safetySettings,
               responseMimeType: 'text/plain'
           }
       });

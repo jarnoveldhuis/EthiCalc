@@ -189,7 +189,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
   }, [transactions, impactAnalysis]);
 
   // --- UPDATED: Toggle function to sync both sides ---
-  const toggleCategory = (categoryName: string, _isPositiveSide: boolean) => {
+  const toggleCategory = (categoryName: string) => {
     // We ignore _isPositiveSide now and just toggle the whole category row
     setExpandedCategories((prev) => {
         const currentState = prev[categoryName] || { positive: false, negative: false };
