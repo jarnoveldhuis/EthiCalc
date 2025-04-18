@@ -9,11 +9,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { calculationService } from "@/core/calculations/impactService"; // Needed for calculations
 import { ShareImpactButton } from './ShareImpactButton';
 
-// --- Category Icons (Needed for commented out section & potential future use) ---
-const categoryIcons: Record<string, string> = {
-    Environment: "🌱", "Labor Ethics": "⚖️", "Animal Welfare": "🐮",
-    "Political Ethics": "🗳️", Transparency: "🔍", "Default Category": "❓"
-};
 
 // --- Helper: Format Currency (Keep) ---
 const formatCurrency = (value: number | null | undefined): string => `$${(value ?? 0).toFixed(2)}`;
@@ -34,14 +29,6 @@ const getTierInfo = (
     if (ratio >= 0.35) return { name: "C", description: "Passive Liability", displayRatio: ratio, colorClass: textColor };
     if (ratio >= 0.20) return { name: "D", description: "Dead Weight", displayRatio: ratio, colorClass: textColor };
     return { name: "F", description: "Societal Parasite", displayRatio: ratio, colorClass: textColor };
-};
-
-// --- Helper: Score Colors (Needed for commented out section) ---
-const getScoreColorClasses = (score: number): { textColor: string; bgColor: string } => {
-    const positiveThreshold = 1; const negativeThreshold = -1;
-    if (score > positiveThreshold) return { textColor: "text-[var(--success)]", bgColor: "bg-[var(--success)]" };
-    if (score < negativeThreshold) return { textColor: "text-[var(--destructive)]", bgColor: "bg-[var(--destructive)]" };
-    return { textColor: "text-[var(--muted-foreground)]", bgColor: "bg-gray-400 dark:bg-gray-500" };
 };
 
 // --- Sidebar Component ---

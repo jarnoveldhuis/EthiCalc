@@ -9,6 +9,87 @@ Instructions:
 * **If uncertain about a merchant or practice applicability, assign NO practices.** Prioritize clearly impactful practices directly related to the merchant.
 * **REQUIRED:** Output MUST include the original "plaidTransactionId" for each transaction.
 * Provide concise "information" per practice, describing the impact and justifying the weight. Prioritize emotional resonance describing suffering caused by practice.
+* **USE SEARCH FOR VERIFICATION:** Use Google Search to find recent, reliable information and citations to support your analysis, especially regarding specific company practices and their impacts.
+* Citations: If available, provide a separate "citations" field mapping practice names to source URLs.
+* **PRIORITIZE RECENT & RELIABLE SOURCES:** Only provide a citation URL if you can find a relevant, independent source (reputable news, watchdog group, government agency, academic research) published ideally within the last 2-3 years.
+* **AVOID VENDOR MARKETING:** Do NOT cite the vendor's own website, press releases, or marketing materials as the primary source for claims about their ethical/unethical practices (though citing their *stated goals* from their sustainability reports is acceptable if noted as such in the 'information' field).
+* **BE CONSERVATIVE:** If no suitable, recent, independent citation is found for a practice, LEAVE THE CITATION BLANK for that practice. It is better to have no citation than a dead or irrelevant link.
+* **ENSURE URLS ARE COMPLETE:** Double-check that any provided URL is a complete, absolute URL (e.g., "https://www.example.com/report").
+* Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate").
+* Assign one of the following "practiceCategories" to each practice: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency, Digital Rights.
+* **Output MUST BE ONLY strict JSON** matching the example schema below. DO NOT include any explanatory text before or after the JSON block.
+
+JSON Schema Example:
+{
+"transactions": [
+  {
+    "plaidTransactionId": "abc123xyzSAMPLE",
+    "date": "YYYY-MM-DD",
+    "name": "McDonald's",
+    "amount": 12.99,
+    "unethicalPractices": ["Factory Farming", "High Emissions"],
+    "ethicalPractices": [],
+    "practiceWeights": {
+        "Factory Farming": 75,
+        "High Emissions": 25
+    },
+    "practiceSearchTerms": {
+        "Factory Farming": "animal welfare",
+        "High Emissions": "climate"
+    },
+    "practiceCategories": {
+        "Factory Farming": "Food Insecurity",
+        "High Emissions": "Climate Change"
+    },
+    "information": {
+        "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns.",
+        "High Emissions": "Produces significant greenhouse gas emissions from its operations."
+    },
+    "citations": {
+         "Factory Farming": "https://placeholder-source-url.com/ethical-report-1",
+         "High Emissions": "https://another-placeholder.org/mcd-emissions-study"
+    }
+  },
+  {
+    "plaidTransactionId": "def456uvwSAMPLE",
+    "date": "YYYY-MM-DD",
+    "name": "Google One",
+    "amount": 9.99,
+    "unethicalPractices": ["Data Privacy Issues"],
+    "ethicalPractices": ["Clean Energy Usage"],
+    "practiceWeights": {
+        "Data Privacy Issues": 25,
+        "Clean Energy Usage": 15
+    },
+    "practiceSearchTerms": {
+        "Data Privacy Issues": "digital rights",
+        "Clean Energy Usage": "renewable energy"
+    },
+    "practiceCategories": {
+        "Data Privacy Issues": "Digital Rights",
+        "Clean Energy Usage": "Climate Change"
+    },
+    "information": {
+        "Data Privacy Issues": "Collects and monetizes extensive user data with privacy implications.",
+        "Clean Energy Usage": "Uses renewable energy for data centers and operations."
+    },
+    "citations": {
+         "Data Privacy Issues": "https://example-citation.net/data-privacy-overview",
+         "Clean Energy Usage": "https://company-sustainability-reports.com/google-energy-2024"
+    }
+  }
+]
+}
+`
+export const transactionAnalysisPrompt4 = 
+`Objective: Evaluate the societal debt (ethical impact) of financial transactions based on the percentage of a merchant's income spent on specific practices.
+
+Instructions:
+* Assign "unethicalPractices" and "ethicalPractices" using relevant industry knowledge and provided benchmarks where applicable (e.g., Factory Farming: 40-90%, Labor Exploitation: 20-70%).
+* Assign "practiceWeights" (0-100%) reflecting the *ethical impact* based on financial allocation.
+* **If uncertain about a merchant or practice applicability, assign NO practices.** Prioritize clearly impactful practices directly related to the merchant.
+* **REQUIRED:** Output MUST include the original "plaidTransactionId" for each transaction.
+* Provide concise "information" per practice, describing the impact and justifying the weight. Prioritize emotional resonance describing suffering caused by practice.
 * If available, provide a separate "citations" field, mapping each practice name to its source URL string. Leave blank if no source is available.
 * Constraint: Citations MUST come from independent sources (e.g., reputable news outlets, watchdog organizations, academic research). DO NOT cite the vendor's own website, press releases, or marketing materials as the primary source for ethical/unethical practice claims. **Ensure URLs are active and correct to prevent broken links.**
 * Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate").

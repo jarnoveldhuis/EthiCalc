@@ -1,21 +1,34 @@
 // src/config/index.ts
 export const config = {
+  // Add a flag to choose the analysis provider
+  analysisProvider: process.env.ANALYSIS_PROVIDER || 'openai', // 'openai' or 'gemini'
+
   plaid: {
     clientId: process.env.PLAID_CLIENT_ID,
-    secret: process.env.PLAID_ENV === "sandbox" 
-      ? process.env.PLAID_SECRET_SANDBOX 
+    secret: process.env.PLAID_ENV === "sandbox"
+      ? process.env.PLAID_SECRET_SANDBOX
       : process.env.PLAID_SECRET_PRODUCTION,
     env: process.env.PLAID_ENV || "sandbox",
     isSandbox: process.env.PLAID_ENV === "sandbox",
     useSampleData: process.env.USE_SAMPLE_DATA === "false" || false,
   },
   openai: {
+    // Keep OpenAI config for fallback or choice
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4o",
-    timeout: 170000, // 3 minutes - increased for web search operations
-    webSearchEnabled: false, // Flag to indicate we're using web search capabilities
-    searchContextSize: "high", // Use minimal search context to reduce costs and speed up response
-
+    model: "gpt-4o", // Or your preferred OpenAI model
+    timeout: 170000,
+    webSearchEnabled: false,
+    searchContextSize: "high",
+  },
+  // Add new Gemini configuration section
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY, // Add this environment variable
+    model: "gemini-2.0-flash", // Default stable model, can be overridden
+    // You could specify the preview model via env var if needed:
+    // model: process.env.GEMINI_MODEL_OVERRIDE || "gemini-1.5-pro-latest",
+    // Let's use the specific one you mentioned for now if ANALYSIS_PROVIDER is 'gemini'
+    previewModel: "gemini-2.5-pro-preview-03-25", // The specific model user wants
+    timeout: 170000, // Adjust timeout if needed
   },
   firebase: {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
