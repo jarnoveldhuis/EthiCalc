@@ -200,11 +200,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       return;
     }
     set({
-      appStatus: "connecting_bank",
+      appStatus: "connecting_bank", // Set busy status for token exchange
       connectionStatus: { isConnected: false, error: null },
     });
+    let exchangedToken: string | null = null; // Hold the token temporarily
     try {
-      // *** ADD AUTH HEADER ***
       const authHeaders = await getAuthHeader();
       if (!authHeaders) {
         throw new Error("User not authenticated for token exchange.");
@@ -213,10 +213,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const apiUrl = "/api/banking/exchange_token";
       const requestOptions: RequestInit = {
         method: "POST",
-        headers: authHeaders, // Use fetched auth headers
+        headers: authHeaders,
         body: JSON.stringify({ public_token: publicToken }),
       };
-      // const request = new Request(apiUrl, requestOptions); // No need to create Request object explicitly
       const response = await fetch(apiUrl, requestOptions);
       const data = await response.json();
       if (!response.ok || !data.access_token) {
@@ -224,36 +223,52 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           data.error || `Token exchange failed (${response.status})`
         );
       }
+
+      exchangedToken = data.access_token; // Store token
+
       const tokenInfo: StoredTokenInfo = {
-        token: data.access_token,
-        userId: user.uid, // Store the user ID it belongs to
+        token: exchangedToken!,
+        userId: user.uid,
         timestamp: Date.now(),
       };
       localStorage.setItem(
         "plaid_access_token_info",
         JSON.stringify(tokenInfo)
       );
+
+      // --- FIX START ---
+      // Update connection status AND reset appStatus BEFORE calling fetchTransactions
       set((state) => ({
-        connectionStatus: { ...state.connectionStatus, isConnected: true },
+        connectionStatus: { ...state.connectionStatus, isConnected: true, error: null },
+        appStatus: "idle", // Reset to idle, allowing fetchTransactions to run
       }));
+      // --- FIX END ---
+
+
       try {
         sessionStorage.removeItem("wasManuallyDisconnected");
       } catch (e) {
-        console.error(e);
+        console.error("Failed removing session storage item:", e);
       }
-      await get().fetchTransactions(data.access_token); // fetchTransactions will add its own auth header if needed
+
+      console.log("connectBank: Token exchanged, calling fetchTransactions...");
+      // --- FIX START ---
+      // Use nullish coalescing operator (??) to pass undefined if exchangedToken is null
+      await get().fetchTransactions(exchangedToken ?? undefined);
+      // --- FIX END --
+
     } catch (error) {
       console.error("Error connecting bank:", error);
       set({
-        appStatus: "error",
+        appStatus: "error", // Set error status
         connectionStatus: {
-          isConnected: false,
+          isConnected: false, // Ensure connection is marked false on error
           error:
             error instanceof Error ? error.message : "Failed to connect bank",
         },
       });
     }
-    // No finally needed as fetchTransactions handles subsequent state
+    // No finally block needed to manage appStatus here
   },
 
   resetState: () => {
