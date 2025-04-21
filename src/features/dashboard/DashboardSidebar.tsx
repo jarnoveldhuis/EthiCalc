@@ -1,12 +1,12 @@
-// src/features/dashboard/DashboardSidebar.jsx
+// src/features/dashboard/DashboardSidebar.tsx
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { useTransactionStore } from "@/store/transactionStore";
+import { useTransactionStore } from "@/store/transactionStore"; // Import AppStatus
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { useCountUp } from '@/hooks/useCountUp';
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
 import { useAuth } from "@/hooks/useAuth";
-import { calculationService } from "@/core/calculations/impactService"; // Needed for calculations
+import { calculationService } from "@/core/calculations/impactService";
 import { ShareImpactButton } from './ShareImpactButton';
 
 
@@ -35,12 +35,12 @@ const getTierInfo = (
 export function DashboardSidebar() {
   const { user } = useAuth();
 
-  // --- State Selection (Split Selectors) ---
+  // --- State Selection (Updated) ---
   const isBankConnected = useTransactionStore(state => state.connectionStatus.isConnected);
   const transactions = useTransactionStore(state => state.transactions);
   const impactAnalysis = useTransactionStore(state => state.impactAnalysis);
-  const applyCredit = useTransactionStore(state => state.applyCredit);
-  const isApplyingCredit = useTransactionStore(state => state.isApplyingCredit);
+  const appStatus = useTransactionStore(state => state.appStatus); // <-- Use appStatus
+  const applyCreditAction = useTransactionStore(state => state.applyCredit); // <-- Rename action selector
 
   const { modalState, openDonationModal, closeDonationModal } = useDonationModal();
 
@@ -50,6 +50,7 @@ export function DashboardSidebar() {
   const overallAnimationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- Calculations ---
+  // These dependencies on impactAnalysis are correct
   const applied = useMemo(() => isBankConnected ? (impactAnalysis?.appliedCredit ?? 0) : 0, [impactAnalysis, isBankConnected]);
   const effective = useMemo(() => isBankConnected ? (impactAnalysis?.effectiveDebt ?? 0) : 0, [impactAnalysis, isBankConnected]);
   const available = useMemo(() => isBankConnected ? (impactAnalysis?.availableCredit ?? 0) : 0, [impactAnalysis, isBankConnected]);
@@ -58,14 +59,17 @@ export function DashboardSidebar() {
 
   const targetScoreRatio = useMemo(() => {
       if (!isBankConnected || !impactAnalysis || totalNegativeImpact <= 0) return null;
+      // Score ratio should reflect potential offset (available + already applied)
       const totalPotentialOffset = applied + available;
       return Math.min(1, totalNegativeImpact === 0 ? 1 : totalPotentialOffset / totalNegativeImpact);
   }, [impactAnalysis, applied, available, totalNegativeImpact, isBankConnected]);
 
   const actualAppliedRatio = useMemo(() => {
         if (!isBankConnected || !impactAnalysis || totalNegativeImpact <= 0) return null;
+        // Actual ratio is based only on what's been applied so far
         return totalNegativeImpact === 0 ? null : applied / totalNegativeImpact;
   }, [impactAnalysis, applied, totalNegativeImpact, isBankConnected]);
+
 
   const animatedAppliedRatioPercentString = useCountUp(
       isBankConnected && actualAppliedRatio !== null ? Math.max(0, actualAppliedRatio * 100) : 0,
@@ -77,16 +81,17 @@ export function DashboardSidebar() {
       return getTierInfo(targetScoreRatio, totalPositiveImpact, totalNegativeImpact);
   }, [targetScoreRatio, totalPositiveImpact, totalNegativeImpact, isBankConnected]);
 
+
   const topCardBackgroundClass = useMemo(() => {
        if (!isBankConnected || !impactAnalysis) return "bg-gray-400 dark:bg-gray-600";
        if (totalNegativeImpact <= 0) { return totalPositiveImpact > 0 ? "bg-sky-500 dark:bg-sky-700" : "bg-gray-400 dark:bg-gray-600"; }
        const ratio = targetScoreRatio ?? 0;
-       if (ratio >= 1.0) return "bg-green-500 dark:bg-green-700";
-       if (ratio >= 0.75) return "bg-lime-500 dark:bg-lime-700";
-       if (ratio >= 0.50) return "bg-yellow-400 dark:bg-yellow-600";
-       if (ratio >= 0.35) return "bg-amber-400 dark:bg-amber-600";
-       if (ratio >= 0.20) return "bg-orange-500 dark:bg-orange-700";
-       return "bg-red-600 dark:bg-red-800";
+       if (ratio >= 1.0) return "bg-green-500 dark:bg-green-700"; // S
+       if (ratio >= 0.75) return "bg-lime-500 dark:bg-lime-700"; // A
+       if (ratio >= 0.50) return "bg-yellow-400 dark:bg-yellow-600"; // B
+       if (ratio >= 0.35) return "bg-amber-400 dark:bg-amber-600"; // C
+       if (ratio >= 0.20) return "bg-orange-500 dark:bg-orange-700"; // D
+       return "bg-red-600 dark:bg-red-800"; // F
    }, [impactAnalysis, totalNegativeImpact, totalPositiveImpact, targetScoreRatio, isBankConnected]);
 
   const targetAppliedPercentage = useMemo(() => {
@@ -96,36 +101,26 @@ export function DashboardSidebar() {
 
   const progressBarTrackColor = effective > 0 ? 'bg-red-200 dark:bg-red-900' : 'bg-green-200 dark:bg-green-900';
 
-    // --- Calculation for commented out section & Share Button ---
-    /*
-    const targetCategoryBarData = useMemo(() => { ... }); // Commented out
-    */
+
    // --- MODIFIED: Data for Share Button ---
     const categoryDataForSharing = useMemo(() => {
         if (!isBankConnected || !transactions || transactions.length === 0 || !impactAnalysis) return {};
 
-        // Reuse calculation logic to get category impacts
         const catImpacts = calculationService.calculateCategoryImpacts(transactions);
         const sharingData: Record<string, { score: number }> = {};
-        // Use defined categories or keys from catImpacts
-        const definedCategories = ["Environment", "Labor Ethics", "Animal Welfare", "Political Ethics", "Transparency"];
+        const definedCategories = ["Environment", "Labor Ethics", "Animal Welfare", "Political Ethics", "Transparency", "Digital Rights"];
 
         definedCategories.forEach(category => {
             const values = catImpacts[category] || { positiveImpact: 0, negativeImpact: 0, totalSpent: 0 };
             const { positiveImpact, negativeImpact } = values;
-
-            // Calculate a score (e.g., net impact as percentage of total *negative* impact?)
-            // Or simply net impact? Let's use net impact for simplicity in sharing.
-            // You can adjust the score calculation logic here as needed.
             const score = positiveImpact - negativeImpact;
 
-            // Only include categories with non-zero net impact in the share data
             if (Math.abs(score) > 0.01) {
                 sharingData[category] = { score };
             }
         });
         return sharingData;
-    }, [transactions, isBankConnected, impactAnalysis]); // Added impactAnalysis dependency
+    }, [transactions, isBankConnected, impactAnalysis]);
 
   // --- Effects ---
   useEffect(() => {
@@ -144,19 +139,20 @@ export function DashboardSidebar() {
      return () => { if (overallAnimationTimeoutRef.current) clearTimeout(overallAnimationTimeoutRef.current); };
    }, [targetAppliedPercentage, impactAnalysis, isBankConnected]);
 
-    // --- Effect for commented out section ---
-    /* ... */
 
-
-  // --- Action Handlers ---
+  // --- Action Handlers (Updated) ---
    const handleApplyCredit = useCallback(async () => {
-     if (!user || isApplyingCredit || impactAnalysis === null || available <= 0 || effective <= 0) return;
+     // Check appStatus instead of isApplyingCredit flag
+     if (!user || appStatus === 'applying_credit' || impactAnalysis === null || available <= 0 || effective <= 0) return;
      try {
        const amountToApply = Math.min(available, effective);
-       if (amountToApply > 0) { await applyCredit(amountToApply, user.uid); }
+       if (amountToApply > 0) {
+         // Call the action from the store
+         await applyCreditAction(amountToApply);
+       }
        else { console.log("Apply Credit: No amount to apply."); }
      } catch (error) { console.error("Error applying credit:", error); }
-   }, [applyCredit, user, impactAnalysis, available, effective, isApplyingCredit]);
+   }, [applyCreditAction, user, impactAnalysis, available, effective, appStatus]); // Depend on appStatus
 
   const handleOpenOffsetModal = useCallback(() => {
       const amountToPotentiallyOffset = Math.max(0, effective);
@@ -164,13 +160,26 @@ export function DashboardSidebar() {
   }, [openDonationModal, effective]);
 
 
-  // --- Conditional Button Logic (Unchanged) ---
+  // --- Conditional Button Logic (Updated) ---
   const getActionButton = () => {
+     const isBusy = appStatus !== 'idle' && appStatus !== 'error'; // General busy check
+     const isApplying = appStatus === 'applying_credit'; // Specific check for applying
+
      if (!isBankConnected) { return ( <button disabled className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-gray-400 dark:bg-gray-500 text-white opacity-50 cursor-not-allowed"> Connect Bank </button> ); }
-     if (impactAnalysis === null) { return ( <button disabled className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-gray-400 dark:bg-gray-500 text-white opacity-50 cursor-not-allowed"> Analyzing... </button> ); }
-     if (available > 0 && effective > 0) { return ( <button onClick={handleApplyCredit} disabled={isApplyingCredit} className={`w-full px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-background)] focus:ring-[var(--success)] ${ isApplyingCredit ? "bg-gray-400 dark:bg-gray-500 cursor-not-allowed" : "bg-[var(--success)] hover:opacity-80" }`} title={`Apply ${formatCurrency(available)} credit`}> {isApplyingCredit ? "Applying..." : `Apply Credit (${formatCurrency(available)})`} </button> ); }
-     if (available <= 0 && effective > 0) { return ( <button onClick={handleOpenOffsetModal} className="w-full px-4 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-background)] focus:ring-green-500" title={`Offset ${formatCurrency(effective)} remaining debt`}> Offset Remaining Debt ({formatCurrency(effective)}) </button> ); }
-     if (effective <= 0) { return ( <button onClick={handleOpenOffsetModal} className="w-full px-4 py-2 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-background)] focus:ring-blue-500" title="Make an additional donation"> Donate to Offset Impact </button> ); }
+
+     // Show generic loading/busy state if analysis isn't ready or app is busy (except applying)
+     if (impactAnalysis === null || (isBusy && !isApplying)) { return ( <button disabled className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-gray-400 dark:bg-gray-500 text-white opacity-50 cursor-not-allowed"> {appStatus === 'initializing' ? 'Initializing...' : 'Processing...'} </button> ); }
+
+     // Apply Credit Button Logic
+     if (available > 0 && effective > 0) { return ( <button onClick={handleApplyCredit} disabled={isApplying} className={`w-full px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-background)] focus:ring-[var(--success)] ${ isApplying ? "bg-gray-400 dark:bg-gray-500 cursor-not-allowed" : "bg-[var(--success)] hover:opacity-80" }`} title={`Apply ${formatCurrency(available)} credit`}> {isApplying ? "Applying..." : `Apply Credit (${formatCurrency(available)})`} </button> ); }
+
+     // Offset Remaining Debt Button Logic
+     if (available <= 0 && effective > 0) { return ( <button onClick={handleOpenOffsetModal} disabled={isBusy} className={`w-full px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-background)] focus:ring-green-500 ${isBusy ? "bg-gray-400 dark:bg-gray-500 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`} title={`Offset ${formatCurrency(effective)} remaining debt`}> Offset Remaining Debt ({formatCurrency(effective)}) </button> ); }
+
+     // Donate Button Logic (when debt is zero or negative)
+     if (effective <= 0) { return ( <button onClick={handleOpenOffsetModal} disabled={isBusy} className={`w-full px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-background)] focus:ring-blue-500 ${isBusy ? "bg-gray-400 dark:bg-gray-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`} title="Make an additional donation"> Donate to Offset Impact </button> ); }
+
+     // Fallback disabled button
      return ( <button disabled className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-gray-400 dark:bg-gray-500 text-white opacity-50 cursor-not-allowed"> Calculating... </button> );
   };
 
@@ -189,7 +198,7 @@ export function DashboardSidebar() {
              {isBankConnected && impactAnalysis && (
                  <ShareImpactButton
                     categoryData={categoryDataForSharing} // Pass the calculated data
-                    overallRatio={actualAppliedRatio}
+                    overallRatio={actualAppliedRatio} // Use actual applied ratio for sharing score
                     totalPositiveImpact={totalPositiveImpact}
                     className="mt-2"
                  />
@@ -200,7 +209,8 @@ export function DashboardSidebar() {
         {isBankConnected && (
            <div className={`flex-grow flex flex-col`}>
                 {/* Section 2: Overall Progress Bar */}
-                {impactAnalysis !== null ? (
+                {/* Show progress bar only if analysis is done and app is not in an error state */}
+                {impactAnalysis !== null && appStatus !== 'error' ? (
                     <div className="p-4 space-y-2 border-b border-[var(--border-color)]">
                         <div className="flex justify-between text-xs sm:text-sm mb-1">
                             <span className="font-medium text-[var(--muted-foreground)]">Applied Credit</span>
@@ -215,28 +225,26 @@ export function DashboardSidebar() {
                         </div>
                     </div>
                 ) : (
-                    <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 border-b border-[var(--border-color)]">Calculating progress...</div>
+                    // Show placeholder or loading message if analysis not ready or error occurred
+                     <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 border-b border-[var(--border-color)]">
+                        {appStatus === 'error' ? 'Error loading data' : 'Calculating progress...'}
+                     </div>
                 )}
 
                {/* Section 3: Available Credit & Action Button */}
                <div className="p-4 space-y-3">
-                   {/* --- MODIFIED: Available Credit Line --- */}
-                   {/* Only render if analysis is done AND available credit > 0 */}
-                   {impactAnalysis !== null && available > 0 && (
+                   {/* Show available credit only if analysis is done, no error, and credit > 0 */}
+                   {impactAnalysis !== null && appStatus !== 'error' && available > 0 && (
                        <div className="flex items-center justify-between">
                            <span className="text-[var(--muted-foreground)] text-sm sm:text-base">Available Credit</span>
                            <AnimatedCounter value={available} prefix="$" className="font-bold text-[var(--success)] text-sm sm:text-base" decimalPlaces={2}/>
                        </div>
                    )}
-                   {/* --- End Modification --- */}
 
                    <div className="pt-2">
                       {getActionButton()}
                    </div>
                </div>
-
-               {/* --- Commented Out: Your Values Section --- */}
-               {/* ... */}
 
            </div>
         )}

@@ -20,7 +20,9 @@ export interface Transaction {
   practiceCategories?: Record<string, string>;
   charities?: Record<string, Charity>;
   information?: Record<string, string>;
-  citations?: Record<string, string>;
+  citations?: Record<string, string[]>; // <--- Update this line
+
+  // citations?: Record<string, string>;
   isCreditApplication?: boolean;
   creditApplied?: boolean;
   plaidTransactionId?: string;

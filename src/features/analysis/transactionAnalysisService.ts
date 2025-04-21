@@ -7,17 +7,19 @@ import {
   Transaction,
   AnalyzedTransactionData,
 } from "@/shared/types/transactions";
-import { transactionAnalysisPrompt } from "./promptTemplates";
+import { transactionAnalysisPrompt } from "./promptTemplates"; // Make sure this has the updated prompt
 import { config } from "@/config";
 import { calculationService } from "@/core/calculations/impactService";
 
-// Interfaces remain the same...
+// --- MODIFIED Interface ---
+// Update the 'citations' type to expect an array of strings
 interface AnalysisResultTransaction extends Partial<Transaction> {
-  citations?: Record<string, string>;
+  citations?: Record<string, string[]>; // Changed from string to string[]
 }
 interface AnalysisResponse {
   transactions: AnalysisResultTransaction[];
 }
+// --- End MODIFIED Interface ---
 
 // Type Guard (keep for error handling)
 interface ErrorWithDetails extends Error {
@@ -30,12 +32,13 @@ function hasErrorDetails(error: unknown): error is ErrorWithDetails {
 
 export async function analyzeTransactionsViaAPI(
   transactionsToAnalyze: Transaction[]
-): Promise<AnalysisResultTransaction[]> {
+): Promise<AnalysisResultTransaction[]> { // Return type uses the updated interface
   if (!Array.isArray(transactionsToAnalyze) || transactionsToAnalyze.length === 0) {
     console.log("analyzeTransactionsViaAPI: No transactions provided for API call.");
     return [];
   }
 
+  // Sanitize input (no changes needed here)
   const sanitizedTransactions = transactionsToAnalyze.map((tx) => ({
         plaidTransactionId: tx.plaidTransactionId,
         date: tx.date || "N/A",
@@ -45,7 +48,7 @@ export async function analyzeTransactionsViaAPI(
         location: tx.location || []
       }));
   const userMessage = JSON.stringify({ transactions: sanitizedTransactions });
-  const systemPrompt = transactionAnalysisPrompt;
+  const systemPrompt = transactionAnalysisPrompt; // Ensure this uses your updated prompt
   let messageContent = "";
   let modelUsed = "";
 
@@ -55,30 +58,23 @@ export async function analyzeTransactionsViaAPI(
       if (!config.gemini.apiKey) { throw new Error("Gemini API key missing."); }
 
       const genAI = new GoogleGenAI({apiKey: config.gemini.apiKey});
-      modelUsed = config.gemini.previewModel;
+      modelUsed = config.gemini.previewModel; // Or your chosen Gemini model
 
-      // Define config components
-      const tools: Tool[] = [{ googleSearch: {} }]; // Use documented structure
-      // const safetySettings = [
-      //       { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      //       { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      //       { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      //       { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      //   ];
-      // NOTE: User specified 'text/plain' earlier, but we need JSON. Reverting.
+      const tools: Tool[] = [{ googleSearch: {} }];
       const contents = [ { role: "user", parts: [{ text: `${systemPrompt}\n\n${userMessage}` }] } ];
 
       console.log(
         `analyzeTransactionsViaAPI: Sending ${transactionsToAnalyze.length} txs to Gemini model: ${modelUsed} (Non-Streaming, Search Enabled)`
       );
 
-      // CORRECTED Non-Streaming API CALL using the 'config' parameter
+      // API CALL using the 'config' parameter
       const result = await genAI.models.generateContent({
           model: modelUsed,
           contents: contents,
           // Group optional settings under the 'config' object
           config: {
               tools: tools,
+              // Keep as text/plain if application/json caused issues with grounding
               responseMimeType: 'text/plain'
           }
       });
@@ -87,148 +83,116 @@ export async function analyzeTransactionsViaAPI(
       // RESPONSE HANDLING
       console.log("Gemini Raw Result Object:", JSON.stringify(result, null, 2));
 
-      // *** CORRECTED Access to feedback/finish reasons ***
-      // Access directly from 'result' or 'result.response' based on actual object structure seen in logs
-      // The logs showed candidates directly on result, let's assume promptFeedback might be too.
-      const finishReason = result?.candidates?.[0]?.finishReason; // Finish reason is on the candidate
-      const safetyRatings = result?.candidates?.[0]?.safetyRatings; // Safety ratings are on the candidate
-      const blockReason = result?.promptFeedback?.blockReason; // Prompt feedback might be directly on result
-      console.log("Gemini Prompt Feedback (raw):", JSON.stringify(result?.promptFeedback, null, 2)); // Log promptFeedback presence
+      const finishReason = result?.candidates?.[0]?.finishReason;
+      const safetyRatings = result?.candidates?.[0]?.safetyRatings;
+      const blockReason = result?.promptFeedback?.blockReason;
+      console.log("Gemini Prompt Feedback (raw):", JSON.stringify(result?.promptFeedback, null, 2));
 
       if (blockReason) {
            console.error(`Gemini response blocked for prompt. Reason: ${blockReason}`);
       }
-      // Also check candidate finish reason for safety/other blocks
       if (finishReason && finishReason !== FinishReason.STOP && finishReason !== FinishReason.MAX_TOKENS) {
            console.error(`Gemini response candidate finished unexpectedly. Reason: ${finishReason}`);
            console.error(`Safety Ratings: ${JSON.stringify(safetyRatings)}`);
       }
-      // *** END CORRECTION ***
 
-      // Extract text directly from the result structure shown in logs
-      messageContent = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      // Extract text
+      // Handle potentially multiple parts (though likely just one for non-streaming text)
+      messageContent = result?.candidates?.[0]?.content?.parts
+          ?.map(part => part.text)
+          .join('') || "";
 
 
-      // *** RESTORED Error Logic ***
       if (!messageContent) {
         console.error("Gemini returned empty messageContent. Full result object logged above.");
         let errorMessage = "Gemini returned empty content";
-        if (blockReason) {
-            errorMessage += ` (Prompt blocked: ${blockReason})`;
-        } else if (finishReason && finishReason !== FinishReason.STOP && finishReason !== FinishReason.MAX_TOKENS) {
-             errorMessage += ` (Generation stopped: ${finishReason})`;
-        } else {
-            errorMessage += " (Check logs for potential issues)";
-        }
+        if (blockReason) { errorMessage += ` (Prompt blocked: ${blockReason})`; }
+        else if (finishReason && finishReason !== FinishReason.STOP && finishReason !== FinishReason.MAX_TOKENS) { errorMessage += ` (Generation stopped: ${finishReason})`; }
+        else { errorMessage += " (Check logs for potential issues)"; }
         throw new Error(errorMessage);
       }
-      // *** END RESTORED Error Logic ***
       // *** END GEMINI LOGIC ***
 
-
     } else {
-      // *** OPENAI LOGIC (Existing - Non-Streaming) ***
-      if (!config.openai.apiKey) {
-        throw new Error("OpenAI API key missing.");
-      }
+      // *** OPENAI LOGIC ***
+      if (!config.openai.apiKey) { throw new Error("OpenAI API key missing."); }
       const openai = new OpenAI({
         apiKey: config.openai.apiKey,
-        timeout: config.openai.timeout || 170000, // OpenAI SDK uses timeout option
+        timeout: config.openai.timeout || 170000,
       });
-      modelUsed = config.openai.webSearchEnabled
-        ? "gpt-4o-search-preview"
-        : config.openai.model;
+      modelUsed = config.openai.webSearchEnabled ? "gpt-4o-search-preview" : config.openai.model;
 
-      console.log(
-        `analyzeTransactionsViaAPI: Sending ${transactionsToAnalyze.length} txs to OpenAI model: ${modelUsed}`
-      );
+      console.log(`analyzeTransactionsViaAPI: Sending ${transactionsToAnalyze.length} txs to OpenAI model: ${modelUsed}`);
 
       const messages: ChatCompletionMessageParam[] = [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ];
-      const completionParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming =
-        {
-          model: modelUsed,
-          messages: messages,
-          response_format: { type: "json_object" },
-        };
+      const completionParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
+        model: modelUsed,
+        messages: messages,
+        response_format: { type: "json_object" },
+      };
 
-      const rawResponse = await openai.chat.completions.create(
-        completionParams
-      );
+      const rawResponse = await openai.chat.completions.create(completionParams);
       messageContent = rawResponse.choices[0]?.message?.content || "";
 
-      if (!messageContent) {
-        throw new Error("OpenAI returned empty content.");
-      }
+      if (!messageContent) { throw new Error("OpenAI returned empty content."); }
       // *** END OPENAI LOGIC ***
     }
 
-    // *** COMMON PARSING LOGIC *** (Remains the same)
+    // *** COMMON PARSING LOGIC ***
+    // This robust parsing logic remains the same
     let jsonString = messageContent.trim();
-    // Remove potential markdown code fences first
-    if (jsonString.startsWith("```json")) {
-      jsonString = jsonString.substring(7, jsonString.length - 3).trim();
-    } else if (jsonString.startsWith("```")) {
-      jsonString = jsonString.substring(3, jsonString.length - 3).trim();
-    }
+    jsonString = jsonString.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, ''); // Remove fences
 
     const firstBrace = jsonString.indexOf("{");
     const lastBrace = jsonString.lastIndexOf("}");
     if (firstBrace === -1 || lastBrace <= firstBrace) {
-      console.error("Raw Aggregated API Response Content:", messageContent); // Log raw content on failure
-      throw new Error(
-        `Could not find valid JSON object boundaries in ${config.analysisProvider} response.`
-      );
+      console.error("Raw Aggregated API Response Content:", messageContent);
+      throw new Error(`Could not find valid JSON object boundaries in ${config.analysisProvider} response after cleaning.`);
     }
     jsonString = jsonString.substring(firstBrace, lastBrace + 1);
 
-    let analyzedData: AnalysisResponse;
+    let analyzedData: AnalysisResponse; // Uses the updated interface
     try {
       analyzedData = JSON.parse(jsonString);
     } catch (parseError) {
-      console.error(
-        `JSON parsing error in analyzeTransactionsViaAPI (${config.analysisProvider}):`,
-        parseError
-      );
-      console.error("Attempted to parse:", jsonString); // Log the string that failed parsing
-      throw new Error(
-        `Failed to parse JSON from ${config.analysisProvider}: ${
-          parseError instanceof Error ? parseError.message : String(parseError)
-        }`
-      );
+      console.error(`JSON parsing error in analyzeTransactionsViaAPI (${config.analysisProvider}):`, parseError);
+      console.error("Attempted to parse:", jsonString);
+      throw new Error(`Failed to parse JSON from ${config.analysisProvider}: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
     }
 
-    if (
-      !analyzedData.transactions ||
-      !Array.isArray(analyzedData.transactions)
-    ) {
-      throw new Error(
-        `${config.analysisProvider} response format invalid: 'transactions' array missing/invalid.`
-      );
+    // --- Validation (Adjusted for new citations type) ---
+    if (!analyzedData.transactions || !Array.isArray(analyzedData.transactions)) {
+      throw new Error(`${config.analysisProvider} response format invalid: 'transactions' array missing/invalid.`);
     }
 
+    // Optional: Add validation for the citations field within each transaction if needed
+    // e.g., check if analyzedData.transactions[i].citations is an object where values are arrays of strings
+    // This depends on how strict you need to be.
+
+    // --- Return using the updated type ---
     return analyzedData.transactions;
+
   } catch (error) {
-    // *** UPDATED ERROR HANDLING using Type Guard ***
-    if (hasErrorDetails(error)) { // Use the type guard function
-      // Inside this block, TypeScript knows 'error' has 'errorDetails'
-      console.error("Gemini Error Details:", JSON.stringify(error.errorDetails, null, 2)); // Access directly, stringify for better logging
+     // Error handling remains the same
+    if (hasErrorDetails(error)) {
+      console.error("Gemini Error Details:", JSON.stringify(error.errorDetails, null, 2));
     } else if (error instanceof Error) {
-        // Standard error logging if it doesn't have details
         console.error(`Error during ${config.analysisProvider} API call (${modelUsed}):`, error.message);
         console.error("Stack trace:", error.stack);
     } else {
-        // Fallback for non-Error objects
         console.error(`An unknown error occurred during ${config.analysisProvider} API call (${modelUsed}):`, error);
     }
-    // *** END UPDATED ERROR HANDLING ***
     throw error; // Re-throw error for the API handler
   }
 }
 
 // --- processTransactionList function remains unchanged ---
+// This function calculates overall impact based on the *results* of the analysis
+// It doesn't directly parse the raw API string, so it doesn't need modification
+// for the citation format change unless you use citations in impact calculations.
 export function processTransactionList(
   transactions: Transaction[]
 ): AnalyzedTransactionData {
@@ -248,16 +212,28 @@ export function processTransactionList(
   const processedList = transactions.map((tx) => ({
     ...tx,
     analyzed: tx.analyzed ?? false,
+    // Ensure citations is an array (or default if missing)
+    // Note: This modification depends on if your Transaction type *itself*
+    //       was updated to use string[] for citations. If Transaction still
+    //       uses Record<string, string>, this mapping might be incorrect.
+    //       Assuming Transaction type was also updated:
+    citations: typeof tx.citations === 'object' && tx.citations !== null
+      ? Object.entries(tx.citations).reduce((acc, [key, value]) => {
+          acc[key] = Array.isArray(value) ? value : (value ? [String(value)] : []);
+          return acc;
+        }, {} as Record<string, string[]>)
+      : {},
   }));
 
   const positiveImpact =
     calculationService.calculatePositiveImpact(processedList);
   const negativeImpact =
     calculationService.calculateNegativeImpact(processedList);
-  const totalSocietalDebt = negativeImpact;
+  const totalSocietalDebt = negativeImpact; // Using negativeImpact as total debt
   const debtPercentage =
     calculationService.calculateDebtPercentage(processedList);
 
+  // Recalculate societalDebt per transaction based on weights
   const updatedTransactions = processedList.map((t) => {
     let transactionSocietalDebt = 0;
     const practiceWeights = t.practiceWeights || {};
@@ -277,7 +253,7 @@ export function processTransactionList(
       const weight = practiceWeights[practice] ?? 0;
       if (!isNaN(weight)) transactionSocietalDebt -= amount * (weight / 100);
     });
-    // Ensure societalDebt is calculated correctly, even if negative (ethical surplus)
+
     return {
       ...t,
       societalDebt: isNaN(transactionSocietalDebt)

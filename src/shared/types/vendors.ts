@@ -12,5 +12,5 @@ export interface VendorAnalysis {
   practiceSearchTerms?: Record<string, string>;
   practiceCategories?: Record<string, string>;
   information?: Record<string, string>;
-  citations?: Record<string, string>;
+  citations?: Record<string, string[]>;
 }

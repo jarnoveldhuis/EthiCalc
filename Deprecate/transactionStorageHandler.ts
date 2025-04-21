@@ -1,7 +1,7 @@
 // src/features/transactions/api/transactionStorageHandler.ts
 // API handlers for transaction storage
 import { NextRequest, NextResponse } from "next/server";
-import { saveAnalyzedTransactions, getUserTransactionBatches, getLatestTransactionBatch } from "../transactionStorageService";
+import { saveAnalyzedTransactions, getUserTransactionBatches, getLatestTransactionBatch } from "../src/features/analysis/transactionStorageService";
 import { AnalyzedTransactionData } from "@/shared/types/transactions"
 // import { getAuth } from "firebase/auth";
 
@@ -14,7 +14,7 @@ export async function saveTransactionsHandler(req: NextRequest) {
   try {
     // In a real app, get user ID from session/token
     // For this example, we'll need to get it from the request
-    const { data, accessToken, userId } = await req.json() as SaveTransactionsRequest & { userId: string };
+    const { data, userId } = await req.json() as SaveTransactionsRequest & { userId: string };
     
     if (!userId) {
       return NextResponse.json(
@@ -30,7 +30,7 @@ export async function saveTransactionsHandler(req: NextRequest) {
       );
     }
     
-    const batchId = await saveAnalyzedTransactions(userId, data, accessToken);
+    const batchId = await saveAnalyzedTransactions(userId, data);
     
     return NextResponse.json({ 
       success: true, 
