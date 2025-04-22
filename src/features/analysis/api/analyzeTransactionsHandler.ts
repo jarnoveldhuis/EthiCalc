@@ -35,10 +35,10 @@ const AnalyzeTransactionsSchema = z.object({
 // Interface for the expected structure returned by analyzeTransactionsViaAPI
 // Ensure this aligns with the return type of analyzeTransactionsViaAPI after Zod changes there
 // (Using Partial<Transaction> might be too broad, consider inferring from the service's Zod schema if possible)
-interface AnalysisResultTransaction extends Partial<Transaction> {
-    citations?: Record<string, string[]>;
-    // Add other fields returned by OpenAI/service
-}
+// interface AnalysisResultTransaction extends Partial<Transaction> {
+//     citations?: Record<string, string[]>;
+//     // Add other fields returned by OpenAI/service
+// }
 
 export async function analyzeTransactionsHandler(req: NextRequest) {
   try {

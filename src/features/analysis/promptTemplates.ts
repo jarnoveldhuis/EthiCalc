@@ -1,10 +1,9 @@
-// src/features/analysis/promptTemplates.ts
-
 export const transactionAnalysisPrompt =
 `Objective: Evaluate the societal debt (ethical impact) of financial transactions based on the percentage of a merchant's income spent on specific practices.
 
 Instructions:
 * Assign "unethicalPractices" and "ethicalPractices" using relevant industry knowledge and provided benchmarks where applicable (e.g., Factory Farming: 40-90%, Labor Exploitation: 20-70%).
+* **Identify Small Businesses:** If a merchant appears to be a small, local, or independent business (e.g., "Local Coffee Shop", "Neighborhood Bookstore", non-chain restaurant), assign the ethical practice "Supports Small Business" with a positive weight (e.g., 10-25%) and categorize it under "Transparency" or "Community Support".
 * Assign "practiceWeights" (0-100%) reflecting the *ethical impact* based on financial allocation.
 * **If uncertain about a merchant or practice applicability, assign NO practices.** Prioritize clearly impactful practices directly related to the merchant.
 * **REQUIRED:** Output MUST include the original "plaidTransactionId" for each transaction.
@@ -17,8 +16,8 @@ Instructions:
     * **DO NOT cite the vendor's own website**, press releases, or marketing materials as primary evidence for ethical/unethical practices (citing their stated goals from official reports is okay if noted in 'information').
     * **It is better to provide an empty array [] than an irrelevant or broken link.** If no suitable citation is found for a practice, use [].
 * **ENSURE URLS ARE COMPLETE:** Double-check that any provided URL is a complete, absolute URL (e.g., "https://www.example.com/report").
-* Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate").
-* Assign one of the following "practiceCategories" to each practice: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency, Digital Rights.
+* Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate", Supports Small Business -> "local business support").
+* Assign one of the following "practiceCategories" to each practice: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency, Digital Rights, Community Support.
 * **Output MUST BE ONLY strict JSON** matching the example schema below. DO NOT include any explanatory text before or after the JSON block.
 
 JSON Schema Example (Note 'citations' uses arrays):
@@ -40,18 +39,18 @@ JSON Schema Example (Note 'citations' uses arrays):
         "High Emissions": "climate"
     },
     "practiceCategories": {
-        "Factory Farming": "Animal Welfare", // Changed Category
-        "High Emissions": "Environment" // Changed Category
+        "Factory Farming": "Animal Welfare",
+        "High Emissions": "Environment"
     },
     "information": {
         "Factory Farming": "Relies on industrial meat production with environmental and animal welfare concerns.",
         "High Emissions": "Produces significant greenhouse gas emissions from its operations and supply chain."
     },
     "citations": {
-         "Factory Farming": [ // Example with one URL
+         "Factory Farming": [
             "https://example-report.org/mcd-animal-welfare-2024"
          ],
-         "High Emissions": [] // Example with NO suitable URL found
+         "High Emissions": []
     }
   },
   {
@@ -82,14 +81,14 @@ JSON Schema Example (Note 'citations' uses arrays):
         "Cloud Efficiency": "AWS infrastructure aims for energy efficiency improvements."
     },
     "citations": {
-         "Labor Exploitation": [ // Example with multiple URLs
+         "Labor Exploitation": [
              "https://news-source.com/amazon-warehouse-conditions-probe",
              "https://labor-watchdog.org/amazon-report-2025"
          ],
          "Excessive Packaging": [
             "https://packaging-journal.net/amazon-waste-stats"
          ],
-         "Cloud Efficiency": [] // Example where stated goal might not have independent citation
+         "Cloud Efficiency": []
     }
   },
   {
@@ -98,21 +97,22 @@ JSON Schema Example (Note 'citations' uses arrays):
     "name": "Local Coffee Shop",
     "amount": 4.75,
     "unethicalPractices": [],
-    "ethicalPractices": ["Community Support"], // Hypothetical
+    "ethicalPractices": ["Small Business"],
     "practiceWeights": {
-        "Community Support": 15
+        "Small Business": 20
     },
     "practiceSearchTerms": {
-        "Community Support": "local business support"
+        "Small Business": "local business support"
     },
     "practiceCategories": {
-        "Community Support": "Transparency" // Or other relevant category
+        "Small Business": "Community Support" 
     },
     "information": {
-        "Community Support": "Supports local events and sources beans from a regional roaster."
+        // Updated info to be more generic benefit
+        "Small Business": "Purchasing from local businesses helps circulate money within the community and supports local jobs."
     },
     "citations": {
-        "Community Support": [] // Example with no unethical practices and no citation needed/found for ethical one
+        "Small Business": []
     }
   }
 ]

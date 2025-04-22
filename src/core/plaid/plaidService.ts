@@ -175,8 +175,12 @@ export async function createSandboxToken(institutionId?: string): Promise<string
       body: JSON.stringify({
         client_id: CLIENT_ID,
         secret: PLAID_SECRET,
-        institution_id: INSTITUTION_ID,
+        // institution_id: INSTITUTION_ID,
         initial_products: ["transactions"],
+        "options": {
+          "override_username": "user_transactions_dynamic",
+          "override_password": "user_transactions_dynamic",
+        }
       }),
     });
     

@@ -8,6 +8,7 @@ import { User } from "firebase/auth";
 import { auth } from "@/core/firebase/firebase"; // Make sure auth is imported for getIdToken
 import { Timestamp, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/core/firebase/firebase";
+import { config } from '@/config'; // <-- ADDED IMPORT
 import {
   mapPlaidTransactions,
   mergeTransactions,
@@ -599,7 +600,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             if (nName !== "unknown_vendor") {
               const vData: Omit<VendorAnalysis, "analyzedAt"> = {
                 originalName: vName,
-                analysisSource: "openai",
+                // --- MODIFIED LINE ---
+                analysisSource: config.analysisProvider as 'openai' | 'gemini',
+                // --- END MODIFIED LINE ---
                 unethicalPractices: fTx.unethicalPractices,
                 ethicalPractices: fTx.ethicalPractices,
                 practiceWeights: fTx.practiceWeights,
