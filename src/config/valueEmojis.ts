@@ -6,6 +6,7 @@ export const valueEmojis: Record<string, string> = {
     "Political Ethics": "🗳️",
     Transparency: "🔍",
     "Digital Rights": "🛜",
+    "Community Support": "🤝",
     // Add other categories as needed
     "Default Category": "❓"
 };

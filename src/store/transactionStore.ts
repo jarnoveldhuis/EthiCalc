@@ -827,6 +827,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   // loadLatestTransactions needs Auth Header
+ // src/store/transactionStore.ts
+
+  // loadLatestTransactions needs Auth Header
   loadLatestTransactions: async (): Promise<boolean> => {
     const currentUser = auth.currentUser; // Get user from auth state
     if (!currentUser) {
@@ -852,8 +855,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
 
     const { appStatus } = get();
-    if (appStatus !== "idle" && appStatus !== "error")
-      return get().hasSavedData;
+    // Allow proceeding if idle, error, or initializing (as init calls this)
+    if (appStatus !== 'idle' && appStatus !== 'error' && appStatus !== 'initializing') {
+        console.log(`loadLatestTransactions: Skipping (Status: ${appStatus})`);
+        return get().hasSavedData;
+    }
+
 
     set({
       appStatus: "loading_latest",
@@ -863,7 +870,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     });
     let success = false;
     try {
-      // *** ADD AUTH HEADER ***
       const authHeaders = await getAuthHeader();
       if (!authHeaders) {
         throw new Error(
@@ -874,23 +880,28 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       console.log(
         `loadLatestTransactions: Calling API /api/transactions/latest for user ${userId}...`
       );
-      // Call the new GET route
       const response = await fetch("/api/transactions/latest", {
         method: "GET",
-        headers: authHeaders, // Send auth token
+        headers: authHeaders,
       });
 
       if (response.status === 404) {
         console.log("loadLatestTransactions: No data found (404).");
+        // *** Ensure credit state is also cleared/reset if no data ***
+        const initialCreditState = await get().loadCreditState(); // Load/init credit state
         set({
           hasSavedData: false,
           savedTransactions: null,
           transactions: [],
           impactAnalysis: null,
+          // Ensure credit state reflects reality (likely 0 applied if no history)
+          creditState: initialCreditState ?? {
+             availableCredit: 0, appliedCredit: 0, lastAppliedAmount: 0, lastAppliedAt: null
+          },
           appStatus: "idle",
         });
-        success = false; // Technically not a success in terms of loading data
-        return success; // Exit early
+        success = false;
+        return success;
       }
 
       if (!response.ok) {
@@ -901,52 +912,74 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
 
       const data = await response.json();
-      const batch = data.batch; // Assuming the API returns { batch: TransactionBatch | null }
+      const batch = data.batch;
 
       if (batch && batch.transactions) {
         const loadedTransactions = (batch.transactions as Transaction[]).map(
           (tx) => ({ ...tx, analyzed: tx.analyzed ?? true })
-        ); // Ensure analyzed is boolean
+        );
         if (!Array.isArray(loadedTransactions))
           throw new Error("Invalid data format in loaded batch");
 
-        const loadedCreditState = await get().loadCreditState(); // loadCreditState now gets userId internally
-        const initialAppliedCredit = loadedCreditState?.appliedCredit ?? 0;
+        // *** === FIX START === ***
+        // Explicitly await loading the credit state *after* getting transactions
+        // but *before* calculating final impact and setting state.
+        console.log("loadLatestTransactions: Transactions loaded, now loading credit state...");
+        const loadedCreditState = await get().loadCreditState(); // This function now handles its own status updates
+
+        // Ensure we have a valid credit state, default if needed
+        const currentCreditState = loadedCreditState ?? {
+            availableCredit: 0, appliedCredit: 0, lastAppliedAmount: 0, lastAppliedAt: null
+        };
+        const currentAppliedCredit = currentCreditState.appliedCredit;
+
+        console.log(`loadLatestTransactions: Credit state loaded. Applied: ${currentAppliedCredit}. Calculating final impact...`);
+
+        // Calculate impact using the fresh transactions AND the freshly loaded applied credit
         const analysis = calculationService.calculateImpactAnalysis(
           loadedTransactions,
-          initialAppliedCredit
+          currentAppliedCredit
         );
+
+        console.log("loadLatestTransactions: Final impact calculated. Setting state...");
+        // Now set the final state using the fresh data
         set({
           transactions: loadedTransactions,
           savedTransactions: loadedTransactions,
-          impactAnalysis: analysis,
+          impactAnalysis: analysis, // Uses fresh appliedCredit
           hasSavedData: true,
+          // Use the freshly loaded credit state, ensuring availableCredit matches analysis
           creditState: {
-            appliedCredit: initialAppliedCredit,
-            lastAppliedAmount: loadedCreditState?.lastAppliedAmount ?? 0,
-            lastAppliedAt: loadedCreditState?.lastAppliedAt ?? null,
-            availableCredit: analysis.availableCredit,
+            ...currentCreditState, // Includes appliedCredit, lastAppliedAmount, lastAppliedAt
+            availableCredit: analysis.availableCredit, // Sync available credit
           },
-          connectionStatus: { isConnected: true, error: null }, // Assume connected
-          appStatus: "idle", // Set idle on success
+          connectionStatus: { isConnected: true, error: null },
+          appStatus: "idle",
         });
+         // *** === FIX END === ***
         success = true;
+
       } else {
-        // This case should be covered by the 404 check, but as a fallback
         console.log(
           "loadLatestTransactions: API returned OK but no batch data."
         );
+        const initialCreditState = await get().loadCreditState(); // Still load credit state
         set({
           hasSavedData: false,
           savedTransactions: null,
           transactions: [],
           impactAnalysis: null,
+          creditState: initialCreditState ?? {
+             availableCredit: 0, appliedCredit: 0, lastAppliedAmount: 0, lastAppliedAt: null
+          },
           appStatus: "idle",
         });
         success = false;
       }
     } catch (error) {
       console.error("❌ loadLatestTransactions Error:", error);
+      // Attempt to load credit state even on error to avoid inconsistent state
+      const fallbackCreditState = await get().loadCreditState().catch(() => get().creditState);
       set((state) => ({
         appStatus: "error",
         connectionStatus: {
@@ -958,8 +991,14 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         },
         hasSavedData: false,
         savedTransactions: null,
+        creditState: fallbackCreditState ?? state.creditState // Keep existing/fallback credit state
       }));
       success = false;
+    } finally {
+        // Ensure status returns to idle/error correctly
+        if (get().appStatus === 'loading_latest') {
+            set({ appStatus: success ? 'idle' : 'error' });
+        }
     }
     return success;
   },

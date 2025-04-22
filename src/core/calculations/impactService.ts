@@ -55,7 +55,7 @@ export const calculationService = {
       if (!transactions || transactions.length === 0) return {};
 
       // Define categories - ensure these match categories used in analysis/data
-      const categories = ["Environment", "Labor Ethics", "Animal Welfare", "Political Ethics", "Transparency"];
+      const categories = ["Environment", "Labor Ethics", "Animal Welfare", "Political Ethics", "Transparency", "Digital Rights", "Community Support"];
       const categoryValues: Record<string, { positiveImpact: number; negativeImpact: number; totalSpent: number; transactionIds: Set<string> }> = {};
 
       // Initialize structure for each category

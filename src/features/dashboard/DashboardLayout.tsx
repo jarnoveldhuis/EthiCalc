@@ -41,7 +41,7 @@ export function DashboardLayout({
     <div className="min-h-screen"> {/* Removed bg-gray-100, uses CSS var */}
       {/* Header - Apply dynamic inline style for background */}
       <header
-        className="border-b border-[var(--border-color)] shadow-sm sticky top-0 z-10 transition-colors duration-300 ease-in-out" // Added transition
+        className="border-b border-[var(--border-color)] shadow-sm sticky top-0 z-30 transition-colors duration-300 ease-in-out" // Increased z-index
         style={{ backgroundColor: headerBackgroundColor }} // <-- Apply dynamic background color
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
