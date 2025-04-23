@@ -1,14 +1,15 @@
 // src/store/transactionStore.ts
 import { create } from "zustand";
-import { Transaction, Charity } from "@/shared/types/transactions";
-import { VendorAnalysis } from "@/shared/types/vendors";
+// Import updated Transaction and Citation types
+import { Transaction, Charity, Citation } from "@/shared/types/transactions";
+import { VendorAnalysis } from "@/shared/types/vendors"; // Uses updated VendorAnalysis type
 import { ImpactAnalysis } from "@/core/calculations/type";
 import { calculationService } from "@/core/calculations/impactService";
 import { User } from "firebase/auth";
-import { auth } from "@/core/firebase/firebase"; // Make sure auth is imported for getIdToken
+import { auth } from "@/core/firebase/firebase";
 import { Timestamp, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/core/firebase/firebase";
-import { config } from '@/config'; // <-- ADDED IMPORT
+import { config } from "@/config";
 import {
   mapPlaidTransactions,
   mergeTransactions,
@@ -17,22 +18,20 @@ import {
   getVendorAnalysis,
   saveVendorAnalysis,
   normalizeVendorName,
-} from "@/features/vendors/vendorStorageService";
+} from "@/features/vendors/vendorStorageService"; // Uses updated VendorAnalysis type
 
 // --- Interface Definitions ---
-
-// Application Status Type
 export type AppStatus =
   | "idle"
   | "initializing"
-  | "connecting_bank" // Status while exchanging token
-  | "fetching_plaid" // Status while fetching transactions from Plaid API
-  | "analyzing" // Status while calling the analysis LLM API
-  | "saving_batch" // Status while saving batch to Firestore
-  | "saving_cache" // Status while saving vendor analysis to cache
-  | "applying_credit" // Status while applying credit in Firestore
-  | "loading_latest" // Status while loading latest batch from Firestore
-  | "loading_credit_state" // Status while loading credit state from Firestore
+  | "connecting_bank"
+  | "fetching_plaid"
+  | "analyzing"
+  | "saving_batch"
+  | "saving_cache"
+  | "applying_credit"
+  | "loading_latest"
+  | "loading_credit_state"
   | "error";
 
 interface BankConnectionStatus {
@@ -50,6 +49,7 @@ interface StoredTokenInfo {
   userId: string;
   timestamp: number;
 }
+// Use updated Transaction type internally for consistency
 interface ApiAnalysisResultItem {
   plaidTransactionId?: string;
   societalDebt?: number;
@@ -61,21 +61,24 @@ interface ApiAnalysisResultItem {
   practiceCategories?: Record<string, string>;
   charities?: Record<string, Charity>;
   information?: Record<string, string>;
-  citations?: Record<string, string[]>;
+  // Expects the new structure from the API/Zod validation
+  citations?: Record<string, Citation[]>;
   name?: string;
 }
 interface ApiAnalysisResponse {
+  // API response structure uses the new citations format
   transactions: ApiAnalysisResultItem[];
   error?: string;
 }
 
 export interface TransactionState {
+  // Uses updated Transaction type
   transactions: Transaction[];
   savedTransactions: Transaction[] | null;
   impactAnalysis: ImpactAnalysis | null;
   connectionStatus: BankConnectionStatus;
   creditState: CreditState;
-  appStatus: AppStatus; // Central status indicator
+  appStatus: AppStatus;
   hasSavedData: boolean;
 
   // Actions
@@ -85,23 +88,21 @@ export interface TransactionState {
   fetchTransactions: (accessToken?: string) => Promise<void>;
   manuallyFetchTransactions: () => Promise<void>;
   analyzeAndCacheTransactions: (
-    rawTransactions: Transaction[]
+    rawTransactions: Transaction[] // Expects updated Transaction type
   ) => Promise<void>;
   saveTransactionBatch: (
-    // Renamed from internal save function concept
-    transactions: Transaction[],
+    transactions: Transaction[], // Expects updated Transaction type
     totalNegativeDebt: number
-    // userId is now derived from auth state
   ) => Promise<void>;
-  applyCredit: (amount: number) => Promise<boolean>; // userId derived from auth state
-  loadLatestTransactions: () => Promise<boolean>; // userId derived from auth state
-  loadCreditState: () => Promise<CreditState | null>; // userId derived from auth state
+  applyCredit: (amount: number) => Promise<boolean>;
+  loadLatestTransactions: () => Promise<boolean>;
+  loadCreditState: () => Promise<CreditState | null>;
   resetState: () => void;
   initializeStore: (user: User | null) => Promise<void>;
 }
 // --- End Interface Definitions ---
 
-// --- Helper Functions ---
+// --- Helper Functions (Unchanged) ---
 function getTransactionIdentifier(transaction: Transaction): string | null {
   const plaidId = transaction.plaidTransactionId;
   if (plaidId) return `plaid-${plaidId}`;
@@ -115,8 +116,6 @@ function getTransactionIdentifier(transaction: Transaction): string | null {
       .toUpperCase()}-${transaction.amount.toFixed(2)}`;
   return null;
 }
-
-// Sanitization function (keep as is)
 function sanitizeDataForFirestore<T>(data: T): T | null {
   if (data === undefined) return null;
   if (data === null || typeof data !== "object") return data;
@@ -133,13 +132,11 @@ function sanitizeDataForFirestore<T>(data: T): T | null {
   }
   return sanitizedObject as T;
 }
-
-// Helper to get Auth Token
 const getAuthHeader = async (): Promise<HeadersInit | null> => {
   const currentUser = auth.currentUser;
   if (!currentUser) {
     console.warn("getAuthHeader: No current user found.");
-    return null; // Or throw an error depending on expected usage
+    return null;
   }
   try {
     const token = await currentUser.getIdToken();
@@ -149,19 +146,18 @@ const getAuthHeader = async (): Promise<HeadersInit | null> => {
     }
     return {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json", // Keep content type here
+      "Content-Type": "application/json",
     };
   } catch (error) {
     console.error("getAuthHeader: Error getting ID token:", error);
-    // Handle error appropriately - maybe trigger logout or show error
-    // For now, return null or throw
-    return null; // Indicate failure
+    return null;
   }
 };
+// --- End Helper Functions ---
 
 // --- Store Implementation ---
 export const useTransactionStore = create<TransactionState>((set, get) => ({
-  // --- Initial State (Unchanged from previous refactor) ---
+  // --- Initial State ---
   transactions: [],
   savedTransactions: null,
   impactAnalysis: null,
@@ -175,9 +171,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   appStatus: "idle",
   hasSavedData: false,
 
-  // --- Actions (Updated for Auth Headers) ---
+  // --- Actions ---
 
   setTransactions: (transactions) => {
+    // Ensure input matches the updated Transaction type if necessary
     const currentAppliedCredit = get().creditState.appliedCredit;
     const analysis = calculationService.calculateImpactAnalysis(
       transactions,
@@ -193,7 +190,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     });
   },
 
-  // connectBank needs Auth Header for the exchange_token call
+  // connectBank, disconnectBank, fetchTransactions, manuallyFetchTransactions
+  // (No direct changes needed here as they rely on types passed to other functions)
   connectBank: async (publicToken, user) => {
     const { appStatus } = get();
     if (!user || (appStatus !== "idle" && appStatus !== "error")) {
@@ -201,16 +199,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       return;
     }
     set({
-      appStatus: "connecting_bank", // Set busy status for token exchange
+      appStatus: "connecting_bank",
       connectionStatus: { isConnected: false, error: null },
     });
-    let exchangedToken: string | null = null; // Hold the token temporarily
+    let exchangedToken: string | null = null;
     try {
       const authHeaders = await getAuthHeader();
       if (!authHeaders) {
         throw new Error("User not authenticated for token exchange.");
       }
-
       const apiUrl = "/api/banking/exchange_token";
       const requestOptions: RequestInit = {
         method: "POST",
@@ -224,9 +221,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           data.error || `Token exchange failed (${response.status})`
         );
       }
-
-      exchangedToken = data.access_token; // Store token
-
+      exchangedToken = data.access_token;
       const tokenInfo: StoredTokenInfo = {
         token: exchangedToken!,
         userId: user.uid,
@@ -236,42 +231,33 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         "plaid_access_token_info",
         JSON.stringify(tokenInfo)
       );
-
-      // --- FIX START ---
-      // Update connection status AND reset appStatus BEFORE calling fetchTransactions
       set((state) => ({
-        connectionStatus: { ...state.connectionStatus, isConnected: true, error: null },
-        appStatus: "idle", // Reset to idle, allowing fetchTransactions to run
+        connectionStatus: {
+          ...state.connectionStatus,
+          isConnected: true,
+          error: null,
+        },
+        appStatus: "idle",
       }));
-      // --- FIX END ---
-
-
       try {
         sessionStorage.removeItem("wasManuallyDisconnected");
       } catch (e) {
-        console.error("Failed removing session storage item:", e);
+        console.error(e);
       }
-
       console.log("connectBank: Token exchanged, calling fetchTransactions...");
-      // --- FIX START ---
-      // Use nullish coalescing operator (??) to pass undefined if exchangedToken is null
       await get().fetchTransactions(exchangedToken ?? undefined);
-      // --- FIX END --
-
     } catch (error) {
       console.error("Error connecting bank:", error);
       set({
-        appStatus: "error", // Set error status
+        appStatus: "error",
         connectionStatus: {
-          isConnected: false, // Ensure connection is marked false on error
+          isConnected: false,
           error:
             error instanceof Error ? error.message : "Failed to connect bank",
         },
       });
     }
-    // No finally block needed to manage appStatus here
   },
-
   resetState: () => {
     console.log("resetState: Triggered.");
     try {
@@ -302,8 +288,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   disconnectBank: () => {
     get().resetState();
   },
-
-  // fetchTransactions needs Auth Header
   fetchTransactions: async (accessToken) => {
     const { appStatus } = get();
     if (
@@ -323,13 +307,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     let tokenToUse: string | null = accessToken || null;
     const currentUserId = auth.currentUser?.uid;
     try {
-      // *** ADD AUTH HEADER ***
       const authHeaders = await getAuthHeader();
       if (!authHeaders) {
         throw new Error("User not authenticated for fetching transactions.");
       }
-
-      // Get Plaid access token (logic remains the same)
       if (!tokenToUse) {
         const storedData = localStorage.getItem("plaid_access_token_info");
         if (!storedData) throw new Error("No access token available");
@@ -347,17 +328,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         }
       }
       if (!tokenToUse) throw new Error("Access token missing after checks.");
-
       console.log("fetchTransactions: Fetching raw transactions via API...");
       const response = await fetch("/api/banking/transactions", {
         method: "POST",
-        headers: authHeaders, // Use fetched auth headers
-        body: JSON.stringify({ access_token: tokenToUse }), // Plaid token in body
+        headers: authHeaders,
+        body: JSON.stringify({ access_token: tokenToUse }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         if (errorData.error?.includes("ITEM_LOGIN_REQUIRED")) {
-          // Check error message
           get().resetState();
           throw new Error("Bank connection expired. Please reconnect.");
         }
@@ -371,7 +350,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const mappedTransactions = mapPlaidTransactions(rawPlaidTransactions);
       if (!Array.isArray(mappedTransactions))
         throw new Error("Invalid mapped transaction data format");
-
       set((state) => ({
         connectionStatus: {
           ...state.connectionStatus,
@@ -380,6 +358,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             mappedTransactions.length === 0 ? "No transactions found" : null,
         },
       }));
+      // Pass mapped transactions (which conform to base Transaction type initially)
       await get().analyzeAndCacheTransactions(mappedTransactions);
     } catch (error) {
       console.error("Error in fetchTransactions:", error);
@@ -402,8 +381,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }));
     }
   },
-
-  // manuallyFetchTransactions uses fetchTransactions, which now includes auth
   manuallyFetchTransactions: async () => {
     const { appStatus } = get();
     if (appStatus !== "idle" && appStatus !== "error") return;
@@ -415,8 +392,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
 
-  // analyzeAndCacheTransactions needs Auth Header for the /api/analysis call
+  // analyzeAndCacheTransactions needs to handle the updated Transaction type
   analyzeAndCacheTransactions: async (incomingTransactions) => {
+    // ... (Initial checks and status setting remain the same) ...
     const { appStatus } = get();
     if (
       appStatus !== "fetching_plaid" &&
@@ -444,7 +422,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       });
       return;
     }
-
     set({
       appStatus: "analyzing",
       connectionStatus: { ...get().connectionStatus, error: null },
@@ -463,17 +440,18 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const transactionsFromCache: Transaction[] = [];
     const alreadyAnalyzed: Transaction[] = [];
 
-    // Cache Lookup (logic remains the same)
+    // Cache Lookup
     const cacheLookupPromises = transactionsToProcess
       .filter((tx) => !tx.analyzed)
       .map(async (tx) => {
-        /* ... as before ... */
         const vendorName = tx.name;
         const normalizedName = normalizeVendorName(vendorName);
         if (normalizedName !== "unknown_vendor") {
           try {
-            const d = await getVendorAnalysis(normalizedName);
-            return { tx, cachedData: d };
+            // getVendorAnalysis returns VendorAnalysis | null
+            // VendorAnalysis now uses Citation[] for citations
+            const cachedData = await getVendorAnalysis(normalizedName);
+            return { tx, cachedData };
           } catch (e) {
             console.error(e);
             return { tx, cachedData: null };
@@ -481,15 +459,19 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         }
         return { tx, cachedData: null };
       });
+
     const cacheResults = await Promise.all(cacheLookupPromises);
     const transactionsById = new Map(
       transactionsToProcess.map((tx) => [getTransactionIdentifier(tx), tx])
     );
+
+    // Process cache results
     cacheResults.forEach(({ tx, cachedData }) => {
-      /* ... as before ... */
       const txId = getTransactionIdentifier(tx);
       if (!txId) return;
       if (cachedData) {
+        // cachedData is VendorAnalysis | null
+        // Construct transaction using data from cache, ensuring citations match Transaction type
         const uTx: Transaction = {
           ...tx,
           analyzed: true,
@@ -499,13 +481,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           practiceSearchTerms: cachedData.practiceSearchTerms || {},
           practiceCategories: cachedData.practiceCategories || {},
           information: cachedData.information || {},
-          citations:
-            typeof cachedData.citations === "object"
-              ? Object.entries(cachedData.citations).reduce((a, [k, v]) => {
-                  a[k] = Array.isArray(v) ? v : [String(v)];
-                  return a;
-                }, {} as Record<string, string[]>)
-              : {},
+          // *** Ensure cached citations (Citation[]) are assigned correctly ***
+          citations: cachedData.citations || {}, // Assign directly as type matches
         };
         transactionsFromCache.push(uTx);
         transactionsById.set(txId, uTx);
@@ -513,8 +490,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         transactionsForApi.push(tx);
       }
     });
+
+    // Collect already analyzed transactions (logic remains same)
     transactionsToProcess.forEach((tx) => {
-      /* ... as before ... */
       const txId = getTransactionIdentifier(tx);
       if (tx.analyzed && txId && !transactionsById.get(txId)?.analyzed) {
         alreadyAnalyzed.push(tx);
@@ -532,12 +510,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     let apiAnalyzedResults: Transaction[] = [];
     let analysisError: Error | null = null;
+
     try {
+      // Call analysis API if needed
       if (transactionsForApi.length > 0) {
         console.log(
           `Analyze: Calling API for ${transactionsForApi.length} txs...`
         );
-        // *** ADD AUTH HEADER ***
         const authHeaders = await getAuthHeader();
         if (!authHeaders) {
           throw new Error("User not authenticated for analysis.");
@@ -545,14 +524,14 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
         const response = await fetch("/api/analysis", {
           method: "POST",
-          headers: authHeaders, // Use fetched auth headers
+          headers: authHeaders,
           body: JSON.stringify({ transactions: transactionsForApi }),
         });
-        // ... rest of API handling as before ...
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.error || `API Error: ${response.status}`);
         }
+        // analysisResponse type uses ApiAnalysisResponse which expects new citation format
         const analysisResponse = (await response.json()) as ApiAnalysisResponse;
         if (
           !analysisResponse ||
@@ -560,21 +539,27 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         ) {
           throw new Error("Invalid API response format");
         }
+
+        // Map API results
         const openAiResultsMap = new Map<string, ApiAnalysisResultItem>();
-        analysisResponse.transactions.forEach((aTx: ApiAnalysisResultItem) => {
+        analysisResponse.transactions.forEach((aTx) => {
+          // aTx type uses ApiAnalysisResultItem
           if (aTx.plaidTransactionId) {
             openAiResultsMap.set(aTx.plaidTransactionId, aTx);
           } else {
             console.warn("API result missing plaidTransactionId:", aTx);
           }
         });
+
         set({ appStatus: "saving_cache" });
         const cacheSavePromises: Promise<void>[] = [];
+
+        // Process API results and prepare for cache saving
         apiAnalyzedResults = transactionsForApi.map((oTx) => {
-          /* ... cache saving logic as before ... */
           const oId = oTx.plaidTransactionId;
           if (oId && openAiResultsMap.has(oId)) {
-            const aVer = openAiResultsMap.get(oId)!;
+            const aVer = openAiResultsMap.get(oId)!; // aVer is ApiAnalysisResultItem
+            // Construct final transaction, ensuring citations match Transaction type
             const fTx: Transaction = {
               ...oTx,
               analyzed: true,
@@ -587,51 +572,57 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
               practiceCategories: aVer.practiceCategories || {},
               charities: aVer.charities || {},
               information: aVer.information || {},
-              citations:
-                typeof aVer.citations === "object"
-                  ? Object.entries(aVer.citations).reduce((a, [k, v]) => {
-                      a[k] = Array.isArray(v) ? v : [String(v)];
-                      return a;
-                    }, {} as Record<string, string[]>)
-                  : {},
+              // *** Assign citations correctly (aVer.citations is Record<string, Citation[]>) ***
+              citations: aVer.citations || {}, // Direct assignment as type matches
             };
+
+            // Prepare data for vendor cache (VendorAnalysis type uses Citation[])
             const vName = oTx.name;
             const nName = normalizeVendorName(vName);
             if (nName !== "unknown_vendor") {
+              // vData needs to match Omit<VendorAnalysis, 'analyzedAt'>
               const vData: Omit<VendorAnalysis, "analyzedAt"> = {
                 originalName: vName,
-                // --- MODIFIED LINE ---
-                analysisSource: config.analysisProvider as 'openai' | 'gemini',
-                // --- END MODIFIED LINE ---
+                analysisSource: config.analysisProvider as "openai" | "gemini",
                 unethicalPractices: fTx.unethicalPractices,
                 ethicalPractices: fTx.ethicalPractices,
                 practiceWeights: fTx.practiceWeights,
                 practiceSearchTerms: fTx.practiceSearchTerms,
                 practiceCategories: fTx.practiceCategories,
                 information: fTx.information,
-                citations: fTx.citations,
+                // *** Assign citations correctly (fTx.citations is Record<string, Citation[]>) ***
+                citations: fTx.citations, // Direct assignment as type matches
               };
               cacheSavePromises.push(saveVendorAnalysis(nName, vData));
             }
-            return fTx;
+            return fTx; // fTx is of type Transaction
           }
+          // Return original transaction if no API result, ensure analyzed is boolean
           return { ...oTx, analyzed: oTx.analyzed ?? false };
         });
+
         if (cacheSavePromises.length > 0) {
           await Promise.allSettled(cacheSavePromises);
-          console.log(`Analyze: Finished saving cache.`);
+          console.log(
+            `Analyze: Finished saving ${cacheSavePromises.length} items to cache.`
+          );
         }
-      }
+      } // End if (transactionsForApi.length > 0)
 
+      // Merge all transaction sources (all should conform to Transaction type now)
       const finalTransactions = mergeTransactions(
         [...alreadyAnalyzed, ...transactionsFromCache],
         apiAnalyzedResults
       );
+
+      // Recalculate impact using final list
       const currentCreditState = get().creditState;
       const finalImpact = calculationService.calculateImpactAnalysis(
         finalTransactions,
         currentCreditState.appliedCredit
       );
+
+      // Update state
       set({
         transactions: finalTransactions,
         savedTransactions: finalTransactions,
@@ -644,13 +635,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         connectionStatus: { ...get().connectionStatus, error: null },
       });
       console.log("Analyze: Complete, state updated.");
+
       // Trigger background save
       if (finalTransactions.length > 0) {
         get()
-          .saveTransactionBatch(finalTransactions, finalImpact.negativeImpact) // userId is handled internally now
+          .saveTransactionBatch(finalTransactions, finalImpact.negativeImpact)
           .catch((err) => console.error("Failed to save batch:", err));
       }
     } catch (error) {
+      // ... (Error handling remains the same) ...
       analysisError = error instanceof Error ? error : new Error(String(error));
       console.error("Error during analysis orchestration:", analysisError);
       set({
@@ -661,6 +654,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         },
       });
     } finally {
+      // ... (Final status setting remains the same) ...
       const finalStatus = get().appStatus;
       if (finalStatus === "saving_cache" || finalStatus === "analyzing") {
         set({ appStatus: analysisError ? "error" : "idle" });
@@ -668,8 +662,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
 
-  // saveTransactionBatch needs Auth Header
+  // saveTransactionBatch needs to send data conforming to the updated Transaction type
   saveTransactionBatch: async (transactionsToSave, totalNegativeDebt) => {
+    // ... (Initial checks, auth header logic remain the same) ...
     const { appStatus } = get();
     if (
       appStatus !== "idle" &&
@@ -681,62 +676,62 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (!transactionsToSave || transactionsToSave.length === 0) {
       return;
     }
-    const currentUser = auth.currentUser; // Get current user
+    const currentUser = auth.currentUser;
     if (!currentUser) {
       console.error("Save Batch Error: User not logged in.");
       return;
     }
-
     set({ appStatus: "saving_batch" });
+
     try {
-      // *** ADD AUTH HEADER ***
       const authHeaders = await getAuthHeader();
       if (!authHeaders) {
         throw new Error("User not authenticated for saving batch.");
       }
 
+      // Ensure transactions being saved conform to the updated Transaction type
       const finalizedTransactions = transactionsToSave.map((tx) => ({
         ...tx,
         analyzed: tx.analyzed ?? true,
+        // Ensure citations structure is correct here if needed, though it should be already
+        citations: tx.citations || {}, // Make sure it's the correct Citation[] structure
       }));
-      // Prepare data WITHOUT userId, as it's handled server-side now
+
+      // Prepare payload - finalizedTransactions now uses updated Transaction type
       const batchPayload = {
         analyzedData: {
-          transactions: finalizedTransactions,
+          transactions: finalizedTransactions, // This array now uses the correct type
           totalSocietalDebt: totalNegativeDebt ?? 0,
           debtPercentage: calculationService.calculateDebtPercentage(
             finalizedTransactions
-          ), // Recalculate here
-          // Include impact analysis totals if needed by the save logic/service
+          ),
           totalPositiveImpact: calculationService.calculatePositiveImpact(
             finalizedTransactions
           ),
-          totalNegativeImpact: totalNegativeDebt ?? 0, // Use provided neg impact
+          totalNegativeImpact: totalNegativeDebt ?? 0,
         },
-        // accessToken?: string; // Include if needed
       };
 
       console.log(
         `saveTransactionBatch: Calling API /api/transactions/save for user ${currentUser.uid}...`
       );
       const response = await fetch("/api/transactions/save", {
-        // Use the new route
         method: "POST",
-        headers: authHeaders, // Use fetched auth headers
+        headers: authHeaders,
         body: JSON.stringify(batchPayload),
       });
-
+      // ... (Rest of response handling remains the same) ...
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
           errorData.error || `Save Batch API Error: ${response.status}`
         );
       }
-
       const result = await response.json();
       set({ hasSavedData: true });
       console.log(`saveTransactionBatch: Saved batch via API. Result:`, result);
     } catch (error) {
+      // ... (Error handling remains the same) ...
       console.error("Error saving batch via API:", error);
       set((state) => ({
         appStatus: "error",
@@ -746,32 +741,23 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         },
       }));
     } finally {
+      // ... (Final status setting remains the same) ...
       if (get().appStatus === "saving_batch") {
         set({ appStatus: "idle" });
       }
     }
   },
 
-  // applyCredit updates Firestore directly, no API call needed IF rules allow client writes
-  // However, for consistency and better security/validation, an API endpoint is preferred.
-  // Let's assume direct write for now as implemented, but flag for potential refactor.
+  // applyCredit, loadLatestTransactions, loadCreditState, initializeStore
+  // (Should be okay as they rely on types or functions that now use updated types)
   applyCredit: async (amount) => {
-    // ... (Keep existing applyCredit logic for now, which writes directly)
-    // This assumes Firestore rules allow the client to write to their own /creditState/{userId} doc.
-    // A more secure approach would be an API endpoint:
-    // 1. Client calls POST /api/credit/apply { amount: X } with Auth header
-    // 2. Server verifies auth, gets uid
-    // 3. Server reads current credit state and transactions for uid
-    // 4. Server calculates valid amount to apply
-    // 5. Server updates credit state in Firestore
-    // 6. Server responds success/fail
-    // 7. Client updates local state based on response
+    // This function primarily interacts with creditState and recalculates impact,
+    // it doesn't directly manipulate the deep structure of citations, so should be fine.
     const { impactAnalysis, creditState, appStatus, transactions } = get();
     if (appStatus !== "idle" && appStatus !== "error") return false;
     if (!impactAnalysis || amount <= 0) return false;
-    const currentUserId = auth.currentUser?.uid; // Get current user ID
+    const currentUserId = auth.currentUser?.uid;
     if (!currentUserId) return false;
-
     set({ appStatus: "applying_credit" });
     try {
       const availableFromState = Math.max(0, creditState.availableCredit);
@@ -784,12 +770,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         availableFromState,
         effectiveDebtFromAnalysis
       );
-
       if (creditToApply <= 0) {
         set({ appStatus: "idle" });
         return false;
       }
-
       const updatedCreditStateValues = {
         appliedCredit: creditState.appliedCredit + creditToApply,
         lastAppliedAmount: creditToApply,
@@ -801,7 +785,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       );
       if (!sanitizedUpdate) throw new Error("Failed to sanitize credit state");
       await setDoc(creditDocRef, sanitizedUpdate, { merge: true });
-
+      // Recalculation uses the updated Transaction[] type internally via calculationService
       const newAnalysis = calculationService.calculateImpactAnalysis(
         transactions,
         updatedCreditStateValues.appliedCredit
@@ -825,19 +809,16 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
     }
   },
-
-  // loadLatestTransactions needs Auth Header
- // src/store/transactionStore.ts
-
-  // loadLatestTransactions needs Auth Header
   loadLatestTransactions: async (): Promise<boolean> => {
-    const currentUser = auth.currentUser; // Get user from auth state
+    // This function receives Transaction data from the API, which should now conform
+    // to the updated type definition on the backend/storage service side.
+    // The recalculation within this function also uses calculationService.
+    const currentUser = auth.currentUser;
     if (!currentUser) {
       console.log("loadLatestTransactions: No user.");
       return false;
     }
     const userId = currentUser.uid;
-
     let wasManuallyDisconnected = false;
     try {
       wasManuallyDisconnected =
@@ -853,15 +834,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       });
       return false;
     }
-
     const { appStatus } = get();
-    // Allow proceeding if idle, error, or initializing (as init calls this)
-    if (appStatus !== 'idle' && appStatus !== 'error' && appStatus !== 'initializing') {
-        console.log(`loadLatestTransactions: Skipping (Status: ${appStatus})`);
-        return get().hasSavedData;
+    if (
+      appStatus !== "idle" &&
+      appStatus !== "error" &&
+      appStatus !== "initializing"
+    ) {
+      console.log(`loadLatestTransactions: Skipping (Status: ${appStatus})`);
+      return get().hasSavedData;
     }
-
-
     set({
       appStatus: "loading_latest",
       hasSavedData: false,
@@ -872,11 +853,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     try {
       const authHeaders = await getAuthHeader();
       if (!authHeaders) {
-        throw new Error(
-          "User not authenticated for loading latest transactions."
-        );
+        throw new Error("User not authenticated.");
       }
-
       console.log(
         `loadLatestTransactions: Calling API /api/transactions/latest for user ${userId}...`
       );
@@ -884,93 +862,89 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         method: "GET",
         headers: authHeaders,
       });
-
       if (response.status === 404) {
         console.log("loadLatestTransactions: No data found (404).");
-        // *** Ensure credit state is also cleared/reset if no data ***
-        const initialCreditState = await get().loadCreditState(); // Load/init credit state
+        const initialCreditState = await get().loadCreditState();
         set({
           hasSavedData: false,
           savedTransactions: null,
           transactions: [],
           impactAnalysis: null,
-          // Ensure credit state reflects reality (likely 0 applied if no history)
           creditState: initialCreditState ?? {
-             availableCredit: 0, appliedCredit: 0, lastAppliedAmount: 0, lastAppliedAt: null
+            availableCredit: 0,
+            appliedCredit: 0,
+            lastAppliedAmount: 0,
+            lastAppliedAt: null,
           },
           appStatus: "idle",
         });
         success = false;
         return success;
       }
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
           errorData.error || `Load Latest API Error: ${response.status}`
         );
       }
-
       const data = await response.json();
       const batch = data.batch;
-
       if (batch && batch.transactions) {
+        // Assuming backend returns transactions matching the NEW Transaction type
         const loadedTransactions = (batch.transactions as Transaction[]).map(
           (tx) => ({ ...tx, analyzed: tx.analyzed ?? true })
         );
         if (!Array.isArray(loadedTransactions))
           throw new Error("Invalid data format in loaded batch");
-
-        // *** === FIX START === ***
-        // Explicitly await loading the credit state *after* getting transactions
-        // but *before* calculating final impact and setting state.
-        console.log("loadLatestTransactions: Transactions loaded, now loading credit state...");
-        const loadedCreditState = await get().loadCreditState(); // This function now handles its own status updates
-
-        // Ensure we have a valid credit state, default if needed
+        console.log(
+          "loadLatestTransactions: Transactions loaded, now loading credit state..."
+        );
+        const loadedCreditState = await get().loadCreditState();
         const currentCreditState = loadedCreditState ?? {
-            availableCredit: 0, appliedCredit: 0, lastAppliedAmount: 0, lastAppliedAt: null
+          availableCredit: 0,
+          appliedCredit: 0,
+          lastAppliedAmount: 0,
+          lastAppliedAt: null,
         };
         const currentAppliedCredit = currentCreditState.appliedCredit;
-
-        console.log(`loadLatestTransactions: Credit state loaded. Applied: ${currentAppliedCredit}. Calculating final impact...`);
-
-        // Calculate impact using the fresh transactions AND the freshly loaded applied credit
+        console.log(
+          `loadLatestTransactions: Credit state loaded. Applied: ${currentAppliedCredit}. Calculating final impact...`
+        );
         const analysis = calculationService.calculateImpactAnalysis(
           loadedTransactions,
           currentAppliedCredit
         );
-
-        console.log("loadLatestTransactions: Final impact calculated. Setting state...");
-        // Now set the final state using the fresh data
+        console.log(
+          "loadLatestTransactions: Final impact calculated. Setting state..."
+        );
         set({
           transactions: loadedTransactions,
           savedTransactions: loadedTransactions,
-          impactAnalysis: analysis, // Uses fresh appliedCredit
+          impactAnalysis: analysis,
           hasSavedData: true,
-          // Use the freshly loaded credit state, ensuring availableCredit matches analysis
           creditState: {
-            ...currentCreditState, // Includes appliedCredit, lastAppliedAmount, lastAppliedAt
-            availableCredit: analysis.availableCredit, // Sync available credit
+            ...currentCreditState,
+            availableCredit: analysis.availableCredit,
           },
           connectionStatus: { isConnected: true, error: null },
           appStatus: "idle",
         });
-         // *** === FIX END === ***
         success = true;
-
       } else {
         console.log(
           "loadLatestTransactions: API returned OK but no batch data."
         );
-        const initialCreditState = await get().loadCreditState(); // Still load credit state
+        const initialCreditState = await get().loadCreditState();
         set({
           hasSavedData: false,
           savedTransactions: null,
           transactions: [],
           impactAnalysis: null,
           creditState: initialCreditState ?? {
-             availableCredit: 0, appliedCredit: 0, lastAppliedAmount: 0, lastAppliedAt: null
+            availableCredit: 0,
+            appliedCredit: 0,
+            lastAppliedAmount: 0,
+            lastAppliedAt: null,
           },
           appStatus: "idle",
         });
@@ -978,8 +952,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
     } catch (error) {
       console.error("❌ loadLatestTransactions Error:", error);
-      // Attempt to load credit state even on error to avoid inconsistent state
-      const fallbackCreditState = await get().loadCreditState().catch(() => get().creditState);
+      const fallbackCreditState = await get()
+        .loadCreditState()
+        .catch(() => get().creditState);
       set((state) => ({
         appStatus: "error",
         connectionStatus: {
@@ -991,27 +966,24 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         },
         hasSavedData: false,
         savedTransactions: null,
-        creditState: fallbackCreditState ?? state.creditState // Keep existing/fallback credit state
+        creditState: fallbackCreditState ?? state.creditState,
       }));
       success = false;
     } finally {
-        // Ensure status returns to idle/error correctly
-        if (get().appStatus === 'loading_latest') {
-            set({ appStatus: success ? 'idle' : 'error' });
-        }
+      if (get().appStatus === "loading_latest") {
+        set({ appStatus: success ? "idle" : "error" });
+      }
     }
     return success;
   },
-
-  // loadCreditState uses user ID internally now
   loadCreditState: async (): Promise<CreditState | null> => {
-    const currentUser = auth.currentUser; // Get current user
+    // This function recalculates impact based on current transactions, which now use the updated type.
+    const currentUser = auth.currentUser;
     if (!currentUser) {
       console.warn("loadCreditState: No user logged in.");
       return get().creditState;
     }
     const userId = currentUser.uid;
-
     const { appStatus } = get();
     if (
       appStatus !== "idle" &&
@@ -1020,7 +992,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     ) {
       return get().creditState;
     }
-
     set({ appStatus: "loading_credit_state" });
     let finalCreditState: CreditState | null = null;
     try {
@@ -1030,14 +1001,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         loadedLastAmount = 0,
         loadedLastAt: Timestamp | null = null;
       if (docSnap.exists()) {
-        /* ... load logic as before ... */
         const data = docSnap.data();
         loadedAppliedCredit = data.appliedCredit || 0;
         loadedLastAmount = data.lastAppliedAmount || 0;
         loadedLastAt =
           data.lastAppliedAt instanceof Timestamp ? data.lastAppliedAt : null;
       } else {
-        /* ... init logic as before ... */
         loadedLastAt = Timestamp.now();
         const init = sanitizeDataForFirestore({
           appliedCredit: 0,
@@ -1047,8 +1016,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         if (!init) throw new Error("Failed sanitize init state");
         await setDoc(creditDocRef, init);
       }
-
-      const currentTransactions = get().transactions;
+      const currentTransactions = get().transactions; // Uses updated Transaction[] type
       const analysis = calculationService.calculateImpactAnalysis(
         currentTransactions,
         loadedAppliedCredit
@@ -1077,9 +1045,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
     return finalCreditState;
   },
-
-  // initializeStore remains largely the same, but calls actions that now use auth
   initializeStore: async (user: User | null) => {
+    // Relies on loadLatestTransactions which is now corrected.
     const { appStatus } = get();
     if (!user) {
       get().resetState();
@@ -1089,14 +1056,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       console.log(`initializeStore: Skipping (Status: ${appStatus})`);
       return;
     }
-
     let wasManuallyDisconnected = false;
     try {
       wasManuallyDisconnected =
         sessionStorage.getItem("wasManuallyDisconnected") === "true";
     } catch {}
     if (wasManuallyDisconnected) {
-      /* ... handle disconnect ... */ set({
+      set({
         appStatus: "idle",
         connectionStatus: {
           isConnected: false,
@@ -1105,10 +1071,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       });
       try {
         localStorage.removeItem("plaid_access_token_info");
-      } catch (e) {console.error(e)}
+      } catch (e) {
+        console.error(e);
+      }
       return;
     }
-
     set({
       appStatus: "initializing",
       connectionStatus: { ...get().connectionStatus, error: null },
@@ -1116,16 +1083,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     console.log(`initializeStore: Starting for ${user.uid}`);
     let loadedFromFirebase = false;
     try {
-      // loadLatestTransactions now handles auth internally
-      loadedFromFirebase = await get().loadLatestTransactions(); // No userId needed
+      loadedFromFirebase = await get().loadLatestTransactions();
       console.log(
         `initializeStore: loadLatestTransactions result: ${loadedFromFirebase}`
       );
-
       let hasValidStoredToken = false,
         tokenToFetch: string | null = null;
       try {
-        /* ... token check logic as before ... */
         const storedData = localStorage.getItem("plaid_access_token_info");
         if (storedData) {
           const tokenInfo = JSON.parse(storedData) as StoredTokenInfo;
@@ -1140,9 +1104,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         localStorage.removeItem("plaid_access_token_info");
         console.error(e);
       }
-
       if (loadedFromFirebase) {
-        /* ... ensure connected status ... */
         set((state) => ({
           connectionStatus: {
             ...state.connectionStatus,
@@ -1154,9 +1116,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         console.log(
           "initializeStore: No Firebase data, token exists. Fetching fresh..."
         );
-        await get().fetchTransactions(tokenToFetch); // fetchTransactions handles auth
+        await get().fetchTransactions(tokenToFetch);
       } else {
-        /* ... handle no data, no token ... */
         set((state) => ({
           connectionStatus: {
             ...state.connectionStatus,

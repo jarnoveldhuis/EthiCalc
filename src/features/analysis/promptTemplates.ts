@@ -1,5 +1,4 @@
-export const transactionAnalysisPrompt =
-`Objective: Evaluate the societal debt (ethical impact) of financial transactions based on the percentage of a merchant's income spent on specific practices.
+export const transactionAnalysisPrompt = `Objective: Evaluate the societal debt (ethical impact) of financial transactions based on the percentage of a merchant's income spent on specific practices.
 
 Instructions:
 * Assign "unethicalPractices" and "ethicalPractices" using relevant industry knowledge and provided benchmarks where applicable (e.g., Factory Farming: 40-90%, Labor Exploitation: 20-70%).
@@ -9,18 +8,18 @@ Instructions:
 * **REQUIRED:** Output MUST include the original "plaidTransactionId" for each transaction.
 * Provide concise "information" per practice, describing the impact and justifying the weight. Prioritize emotional resonance describing suffering caused by practice.
 * **USE SEARCH FOR VERIFICATION:** Use Google Search to find recent, reliable information and citations to support your analysis, especially regarding specific company practices and their impacts.
-* **Citations Field:** If available, provide a separate "citations" field mapping each practice name to an **ARRAY of source URL strings (string[])**.
+* **Citations Field:** If available, provide a separate "citations" field mapping each practice name to an **ARRAY of Citation Objects**. Each object MUST have a "url" (string) and SHOULD have a "title" (string, e.g., source website name).
 * **PRIORITIZE URL QUALITY & RELEVANCE:**
     * Only include citation URLs that are **valid, publicly accessible, directly relevant** to the specific practice and merchant, and ideally published within the **last 2-3 years**.
     * URLs MUST be from **independent, reliable sources** (reputable news, watchdog groups, government agencies, academic research).
     * **DO NOT cite the vendor's own website**, press releases, or marketing materials as primary evidence for ethical/unethical practices (citing their stated goals from official reports is okay if noted in 'information').
     * **It is better to provide an empty array [] than an irrelevant or broken link.** If no suitable citation is found for a practice, use [].
 * **ENSURE URLS ARE COMPLETE:** Double-check that any provided URL is a complete, absolute URL (e.g., "https://www.example.com/report").
-* Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate", Supports Small Business -> "local business support").
+* Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate".
 * Assign one of the following "practiceCategories" to each practice: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency, Digital Rights, Community Support.
 * **Output MUST BE ONLY strict JSON** matching the example schema below. DO NOT include any explanatory text before or after the JSON block.
 
-JSON Schema Example (Note 'citations' uses arrays):
+JSON Schema Example (Note 'citations' uses an array of objects):
 {
 "transactions": [
   {
@@ -48,7 +47,7 @@ JSON Schema Example (Note 'citations' uses arrays):
     },
     "citations": {
          "Factory Farming": [
-            "https://example-report.org/mcd-animal-welfare-2024"
+            { "url": "https://example-report.org/mcd-animal-welfare-2024", "title": "Example Report" }
          ],
          "High Emissions": []
     }
@@ -82,11 +81,11 @@ JSON Schema Example (Note 'citations' uses arrays):
     },
     "citations": {
          "Labor Exploitation": [
-             "https://news-source.com/amazon-warehouse-conditions-probe",
-             "https://labor-watchdog.org/amazon-report-2025"
+             { "url": "https://news-source.com/amazon-warehouse-conditions-probe", "title": "News Source" },
+             { "url": "https://labor-watchdog.org/amazon-report-2025", "title": "Labor Watchdog" }
          ],
          "Excessive Packaging": [
-            "https://packaging-journal.net/amazon-waste-stats"
+            { "url": "https://packaging-journal.net/amazon-waste-stats", "title": "Packaging Journal" }
          ],
          "Cloud Efficiency": []
     }

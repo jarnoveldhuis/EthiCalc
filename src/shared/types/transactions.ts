@@ -4,12 +4,30 @@ export interface Charity {
   url: string;
 }
 
+export interface Citation {
+    url: string;
+    title?: string;
+}
+
+// *** NEW: Interface for Plaid Location Object ***
+// (Define only the fields you might potentially use, or add more as needed from Plaid docs)
+export interface PlaidLocation {
+    address: string | null;
+    city: string | null;
+    region: string | null; // State or province
+    postal_code: string | null;
+    country: string | null;
+    lat: number | null;
+    lon: number | null;
+    store_number: string | null;
+}
+
 export interface Transaction {
   id?: string;
-  analyzed: boolean; // <<< CHANGED: Made required
+  analyzed: boolean;
   date: string;
   name: string;
-  merchant_name?: string; // Keep optional merchant name
+  merchant_name?: string;
   amount: number;
   societalDebt?: number;
   unethicalPractices?: string[];
@@ -20,17 +38,17 @@ export interface Transaction {
   practiceCategories?: Record<string, string>;
   charities?: Record<string, Charity>;
   information?: Record<string, string>;
-  citations?: Record<string, string[]>; // <--- Update this line
+  citations?: Record<string, Citation[]>;
 
-  // citations?: Record<string, string>;
   isCreditApplication?: boolean;
   creditApplied?: boolean;
   plaidTransactionId?: string;
   plaidCategories?: string[];
-  location?: string[];
+  // *** UPDATED: Use the specific PlaidLocation type ***
+  location?: PlaidLocation | null; // Replaced Record<string, any> | string[]
 }
 
-// Keep other interfaces (AnalyzedTransactionData, PlaidError, AnalysisRequest)
+// --- Other interfaces remain the same ---
 export interface AnalyzedTransactionData {
   transactions: Transaction[];
   totalSocietalDebt: number;
