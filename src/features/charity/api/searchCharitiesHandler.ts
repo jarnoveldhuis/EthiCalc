@@ -73,11 +73,10 @@ export async function searchCharitiesHandler(req: NextRequest) {
       return NextResponse.json({ charities: [] });
     }
 
-    console.log(`Charity search for: "${cleanQuery}"`);
 
     try {
       const apiUrl = `${config.charity.baseUrl}/search/${encodeURIComponent(cleanQuery)}?apiKey=${config.charity.apiKey}&take=10`;
-      console.log(`Calling Every.org API: ${apiUrl}`);
+
       const response = await fetch(apiUrl);
 
       if (!response.ok) {

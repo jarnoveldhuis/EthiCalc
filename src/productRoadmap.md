@@ -1,4 +1,4 @@
-**Product Roadmap: SocialBalance (Working Title: Mordebt)**
+**Product Roadmap: Value-Balance (Working Title: Mordebt)**
 
 **Overall Goal:** Create a tool that helps users understand the ethical impact of their spending, motivates them towards better decisions, and facilitates offsetting negative impact through charity, potentially creating a sustainable business if proven effective.
 

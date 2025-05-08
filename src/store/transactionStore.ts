@@ -1,14 +1,13 @@
 // src/store/transactionStore.ts
+
+// --- Base Imports ---
 import { create } from "zustand";
-// Import updated Transaction and Citation types
 import { Transaction, Charity, Citation } from "@/shared/types/transactions";
-import { VendorAnalysis } from "@/shared/types/vendors"; // Uses updated VendorAnalysis type
 import { ImpactAnalysis } from "@/core/calculations/type";
 import { calculationService } from "@/core/calculations/impactService";
 import { User } from "firebase/auth";
-import { auth } from "@/core/firebase/firebase";
+import { auth, db } from "@/core/firebase/firebase";
 import { Timestamp, doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "@/core/firebase/firebase";
 import { config } from "@/config";
 import {
   mapPlaidTransactions,
@@ -18,9 +17,21 @@ import {
   getVendorAnalysis,
   saveVendorAnalysis,
   normalizeVendorName,
-} from "@/features/vendors/vendorStorageService"; // Uses updated VendorAnalysis type
+} from "@/features/vendors/vendorStorageService";
+import { VendorAnalysis } from "@/shared/types/vendors";
+import { firebaseDebug } from "@/core/firebase/debugUtils";
 
-// --- Interface Definitions ---
+// --- Value Setting Imports ---
+import {
+  VALUE_CATEGORIES,
+  NEUTRAL_LEVEL,
+  MIN_LEVEL,
+  MAX_LEVEL,
+  TOTAL_VALUE_POINTS,
+  NEGATIVE_PRACTICE_MULTIPLIERS,
+} from "@/config/valuesConfig";
+
+// --- TYPES --- (Keep as before)
 export type AppStatus =
   | "idle"
   | "initializing"
@@ -32,8 +43,8 @@ export type AppStatus =
   | "applying_credit"
   | "loading_latest"
   | "loading_credit_state"
+  | "loading_settings"
   | "error";
-
 interface BankConnectionStatus {
   isConnected: boolean;
   error: string | null;
@@ -44,12 +55,12 @@ interface CreditState {
   lastAppliedAmount: number;
   lastAppliedAt: Timestamp | null;
 }
+export type UserValueSettings = { [categoryId: string]: number };
 interface StoredTokenInfo {
   token: string;
   userId: string;
   timestamp: number;
 }
-// Use updated Transaction type internally for consistency
 interface ApiAnalysisResultItem {
   plaidTransactionId?: string;
   societalDebt?: number;
@@ -61,18 +72,16 @@ interface ApiAnalysisResultItem {
   practiceCategories?: Record<string, string>;
   charities?: Record<string, Charity>;
   information?: Record<string, string>;
-  // Expects the new structure from the API/Zod validation
   citations?: Record<string, Citation[]>;
   name?: string;
 }
 interface ApiAnalysisResponse {
-  // API response structure uses the new citations format
   transactions: ApiAnalysisResultItem[];
   error?: string;
 }
 
+// --- MAIN STATE INTERFACE --- (Keep as before)
 export interface TransactionState {
-  // Uses updated Transaction type
   transactions: Transaction[];
   savedTransactions: Transaction[] | null;
   impactAnalysis: ImpactAnalysis | null;
@@ -80,7 +89,7 @@ export interface TransactionState {
   creditState: CreditState;
   appStatus: AppStatus;
   hasSavedData: boolean;
-
+  userValueSettings: UserValueSettings;
   // Actions
   setTransactions: (transactions: Transaction[]) => void;
   connectBank: (publicToken: string, user: User | null) => Promise<void>;
@@ -88,21 +97,25 @@ export interface TransactionState {
   fetchTransactions: (accessToken?: string) => Promise<void>;
   manuallyFetchTransactions: () => Promise<void>;
   analyzeAndCacheTransactions: (
-    rawTransactions: Transaction[] // Expects updated Transaction type
+    rawTransactions: Transaction[]
   ) => Promise<void>;
-  saveTransactionBatch: (
-    transactions: Transaction[], // Expects updated Transaction type
-    totalNegativeDebt: number
-  ) => Promise<void>;
+  saveTransactionBatch: (transactions: Transaction[]) => Promise<void>;
   applyCredit: (amount: number) => Promise<boolean>;
   loadLatestTransactions: () => Promise<boolean>;
   loadCreditState: () => Promise<CreditState | null>;
   resetState: () => void;
   initializeStore: (user: User | null) => Promise<void>;
+  initializeUserValueSettings: (userId: string) => Promise<void>;
+  updateUserValue: (
+    userId: string,
+    categoryId: string,
+    newLevel: number
+  ) => Promise<void>;
+  getUserValueMultiplier: (practiceCategoryName: string | undefined) => number;
+  resetUserValuesToDefault: (userId: string) => Promise<void>;
 }
-// --- End Interface Definitions ---
 
-// --- Helper Functions (Unchanged) ---
+// --- Helper Functions --- (Keep as before)
 function getTransactionIdentifier(transaction: Transaction): string | null {
   const plaidId = transaction.plaidTransactionId;
   if (plaidId) return `plaid-${plaidId}`;
@@ -121,13 +134,18 @@ function sanitizeDataForFirestore<T>(data: T): T | null {
   if (data === null || typeof data !== "object") return data;
   if (data instanceof Timestamp) return data;
   if (Array.isArray(data)) {
-    return data.map((item) => sanitizeDataForFirestore(item)) as T;
+    return data
+      .map((item) => sanitizeDataForFirestore(item))
+      .filter((item) => item !== undefined) as T;
   }
   const sanitizedObject: { [key: string]: unknown } = {};
   for (const key in data) {
     if (Object.prototype.hasOwnProperty.call(data, key)) {
       const value = (data as Record<string, unknown>)[key];
-      sanitizedObject[key] = sanitizeDataForFirestore(value);
+      const sanitizedValue = sanitizeDataForFirestore(value);
+      if (sanitizedValue !== undefined) {
+        sanitizedObject[key] = sanitizedValue;
+      }
     }
   }
   return sanitizedObject as T;
@@ -139,7 +157,7 @@ const getAuthHeader = async (): Promise<HeadersInit | null> => {
     return null;
   }
   try {
-    const token = await currentUser.getIdToken();
+    const token = await currentUser.getIdToken(true);
     if (!token) {
       console.warn("getAuthHeader: Failed to get ID token.");
       return null;
@@ -153,11 +171,10 @@ const getAuthHeader = async (): Promise<HeadersInit | null> => {
     return null;
   }
 };
-// --- End Helper Functions ---
 
-// --- Store Implementation ---
+// --- STORE IMPLEMENTATION ---
 export const useTransactionStore = create<TransactionState>((set, get) => ({
-  // --- Initial State ---
+  // --- Initial State --- (Keep as before)
   transactions: [],
   savedTransactions: null,
   impactAnalysis: null,
@@ -170,15 +187,21 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
   appStatus: "idle",
   hasSavedData: false,
+  userValueSettings: VALUE_CATEGORIES.reduce((acc, category) => {
+    acc[category.id] = category.defaultLevel;
+    return acc;
+  }, {} as UserValueSettings),
 
-  // --- Actions ---
+  // --- Core Actions ---
 
   setTransactions: (transactions) => {
-    // Ensure input matches the updated Transaction type if necessary
+    /* ... implementation from prev response ... */
     const currentAppliedCredit = get().creditState.appliedCredit;
+    const currentUserValueSettings = get().userValueSettings;
     const analysis = calculationService.calculateImpactAnalysis(
       transactions,
-      currentAppliedCredit
+      currentAppliedCredit,
+      currentUserValueSettings
     );
     set({
       transactions: transactions,
@@ -189,15 +212,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       },
     });
   },
-
-  // connectBank, disconnectBank, fetchTransactions, manuallyFetchTransactions
-  // (No direct changes needed here as they rely on types passed to other functions)
   connectBank: async (publicToken, user) => {
+    /* ... implementation from prev response ... */
     const { appStatus } = get();
-    if (!user || (appStatus !== "idle" && appStatus !== "error")) {
-      console.log(`connectBank: Skipping (Current Status: ${appStatus}).`);
-      return;
-    }
+    if (!user || (appStatus !== "idle" && appStatus !== "error")) return;
     set({
       appStatus: "connecting_bank",
       connectionStatus: { isConnected: false, error: null },
@@ -205,22 +223,18 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     let exchangedToken: string | null = null;
     try {
       const authHeaders = await getAuthHeader();
-      if (!authHeaders) {
+      if (!authHeaders)
         throw new Error("User not authenticated for token exchange.");
-      }
-      const apiUrl = "/api/banking/exchange_token";
-      const requestOptions: RequestInit = {
+      const response = await fetch("/api/banking/exchange_token", {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({ public_token: publicToken }),
-      };
-      const response = await fetch(apiUrl, requestOptions);
+      });
       const data = await response.json();
-      if (!response.ok || !data.access_token) {
+      if (!response.ok || !data.access_token)
         throw new Error(
           data.error || `Token exchange failed (${response.status})`
         );
-      }
       exchangedToken = data.access_token;
       const tokenInfo: StoredTokenInfo = {
         token: exchangedToken!,
@@ -244,7 +258,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       } catch (e) {
         console.error(e);
       }
-      console.log("connectBank: Token exchanged, calling fetchTransactions...");
+      console.log("connectBank: Token exchanged, fetching transactions...");
       await get().fetchTransactions(exchangedToken ?? undefined);
     } catch (error) {
       console.error("Error connecting bank:", error);
@@ -259,7 +273,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
   resetState: () => {
+    /* ... implementation from prev response ... */
     console.log("resetState: Triggered.");
+    const defaultSettings = VALUE_CATEGORIES.reduce((acc, category) => {
+      acc[category.id] = category.defaultLevel;
+      return acc;
+    }, {} as UserValueSettings);
     try {
       sessionStorage.setItem("wasManuallyDisconnected", "true");
     } catch (e) {
@@ -283,20 +302,23 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       },
       appStatus: "idle",
       hasSavedData: false,
+      userValueSettings: defaultSettings,
     });
   },
   disconnectBank: () => {
     get().resetState();
   },
+
   fetchTransactions: async (accessToken) => {
     const { appStatus } = get();
     if (
       appStatus !== "idle" &&
       appStatus !== "error" &&
-      appStatus !== "initializing"
+      appStatus !== "initializing" &&
+      appStatus !== "loading_settings"
     ) {
       console.log(
-        `fetchTransactions: Skipping (Current Status: ${appStatus}).`
+        `WorkspaceTransactions: Skipping (Current Status: ${appStatus}).`
       );
       return;
     }
@@ -308,9 +330,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const currentUserId = auth.currentUser?.uid;
     try {
       const authHeaders = await getAuthHeader();
-      if (!authHeaders) {
+      if (!authHeaders)
         throw new Error("User not authenticated for fetching transactions.");
-      }
       if (!tokenToUse) {
         const storedData = localStorage.getItem("plaid_access_token_info");
         if (!storedData) throw new Error("No access token available");
@@ -322,20 +343,36 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           }
           tokenToUse = tokenInfo.token;
         } catch (parseError) {
-          console.error(parseError);
+          // << parseError is DEFINED here
           localStorage.removeItem("plaid_access_token_info");
+          // LINT FIX: Log the parseError variable
+          console.error("Error parsing stored Plaid token:", parseError);
           throw new Error("Failed to read stored access token.");
         }
       }
       if (!tokenToUse) throw new Error("Access token missing after checks.");
-      console.log("fetchTransactions: Fetching raw transactions via API...");
+      firebaseDebug.log("PLAID_FETCH", {
+        status: "starting",
+        tokenPresent: !!tokenToUse,
+      });
       const response = await fetch("/api/banking/transactions", {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({ access_token: tokenToUse }),
       });
+      firebaseDebug.log("PLAID_FETCH", {
+        status: "response_received",
+        ok: response.ok,
+        statusCode: response.status,
+      });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        /* ... error handling ... */ const errorData = await response
+          .json()
+          .catch(() => ({}));
+        firebaseDebug.log("PLAID_FETCH", {
+          status: "error_response",
+          errorData,
+        });
         if (errorData.error?.includes("ITEM_LOGIN_REQUIRED")) {
           get().resetState();
           throw new Error("Bank connection expired. Please reconnect.");
@@ -347,6 +384,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         );
       }
       const rawPlaidTransactions = await response.json();
+      firebaseDebug.log("PLAID_FETCH", {
+        status: "data_received",
+        count: rawPlaidTransactions?.length,
+      });
       const mappedTransactions = mapPlaidTransactions(rawPlaidTransactions);
       if (!Array.isArray(mappedTransactions))
         throw new Error("Invalid mapped transaction data format");
@@ -358,10 +399,16 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             mappedTransactions.length === 0 ? "No transactions found" : null,
         },
       }));
-      // Pass mapped transactions (which conform to base Transaction type initially)
       await get().analyzeAndCacheTransactions(mappedTransactions);
     } catch (error) {
-      console.error("Error in fetchTransactions:", error);
+      /* ... error handling ... */ console.error(
+        "Error in fetchTransactions:",
+        error
+      );
+      firebaseDebug.log("PLAID_FETCH", {
+        status: "catch_error",
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error
           ? error.message
@@ -381,7 +428,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }));
     }
   },
+
   manuallyFetchTransactions: async () => {
+    /* ... implementation from prev response ... */
     const { appStatus } = get();
     if (appStatus !== "idle" && appStatus !== "error") return;
     try {
@@ -392,15 +441,20 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
 
-  // analyzeAndCacheTransactions needs to handle the updated Transaction type
   analyzeAndCacheTransactions: async (incomingTransactions) => {
-    // ... (Initial checks and status setting remain the same) ...
-    const { appStatus } = get();
+    /* ... implementation from prev response ... */
+    const {
+      appStatus,
+      savedTransactions: currentSavedTx,
+      creditState,
+      userValueSettings,
+    } = get();
     if (
       appStatus !== "fetching_plaid" &&
       appStatus !== "idle" &&
       appStatus !== "error" &&
-      appStatus !== "initializing"
+      appStatus !== "initializing" &&
+      appStatus !== "loading_settings"
     ) {
       console.log(
         `analyzeAndCacheTransactions: Skipping (Current Status: ${appStatus}).`
@@ -409,16 +463,18 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
     if (!incomingTransactions || incomingTransactions.length === 0) {
       console.log(
-        "analyzeAndCacheTransactions: No transactions. Setting idle."
+        "analyzeAndCacheTransactions: No transactions provided. Updating state."
       );
-      const currentAppliedCredit = get().creditState.appliedCredit;
+      const analysis = calculationService.calculateImpactAnalysis(
+        [],
+        creditState.appliedCredit,
+        userValueSettings
+      );
       set({
         appStatus: "idle",
         transactions: [],
-        impactAnalysis: calculationService.calculateImpactAnalysis(
-          [],
-          currentAppliedCredit
-        ),
+        savedTransactions: [],
+        impactAnalysis: analysis,
       });
       return;
     }
@@ -426,10 +482,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       appStatus: "analyzing",
       connectionStatus: { ...get().connectionStatus, error: null },
     });
-    console.log(`Analyze: Starting for ${incomingTransactions.length} txs.`);
-    const currentSavedTx = get().savedTransactions || [];
+    firebaseDebug.log("ANALYSIS", {
+      status: "starting",
+      incomingCount: incomingTransactions.length,
+    });
+    const baseTransactions = currentSavedTx || [];
     const mergedInitialTransactions = mergeTransactions(
-      currentSavedTx,
+      baseTransactions,
       incomingTransactions
     );
     const transactionsToProcess = mergedInitialTransactions.map((tx) => ({
@@ -438,41 +497,39 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }));
     const transactionsForApi: Transaction[] = [];
     const transactionsFromCache: Transaction[] = [];
-    const alreadyAnalyzed: Transaction[] = [];
-
-    // Cache Lookup
+    const processedTxMap = new Map<string | null, Transaction>(
+      transactionsToProcess
+        .filter((tx) => tx.analyzed)
+        .map((tx) => [getTransactionIdentifier(tx), tx])
+    );
+    firebaseDebug.log("ANALYSIS_CACHE", {
+      status: "starting_lookup",
+      count: transactionsToProcess.filter((tx) => !tx.analyzed).length,
+    });
     const cacheLookupPromises = transactionsToProcess
       .filter((tx) => !tx.analyzed)
       .map(async (tx) => {
-        const vendorName = tx.name;
-        const normalizedName = normalizeVendorName(vendorName);
+        const normalizedName = normalizeVendorName(tx.name);
         if (normalizedName !== "unknown_vendor") {
           try {
-            // getVendorAnalysis returns VendorAnalysis | null
-            // VendorAnalysis now uses Citation[] for citations
             const cachedData = await getVendorAnalysis(normalizedName);
             return { tx, cachedData };
           } catch (e) {
-            console.error(e);
+            console.error(`Cache lookup error for ${tx.name}:`, e);
             return { tx, cachedData: null };
           }
         }
         return { tx, cachedData: null };
       });
-
     const cacheResults = await Promise.all(cacheLookupPromises);
-    const transactionsById = new Map(
-      transactionsToProcess.map((tx) => [getTransactionIdentifier(tx), tx])
-    );
-
-    // Process cache results
+    firebaseDebug.log("ANALYSIS_CACHE", {
+      status: "lookup_complete",
+      resultsCount: cacheResults.length,
+    });
     cacheResults.forEach(({ tx, cachedData }) => {
       const txId = getTransactionIdentifier(tx);
-      if (!txId) return;
       if (cachedData) {
-        // cachedData is VendorAnalysis | null
-        // Construct transaction using data from cache, ensuring citations match Transaction type
-        const uTx: Transaction = {
+        const updatedTx: Transaction = {
           ...tx,
           analyzed: true,
           unethicalPractices: cachedData.unethicalPractices || [],
@@ -481,171 +538,162 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           practiceSearchTerms: cachedData.practiceSearchTerms || {},
           practiceCategories: cachedData.practiceCategories || {},
           information: cachedData.information || {},
-          // *** Ensure cached citations (Citation[]) are assigned correctly ***
-          citations: cachedData.citations || {}, // Assign directly as type matches
+          citations: cachedData.citations || {},
         };
-        transactionsFromCache.push(uTx);
-        transactionsById.set(txId, uTx);
+        transactionsFromCache.push(updatedTx);
+        processedTxMap.set(txId, updatedTx);
       } else {
-        transactionsForApi.push(tx);
-      }
-    });
-
-    // Collect already analyzed transactions (logic remains same)
-    transactionsToProcess.forEach((tx) => {
-      const txId = getTransactionIdentifier(tx);
-      if (tx.analyzed && txId && !transactionsById.get(txId)?.analyzed) {
-        alreadyAnalyzed.push(tx);
-      } else if (tx.analyzed && txId && transactionsById.get(txId)?.analyzed) {
-        if (
-          !alreadyAnalyzed.some((aTx) => getTransactionIdentifier(aTx) === txId)
-        ) {
-          alreadyAnalyzed.push(transactionsById.get(txId)!);
+        if (!processedTxMap.has(txId) || !processedTxMap.get(txId)?.analyzed) {
+          transactionsForApi.push(tx);
+          if (!processedTxMap.has(txId)) {
+            processedTxMap.set(txId, tx);
+          }
         }
       }
     });
-    console.log(
-      `Analyze: ${transactionsFromCache.length} cache, ${alreadyAnalyzed.length} done, ${transactionsForApi.length} API.`
-    );
-
-    let apiAnalyzedResults: Transaction[] = [];
+    firebaseDebug.log("ANALYSIS", {
+      cacheHits: transactionsFromCache.length,
+      alreadyAnalyzed: transactionsToProcess.filter((tx) => tx.analyzed).length,
+      needingApi: transactionsForApi.length,
+    });
     let analysisError: Error | null = null;
-
     try {
-      // Call analysis API if needed
       if (transactionsForApi.length > 0) {
-        console.log(
-          `Analyze: Calling API for ${transactionsForApi.length} txs...`
-        );
+        firebaseDebug.log("ANALYSIS_API", {
+          status: "calling",
+          count: transactionsForApi.length,
+        });
         const authHeaders = await getAuthHeader();
-        if (!authHeaders) {
+        if (!authHeaders)
           throw new Error("User not authenticated for analysis.");
-        }
-
         const response = await fetch("/api/analysis", {
           method: "POST",
           headers: authHeaders,
           body: JSON.stringify({ transactions: transactionsForApi }),
         });
+        firebaseDebug.log("ANALYSIS_API", {
+          status: "response_received",
+          ok: response.ok,
+          statusCode: response.status,
+        });
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `API Error: ${response.status}`);
-        }
-        // analysisResponse type uses ApiAnalysisResponse which expects new citation format
-        const analysisResponse = (await response.json()) as ApiAnalysisResponse;
-        if (
-          !analysisResponse ||
-          !Array.isArray(analysisResponse.transactions)
-        ) {
-          throw new Error("Invalid API response format");
-        }
-
-        // Map API results
-        const openAiResultsMap = new Map<string, ApiAnalysisResultItem>();
-        analysisResponse.transactions.forEach((aTx) => {
-          // aTx type uses ApiAnalysisResultItem
-          if (aTx.plaidTransactionId) {
-            openAiResultsMap.set(aTx.plaidTransactionId, aTx);
-          } else {
-            console.warn("API result missing plaidTransactionId:", aTx);
-          }
-        });
-
-        set({ appStatus: "saving_cache" });
-        const cacheSavePromises: Promise<void>[] = [];
-
-        // Process API results and prepare for cache saving
-        apiAnalyzedResults = transactionsForApi.map((oTx) => {
-          const oId = oTx.plaidTransactionId;
-          if (oId && openAiResultsMap.has(oId)) {
-            const aVer = openAiResultsMap.get(oId)!; // aVer is ApiAnalysisResultItem
-            // Construct final transaction, ensuring citations match Transaction type
-            const fTx: Transaction = {
-              ...oTx,
-              analyzed: true,
-              societalDebt: aVer.societalDebt,
-              unethicalPractices: aVer.unethicalPractices || [],
-              ethicalPractices: aVer.ethicalPractices || [],
-              practiceWeights: aVer.practiceWeights || {},
-              practiceDebts: aVer.practiceDebts || {},
-              practiceSearchTerms: aVer.practiceSearchTerms || {},
-              practiceCategories: aVer.practiceCategories || {},
-              charities: aVer.charities || {},
-              information: aVer.information || {},
-              // *** Assign citations correctly (aVer.citations is Record<string, Citation[]>) ***
-              citations: aVer.citations || {}, // Direct assignment as type matches
-            };
-
-            // Prepare data for vendor cache (VendorAnalysis type uses Citation[])
-            const vName = oTx.name;
-            const nName = normalizeVendorName(vName);
-            if (nName !== "unknown_vendor") {
-              // vData needs to match Omit<VendorAnalysis, 'analyzedAt'>
-              const vData: Omit<VendorAnalysis, "analyzedAt"> = {
-                originalName: vName,
-                analysisSource: config.analysisProvider as "openai" | "gemini",
-                unethicalPractices: fTx.unethicalPractices,
-                ethicalPractices: fTx.ethicalPractices,
-                practiceWeights: fTx.practiceWeights,
-                practiceSearchTerms: fTx.practiceSearchTerms,
-                practiceCategories: fTx.practiceCategories,
-                information: fTx.information,
-                // *** Assign citations correctly (fTx.citations is Record<string, Citation[]>) ***
-                citations: fTx.citations, // Direct assignment as type matches
-              };
-              cacheSavePromises.push(saveVendorAnalysis(nName, vData));
-            }
-            return fTx; // fTx is of type Transaction
-          }
-          // Return original transaction if no API result, ensure analyzed is boolean
-          return { ...oTx, analyzed: oTx.analyzed ?? false };
-        });
-
-        if (cacheSavePromises.length > 0) {
-          await Promise.allSettled(cacheSavePromises);
-          console.log(
-            `Analyze: Finished saving ${cacheSavePromises.length} items to cache.`
+          throw new Error(
+            errData.error || `Analysis API Error: ${response.status}`
           );
         }
-      } // End if (transactionsForApi.length > 0)
+        const analysisResponse = (await response.json()) as ApiAnalysisResponse;
+        if (!analysisResponse || !Array.isArray(analysisResponse.transactions))
+          throw new Error("Invalid API response format");
+        firebaseDebug.log("ANALYSIS_API", {
+          status: "data_received",
+          count: analysisResponse.transactions.length,
+        });
+        const openAiResultsMap = new Map<string, ApiAnalysisResultItem>();
+        analysisResponse.transactions.forEach((aTx) => {
+          if (aTx.plaidTransactionId)
+            openAiResultsMap.set(`plaid-${aTx.plaidTransactionId}`, aTx);
+        });
+        set({ appStatus: "saving_cache" });
+        // LINT FIX: Declare apiAnalyzedResults here if needed, or build finalTransactions directly
+        // Let's build finalTransactions directly to avoid the let/const issue potentially
+        // const apiAnalyzedResults: Transaction[] = []; // Not needed if directly updating map
 
-      // Merge all transaction sources (all should conform to Transaction type now)
-      const finalTransactions = mergeTransactions(
-        [...alreadyAnalyzed, ...transactionsFromCache],
-        apiAnalyzedResults
+        transactionsForApi.forEach((originalTx) => {
+          const txId = getTransactionIdentifier(originalTx);
+          const apiResult = txId ? openAiResultsMap.get(txId) : null;
+          if (txId && apiResult) {
+            const finalTx: Transaction = {
+              ...originalTx,
+              analyzed: true,
+              societalDebt: apiResult.societalDebt,
+              unethicalPractices: apiResult.unethicalPractices || [],
+              ethicalPractices: apiResult.ethicalPractices || [],
+              practiceWeights: apiResult.practiceWeights || {},
+              practiceDebts: apiResult.practiceDebts || {},
+              practiceSearchTerms: apiResult.practiceSearchTerms || {},
+              practiceCategories: apiResult.practiceCategories || {},
+              charities: apiResult.charities || {},
+              information: apiResult.information || {},
+              citations: apiResult.citations || {},
+            };
+            /* apiAnalyzedResults.push(finalTx); */ processedTxMap.set(
+              txId,
+              finalTx
+            );
+            const normName = normalizeVendorName(finalTx.name);
+            if (normName !== "unknown_vendor") {
+              const vendorData: Omit<VendorAnalysis, "analyzedAt"> = {
+                originalName: finalTx.name,
+                analysisSource: config.analysisProvider as "openai" | "gemini",
+                unethicalPractices: finalTx.unethicalPractices ?? [],
+                ethicalPractices: finalTx.ethicalPractices ?? [],
+                practiceWeights: finalTx.practiceWeights ?? {},
+                practiceSearchTerms: finalTx.practiceSearchTerms ?? {},
+                practiceCategories: finalTx.practiceCategories ?? {},
+                information: finalTx.information ?? {},
+                citations: finalTx.citations ?? {},
+              };
+              saveVendorAnalysis(normName, vendorData)
+                .then(() =>
+                  firebaseDebug.log("ANALYSIS_CACHE_SAVE", {
+                    status: "success",
+                    vendor: normName,
+                  })
+                )
+                .catch((err) =>
+                  firebaseDebug.log("ANALYSIS_CACHE_SAVE", {
+                    status: "error",
+                    vendor: normName,
+                    error: err.message,
+                  })
+                );
+            }
+          } else {
+            if (txId)
+              processedTxMap.set(txId, { ...originalTx, analyzed: false });
+          }
+        });
+      }
+      const finalTransactions = Array.from(processedTxMap.values()).sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
-
-      // Recalculate impact using final list
-      const currentCreditState = get().creditState;
+      const latestUserValueSettings = get().userValueSettings;
       const finalImpact = calculationService.calculateImpactAnalysis(
         finalTransactions,
-        currentCreditState.appliedCredit
+        creditState.appliedCredit,
+        latestUserValueSettings
       );
-
-      // Update state
       set({
         transactions: finalTransactions,
         savedTransactions: finalTransactions,
         impactAnalysis: finalImpact,
         creditState: {
-          ...currentCreditState,
+          ...creditState,
           availableCredit: finalImpact.availableCredit,
         },
         appStatus: "idle",
         connectionStatus: { ...get().connectionStatus, error: null },
+        hasSavedData: true,
       });
-      console.log("Analyze: Complete, state updated.");
-
-      // Trigger background save
+      firebaseDebug.log("ANALYSIS", {
+        status: "complete",
+        finalCount: finalTransactions.length,
+      });
       if (finalTransactions.length > 0) {
         get()
-          .saveTransactionBatch(finalTransactions, finalImpact.negativeImpact)
-          .catch((err) => console.error("Failed to save batch:", err));
+          .saveTransactionBatch(finalTransactions)
+          .catch((err) =>
+            console.error("Background saveTransactionBatch failed:", err)
+          );
       }
     } catch (error) {
-      // ... (Error handling remains the same) ...
       analysisError = error instanceof Error ? error : new Error(String(error));
       console.error("Error during analysis orchestration:", analysisError);
+      firebaseDebug.log("ANALYSIS", {
+        status: "error",
+        error: analysisError.message,
+      });
       set({
         appStatus: "error",
         connectionStatus: {
@@ -654,7 +702,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         },
       });
     } finally {
-      // ... (Final status setting remains the same) ...
       const finalStatus = get().appStatus;
       if (finalStatus === "saving_cache" || finalStatus === "analyzing") {
         set({ appStatus: analysisError ? "error" : "idle" });
@@ -662,65 +709,62 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
 
-  // saveTransactionBatch needs to send data conforming to the updated Transaction type
-  saveTransactionBatch: async (transactionsToSave, totalNegativeDebt) => {
-    // ... (Initial checks, auth header logic remain the same) ...
+  // LINT FIX: Removed unused parameter from signature
+  saveTransactionBatch: async (transactionsToSave) => {
+    /* ... implementation from prev response ... */
     const { appStatus } = get();
-    if (
-      appStatus !== "idle" &&
-      appStatus !== "error" &&
-      appStatus !== "saving_batch"
-    ) {
-      return;
-    }
-    if (!transactionsToSave || transactionsToSave.length === 0) {
-      return;
-    }
+    if (appStatus === "saving_batch") return;
+    if (!transactionsToSave || transactionsToSave.length === 0) return;
     const currentUser = auth.currentUser;
     if (!currentUser) {
       console.error("Save Batch Error: User not logged in.");
       return;
     }
     set({ appStatus: "saving_batch" });
-
+    firebaseDebug.log("SAVE_BATCH_API", {
+      status: "starting",
+      count: transactionsToSave.length,
+    });
     try {
       const authHeaders = await getAuthHeader();
-      if (!authHeaders) {
+      if (!authHeaders)
         throw new Error("User not authenticated for saving batch.");
-      }
-
-      // Ensure transactions being saved conform to the updated Transaction type
       const finalizedTransactions = transactionsToSave.map((tx) => ({
         ...tx,
         analyzed: tx.analyzed ?? true,
-        // Ensure citations structure is correct here if needed, though it should be already
-        citations: tx.citations || {}, // Make sure it's the correct Citation[] structure
       }));
-
-      // Prepare payload - finalizedTransactions now uses updated Transaction type
+      const currentUserValueSettings = get().userValueSettings;
+      const analysisForSave = calculationService.calculateImpactAnalysis(
+        finalizedTransactions,
+        get().creditState.appliedCredit,
+        currentUserValueSettings
+      );
       const batchPayload = {
         analyzedData: {
-          transactions: finalizedTransactions, // This array now uses the correct type
-          totalSocietalDebt: totalNegativeDebt ?? 0,
-          debtPercentage: calculationService.calculateDebtPercentage(
-            finalizedTransactions
-          ),
-          totalPositiveImpact: calculationService.calculatePositiveImpact(
-            finalizedTransactions
-          ),
-          totalNegativeImpact: totalNegativeDebt ?? 0,
+          transactions: finalizedTransactions,
+          totalSocietalDebt: analysisForSave.negativeImpact,
+          debtPercentage: analysisForSave.debtPercentage,
+          totalPositiveImpact: analysisForSave.positiveImpact,
+          totalNegativeImpact: analysisForSave.negativeImpact,
         },
       };
-
-      console.log(
-        `saveTransactionBatch: Calling API /api/transactions/save for user ${currentUser.uid}...`
-      );
+      const sanitizedPayload = sanitizeDataForFirestore(batchPayload);
+      if (!sanitizedPayload)
+        throw new Error("Failed to sanitize payload for Firestore.");
+      firebaseDebug.log("SAVE_BATCH_API", {
+        status: "calling",
+        userId: currentUser.uid,
+      });
       const response = await fetch("/api/transactions/save", {
         method: "POST",
         headers: authHeaders,
-        body: JSON.stringify(batchPayload),
+        body: JSON.stringify(sanitizedPayload),
       });
-      // ... (Rest of response handling remains the same) ...
+      firebaseDebug.log("SAVE_BATCH_API", {
+        status: "response_received",
+        ok: response.ok,
+        statusCode: response.status,
+      });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
@@ -729,10 +773,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
       const result = await response.json();
       set({ hasSavedData: true });
-      console.log(`saveTransactionBatch: Saved batch via API. Result:`, result);
+      firebaseDebug.log("SAVE_BATCH_API", { status: "success", result });
     } catch (error) {
-      // ... (Error handling remains the same) ...
       console.error("Error saving batch via API:", error);
+      firebaseDebug.log("SAVE_BATCH_API", {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
       set((state) => ({
         appStatus: "error",
         connectionStatus: {
@@ -741,66 +788,110 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         },
       }));
     } finally {
-      // ... (Final status setting remains the same) ...
       if (get().appStatus === "saving_batch") {
         set({ appStatus: "idle" });
       }
     }
   },
-
-  // applyCredit, loadLatestTransactions, loadCreditState, initializeStore
-  // (Should be okay as they rely on types or functions that now use updated types)
   applyCredit: async (amount) => {
-    // This function primarily interacts with creditState and recalculates impact,
-    // it doesn't directly manipulate the deep structure of citations, so should be fine.
-    const { impactAnalysis, creditState, appStatus, transactions } = get();
-    if (appStatus !== "idle" && appStatus !== "error") return false;
-    if (!impactAnalysis || amount <= 0) return false;
+    /* ... implementation from prev response ... */
+    const {
+      impactAnalysis,
+      creditState,
+      appStatus,
+      transactions,
+      userValueSettings,
+    } = get();
+    if (appStatus === "applying_credit") return false;
+    if (appStatus !== "idle" && appStatus !== "error") {
+      console.warn("Cannot apply credit while busy.");
+      return false;
+    }
+    if (!impactAnalysis || amount <= 0) {
+      console.warn("Cannot apply credit: Invalid amount or no analysis.");
+      return false;
+    }
     const currentUserId = auth.currentUser?.uid;
-    if (!currentUserId) return false;
+    if (!currentUserId) {
+      console.warn("Cannot apply credit: No user.");
+      return false;
+    }
     set({ appStatus: "applying_credit" });
+    firebaseDebug.log("APPLY_CREDIT", { status: "starting", amount });
     try {
-      const availableFromState = Math.max(0, creditState.availableCredit);
-      const effectiveDebtFromAnalysis = Math.max(
+      const currentPositiveImpact =
+        calculationService.calculatePositiveImpact(transactions);
+      const currentAvailable = Math.max(
         0,
-        impactAnalysis.effectiveDebt
+        currentPositiveImpact - creditState.appliedCredit
       );
-      const creditToApply = Math.min(
+      const valueAdjustedNegativeImpact =
+        calculationService.calculateNegativeImpact(
+          transactions,
+          userValueSettings
+        );
+      const currentEffectiveDebt = Math.max(
+        0,
+        valueAdjustedNegativeImpact - creditState.appliedCredit
+      );
+      const creditToActuallyApply = Math.min(
         amount,
-        availableFromState,
-        effectiveDebtFromAnalysis
+        currentAvailable,
+        currentEffectiveDebt
       );
-      if (creditToApply <= 0) {
+      firebaseDebug.log("APPLY_CREDIT", {
+        requested: amount,
+        available: currentAvailable,
+        effectiveDebt: currentEffectiveDebt,
+        applying: creditToActuallyApply,
+      });
+      if (creditToActuallyApply <= 0) {
+        console.log("No credit to apply or no debt to offset.");
         set({ appStatus: "idle" });
         return false;
       }
+      const updatedAppliedCredit =
+        creditState.appliedCredit + creditToActuallyApply;
       const updatedCreditStateValues = {
-        appliedCredit: creditState.appliedCredit + creditToApply,
-        lastAppliedAmount: creditToApply,
+        appliedCredit: updatedAppliedCredit,
+        lastAppliedAmount: creditToActuallyApply,
         lastAppliedAt: Timestamp.now(),
       };
       const creditDocRef = doc(db, "creditState", currentUserId);
       const sanitizedUpdate = sanitizeDataForFirestore(
         updatedCreditStateValues
       );
-      if (!sanitizedUpdate) throw new Error("Failed to sanitize credit state");
+      if (!sanitizedUpdate)
+        throw new Error("Failed to sanitize credit state update");
       await setDoc(creditDocRef, sanitizedUpdate, { merge: true });
-      // Recalculation uses the updated Transaction[] type internally via calculationService
+      firebaseDebug.log("APPLY_CREDIT", { status: "firestore_updated" });
       const newAnalysis = calculationService.calculateImpactAnalysis(
         transactions,
-        updatedCreditStateValues.appliedCredit
+        updatedAppliedCredit,
+        userValueSettings
       );
+      firebaseDebug.log("APPLY_CREDIT", {
+        status: "recalculated_impact",
+        newAnalysis,
+      });
       set({
         creditState: {
           ...creditState,
-          ...updatedCreditStateValues,
+          appliedCredit: updatedAppliedCredit,
+          lastAppliedAmount: creditToActuallyApply,
+          lastAppliedAt: updatedCreditStateValues.lastAppliedAt,
           availableCredit: newAnalysis.availableCredit,
         },
         impactAnalysis: newAnalysis,
       });
+      firebaseDebug.log("APPLY_CREDIT", { status: "success" });
       return true;
     } catch (error) {
       console.error("Error applying credit:", error);
+      firebaseDebug.log("APPLY_CREDIT", {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
       set({ appStatus: "error" });
       return false;
     } finally {
@@ -810,9 +901,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
   loadLatestTransactions: async (): Promise<boolean> => {
-    // This function receives Transaction data from the API, which should now conform
-    // to the updated type definition on the backend/storage service side.
-    // The recalculation within this function also uses calculationService.
+    /* ... implementation from prev response ... */
     const currentUser = auth.currentUser;
     if (!currentUser) {
       console.log("loadLatestTransactions: No user.");
@@ -849,33 +938,30 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       savedTransactions: null,
       connectionStatus: { ...get().connectionStatus, error: null },
     });
+    firebaseDebug.log("LOAD_LATEST", { status: "starting", userId });
     let success = false;
     try {
       const authHeaders = await getAuthHeader();
-      if (!authHeaders) {
-        throw new Error("User not authenticated.");
-      }
-      console.log(
-        `loadLatestTransactions: Calling API /api/transactions/latest for user ${userId}...`
-      );
+      if (!authHeaders) throw new Error("User not authenticated.");
       const response = await fetch("/api/transactions/latest", {
         method: "GET",
         headers: authHeaders,
       });
+      firebaseDebug.log("LOAD_LATEST", {
+        status: "response_received",
+        ok: response.ok,
+        statusCode: response.status,
+      });
       if (response.status === 404) {
         console.log("loadLatestTransactions: No data found (404).");
+        firebaseDebug.log("LOAD_LATEST", { status: "no_data_found" });
         const initialCreditState = await get().loadCreditState();
         set({
           hasSavedData: false,
           savedTransactions: null,
           transactions: [],
           impactAnalysis: null,
-          creditState: initialCreditState ?? {
-            availableCredit: 0,
-            appliedCredit: 0,
-            lastAppliedAmount: 0,
-            lastAppliedAt: null,
-          },
+          creditState: initialCreditState ?? get().creditState,
           appStatus: "idle",
         });
         success = false;
@@ -890,33 +976,32 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const data = await response.json();
       const batch = data.batch;
       if (batch && batch.transactions) {
-        // Assuming backend returns transactions matching the NEW Transaction type
         const loadedTransactions = (batch.transactions as Transaction[]).map(
           (tx) => ({ ...tx, analyzed: tx.analyzed ?? true })
         );
         if (!Array.isArray(loadedTransactions))
           throw new Error("Invalid data format in loaded batch");
-        console.log(
-          "loadLatestTransactions: Transactions loaded, now loading credit state..."
-        );
+        firebaseDebug.log("LOAD_LATEST", {
+          status: "data_received",
+          count: loadedTransactions.length,
+        });
         const loadedCreditState = await get().loadCreditState();
-        const currentCreditState = loadedCreditState ?? {
-          availableCredit: 0,
-          appliedCredit: 0,
-          lastAppliedAmount: 0,
-          lastAppliedAt: null,
-        };
+        const currentCreditState = loadedCreditState ?? get().creditState;
         const currentAppliedCredit = currentCreditState.appliedCredit;
-        console.log(
-          `loadLatestTransactions: Credit state loaded. Applied: ${currentAppliedCredit}. Calculating final impact...`
-        );
+        const currentUserValueSettings = get().userValueSettings;
+        firebaseDebug.log("LOAD_LATEST", {
+          status: "calculating_impact",
+          appliedCredit: currentAppliedCredit,
+        });
         const analysis = calculationService.calculateImpactAnalysis(
           loadedTransactions,
-          currentAppliedCredit
+          currentAppliedCredit,
+          currentUserValueSettings
         );
-        console.log(
-          "loadLatestTransactions: Final impact calculated. Setting state..."
-        );
+        firebaseDebug.log("LOAD_LATEST", {
+          status: "impact_calculated",
+          analysis,
+        });
         set({
           transactions: loadedTransactions,
           savedTransactions: loadedTransactions,
@@ -931,27 +1016,24 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         });
         success = true;
       } else {
-        console.log(
-          "loadLatestTransactions: API returned OK but no batch data."
-        );
+        firebaseDebug.log("LOAD_LATEST", { status: "no_batch_data" });
         const initialCreditState = await get().loadCreditState();
         set({
           hasSavedData: false,
           savedTransactions: null,
           transactions: [],
           impactAnalysis: null,
-          creditState: initialCreditState ?? {
-            availableCredit: 0,
-            appliedCredit: 0,
-            lastAppliedAmount: 0,
-            lastAppliedAt: null,
-          },
+          creditState: initialCreditState ?? get().creditState,
           appStatus: "idle",
         });
         success = false;
       }
     } catch (error) {
       console.error("❌ loadLatestTransactions Error:", error);
+      firebaseDebug.log("LOAD_LATEST", {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
       const fallbackCreditState = await get()
         .loadCreditState()
         .catch(() => get().creditState);
@@ -977,10 +1059,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     return success;
   },
   loadCreditState: async (): Promise<CreditState | null> => {
-    // This function recalculates impact based on current transactions, which now use the updated type.
+    /* ... implementation from prev response ... */
     const currentUser = auth.currentUser;
     if (!currentUser) {
-      console.warn("loadCreditState: No user logged in.");
+      console.warn("loadCreditState: No user.");
       return get().creditState;
     }
     const userId = currentUser.uid;
@@ -988,11 +1070,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (
       appStatus !== "idle" &&
       appStatus !== "error" &&
-      appStatus !== "loading_latest"
+      appStatus !== "loading_latest" &&
+      appStatus !== "initializing"
     ) {
+      console.log(`loadCreditState: Skipping due to app status: ${appStatus}`);
       return get().creditState;
     }
-    set({ appStatus: "loading_credit_state" });
+    const wasIdle = appStatus === "idle" || appStatus === "error";
+    if (wasIdle) set({ appStatus: "loading_credit_state" });
+    firebaseDebug.log("LOAD_CREDIT", { status: "starting", userId });
     let finalCreditState: CreditState | null = null;
     try {
       const creditDocRef = doc(db, "creditState", userId);
@@ -1002,25 +1088,44 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         loadedLastAt: Timestamp | null = null;
       if (docSnap.exists()) {
         const data = docSnap.data();
-        loadedAppliedCredit = data.appliedCredit || 0;
-        loadedLastAmount = data.lastAppliedAmount || 0;
+        loadedAppliedCredit =
+          typeof data.appliedCredit === "number" ? data.appliedCredit : 0;
+        loadedLastAmount =
+          typeof data.lastAppliedAmount === "number"
+            ? data.lastAppliedAmount
+            : 0;
         loadedLastAt =
           data.lastAppliedAt instanceof Timestamp ? data.lastAppliedAt : null;
+        firebaseDebug.log("LOAD_CREDIT", {
+          status: "loaded_from_db",
+          applied: loadedAppliedCredit,
+        });
       } else {
         loadedLastAt = Timestamp.now();
-        const init = sanitizeDataForFirestore({
+        const initialState = {
+          userId,
           appliedCredit: 0,
           lastAppliedAmount: 0,
           lastAppliedAt: loadedLastAt,
-        });
-        if (!init) throw new Error("Failed sanitize init state");
-        await setDoc(creditDocRef, init);
+        };
+        const sanitizedInit = sanitizeDataForFirestore(initialState);
+        if (!sanitizedInit)
+          throw new Error("Failed to sanitize initial credit state");
+        await setDoc(creditDocRef, sanitizedInit);
+        firebaseDebug.log("LOAD_CREDIT", { status: "initialized_in_db" });
       }
-      const currentTransactions = get().transactions; // Uses updated Transaction[] type
+      const currentTransactions = get().transactions;
+      const currentUserValueSettings = get().userValueSettings;
       const analysis = calculationService.calculateImpactAnalysis(
         currentTransactions,
-        loadedAppliedCredit
+        loadedAppliedCredit,
+        currentUserValueSettings
       );
+      firebaseDebug.log("LOAD_CREDIT", {
+        status: "recalculated_impact",
+        applied: loadedAppliedCredit,
+        available: analysis.availableCredit,
+      });
       finalCreditState = {
         appliedCredit: loadedAppliedCredit,
         lastAppliedAmount: loadedLastAmount,
@@ -1030,13 +1135,19 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({ creditState: finalCreditState, impactAnalysis: analysis });
     } catch (error) {
       console.error("Error loading credit state:", error);
-      set((state) => ({
-        appStatus: "error",
-        connectionStatus: {
-          ...state.connectionStatus,
-          error: state.connectionStatus.error ?? "Failed credit state",
-        },
-      }));
+      firebaseDebug.log("LOAD_CREDIT", {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
+      if (wasIdle)
+        set((state) => ({
+          appStatus: "error",
+          connectionStatus: {
+            ...state.connectionStatus,
+            error:
+              state.connectionStatus.error ?? "Failed to load credit state",
+          },
+        }));
       finalCreditState = null;
     } finally {
       if (get().appStatus === "loading_credit_state") {
@@ -1046,10 +1157,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     return finalCreditState;
   },
   initializeStore: async (user: User | null) => {
-    // Relies on loadLatestTransactions which is now corrected.
-    const { appStatus } = get();
+    /* ... implementation from prev response (using get()) ... */
+    const { appStatus, resetState } = get();
     if (!user) {
-      get().resetState();
+      resetState();
       return;
     }
     if (appStatus !== "idle" && appStatus !== "error") {
@@ -1081,30 +1192,63 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       connectionStatus: { ...get().connectionStatus, error: null },
     });
     console.log(`initializeStore: Starting for ${user.uid}`);
-    let loadedFromFirebase = false;
+    firebaseDebug.log("INITIALIZE", { status: "starting", userId: user.uid });
     try {
-      loadedFromFirebase = await get().loadLatestTransactions();
-      console.log(
-        `initializeStore: loadLatestTransactions result: ${loadedFromFirebase}`
-      );
-      let hasValidStoredToken = false,
-        tokenToFetch: string | null = null;
-      try {
-        const storedData = localStorage.getItem("plaid_access_token_info");
-        if (storedData) {
-          const tokenInfo = JSON.parse(storedData) as StoredTokenInfo;
-          if (tokenInfo.userId === user.uid) {
-            hasValidStoredToken = true;
-            tokenToFetch = tokenInfo.token;
-          } else {
-            localStorage.removeItem("plaid_access_token_info");
+      await get().initializeUserValueSettings(user.uid);
+      firebaseDebug.log("INITIALIZE", { status: "settings_initialized" });
+      const loadedFromFirebase = await get().loadLatestTransactions();
+      firebaseDebug.log("INITIALIZE", {
+        status: "load_latest_complete",
+        success: loadedFromFirebase,
+      });
+      if (!loadedFromFirebase) {
+        let hasValidStoredToken = false,
+          tokenToFetch: string | null = null;
+        try {
+          const storedData = localStorage.getItem("plaid_access_token_info");
+          if (storedData) {
+            const tokenInfo = JSON.parse(storedData) as StoredTokenInfo;
+            if (tokenInfo.userId === user.uid) {
+              hasValidStoredToken = true;
+              tokenToFetch = tokenInfo.token;
+            } else {
+              localStorage.removeItem("plaid_access_token_info");
+            }
           }
+        } catch (e) {
+          localStorage.removeItem("plaid_access_token_info");
+          console.error(e);
         }
-      } catch (e) {
-        localStorage.removeItem("plaid_access_token_info");
-        console.error(e);
-      }
-      if (loadedFromFirebase) {
+        firebaseDebug.log("INITIALIZE", {
+          status: "token_check_complete",
+          hasToken: hasValidStoredToken,
+        });
+        if (hasValidStoredToken && tokenToFetch) {
+          console.log(
+            "initializeStore: No Firebase data, token exists. Fetching fresh transactions..."
+          );
+          firebaseDebug.log("INITIALIZE", {
+            status: "no_firebase_data_fetching_fresh",
+          });
+          await get().fetchTransactions(tokenToFetch);
+          firebaseDebug.log("INITIALIZE", {
+            status: "finished_after_fresh_fetch",
+          });
+        } else {
+          console.log("initializeStore: No Firebase data and no valid token.");
+          firebaseDebug.log("INITIALIZE", {
+            status: "finished_no_data_no_token",
+          });
+          set((state) => ({
+            connectionStatus: {
+              ...state.connectionStatus,
+              isConnected: false,
+              error: null,
+            },
+            appStatus: "idle",
+          }));
+        }
+      } else {
         set((state) => ({
           connectionStatus: {
             ...state.connectionStatus,
@@ -1112,35 +1256,261 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             error: null,
           },
         }));
-      } else if (hasValidStoredToken && tokenToFetch) {
-        console.log(
-          "initializeStore: No Firebase data, token exists. Fetching fresh..."
-        );
-        await get().fetchTransactions(tokenToFetch);
-      } else {
-        set((state) => ({
-          connectionStatus: {
-            ...state.connectionStatus,
-            isConnected: false,
-            error: null,
-          },
-          appStatus: "idle",
-        }));
+        firebaseDebug.log("INITIALIZE", {
+          status: "finished_with_firebase_data",
+        });
       }
     } catch (error) {
       console.error("❌ initializeStore Error:", error);
+      firebaseDebug.log("INITIALIZE", {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
       set({
         appStatus: "error",
         connectionStatus: {
           isConnected: false,
-          error: error instanceof Error ? error.message : "Init failed",
+          error:
+            error instanceof Error ? error.message : "Initialization failed",
         },
       });
     } finally {
       if (get().appStatus === "initializing") {
         set({ appStatus: "idle" });
       }
-      console.log(`initializeStore: Finished. Status: ${get().appStatus}`);
+      firebaseDebug.log("INITIALIZE", {
+        status: "finally_complete",
+        finalAppStatus: get().appStatus,
+      });
     }
   },
-})); // End create
+
+  // --- Value Setting Actions ---
+  initializeUserValueSettings: async (userId) => {
+    /* ... implementation from prev response ... */
+    if (!userId) {
+      console.warn("initializeUserValueSettings: No userId provided.");
+      const defaultSettings = VALUE_CATEGORIES.reduce((acc, category) => {
+        acc[category.id] = category.defaultLevel;
+        return acc;
+      }, {} as UserValueSettings);
+      set({ userValueSettings: defaultSettings });
+      return;
+    }
+    const currentStatus = get().appStatus;
+    if (
+      currentStatus !== "initializing" &&
+      currentStatus !== "idle" &&
+      currentStatus !== "error" &&
+      currentStatus !== "loading_latest" /* Allow during init/load */
+    ) {
+      console.log(
+        `initializeUserValueSettings: Skipping due to app status ${currentStatus}`
+      );
+      return;
+    }
+    set({ appStatus: "loading_settings" });
+    firebaseDebug.log("INIT_VALUES", { status: "starting", userId });
+    try {
+      const settingsDocRef = doc(db, "userValueSettings", userId);
+      const docSnap = await getDoc(settingsDocRef);
+      let loadedSettings: UserValueSettings = {};
+      const defaultSettings = VALUE_CATEGORIES.reduce((acc, category) => {
+        acc[category.id] = category.defaultLevel;
+        return acc;
+      }, {} as UserValueSettings);
+      let needsUpdate = false;
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const potentialSettings = data.settings || data;
+        if (
+          typeof potentialSettings === "object" &&
+          potentialSettings !== null
+        ) {
+          loadedSettings = { ...potentialSettings } as UserValueSettings;
+        } else {
+          loadedSettings = defaultSettings;
+          needsUpdate = true;
+        }
+        firebaseDebug.log("INIT_VALUES", { status: "loaded_from_db" });
+
+        let currentTotalPoints = 0;
+        VALUE_CATEGORIES.forEach((category) => {
+          if (
+            loadedSettings[category.id] === undefined ||
+            typeof loadedSettings[category.id] !== "number" ||
+            loadedSettings[category.id] < MIN_LEVEL ||
+            loadedSettings[category.id] > MAX_LEVEL
+          ) {
+            console.warn(
+              `Setting for ${category.id} missing or invalid, defaulting.`
+            );
+            loadedSettings[category.id] = category.defaultLevel;
+            needsUpdate = true;
+          }
+          currentTotalPoints += loadedSettings[category.id];
+        });
+        if (currentTotalPoints !== TOTAL_VALUE_POINTS) {
+          console.warn(
+            `Loaded settings total (${currentTotalPoints}) != expected (${TOTAL_VALUE_POINTS}). Resetting.`
+          );
+          loadedSettings = defaultSettings;
+          needsUpdate = true;
+        }
+        if (needsUpdate) {
+          console.log("Correcting/updating settings in Firestore.");
+          await setDoc(settingsDocRef, { settings: loadedSettings });
+        }
+      } else {
+        loadedSettings = defaultSettings;
+        await setDoc(settingsDocRef, { settings: loadedSettings });
+        firebaseDebug.log("INIT_VALUES", { status: "initialized_in_db" });
+      }
+      const { transactions, creditState } = get();
+      const analysis = calculationService.calculateImpactAnalysis(
+        transactions,
+        creditState.appliedCredit,
+        loadedSettings
+      );
+      set({
+        userValueSettings: loadedSettings,
+        impactAnalysis: analysis,
+        creditState: {
+          ...creditState,
+          availableCredit: analysis.availableCredit,
+        } /* appStatus: 'idle' */,
+      });
+      firebaseDebug.log("INIT_VALUES", { status: "success" });
+    } catch (error) {
+      console.error("Error initializing user value settings:", error);
+      firebaseDebug.log("INIT_VALUES", {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const defaultSettings = VALUE_CATEGORIES.reduce((acc, category) => {
+        acc[category.id] = category.defaultLevel;
+        return acc;
+      }, {} as UserValueSettings);
+      set({ userValueSettings: defaultSettings, appStatus: "error" });
+    } finally {
+      if (get().appStatus === "loading_settings") {
+        set({ appStatus: "idle" });
+      }
+    }
+  },
+  updateUserValue: async (userId, categoryId, newLevel) => {
+    /* ... implementation from prev response ... */
+    if (!userId) {
+      console.error("updateUserValue: No userId provided.");
+      return;
+    }
+    if (newLevel < MIN_LEVEL || newLevel > MAX_LEVEL) {
+      console.warn(
+        `updateUserValue: Invalid newLevel ${newLevel} provided for ${categoryId}.`
+      );
+      return;
+    }
+    const { userValueSettings, transactions, creditState } = get();
+    const currentLevel = userValueSettings[categoryId];
+    if (newLevel === currentLevel) {
+      return;
+    }
+    const updatedSettings = { ...userValueSettings, [categoryId]: newLevel };
+    set({ userValueSettings: updatedSettings });
+    firebaseDebug.log("VALUES_UPDATE", {
+      status: "optimistic_set",
+      categoryId,
+      newLevel,
+    });
+    const analysis = calculationService.calculateImpactAnalysis(
+      transactions,
+      creditState.appliedCredit,
+      updatedSettings
+    );
+    set({
+      impactAnalysis: analysis,
+      creditState: {
+        ...creditState,
+        availableCredit: analysis.availableCredit,
+      },
+    });
+    firebaseDebug.log("VALUES_UPDATE", {
+      status: "recalculated_impact",
+      categoryId,
+      newLevel,
+    });
+    try {
+      console.log(
+        `Saving updated value settings for ${userId} to Firestore...`,
+        updatedSettings
+      );
+      const settingsDocRef = doc(db, "userValueSettings", userId);
+      await setDoc(settingsDocRef, { settings: updatedSettings });
+      console.log(`Settings saved for ${userId}.`);
+      firebaseDebug.log("VALUES_UPDATE", {
+        status: "firestore_saved",
+        categoryId,
+        newLevel,
+      });
+    } catch (error) {
+      console.error("Error saving updated user value settings:", error);
+      firebaseDebug.log("VALUES_UPDATE", {
+        status: "firestore_error",
+        error: error instanceof Error ? error.message : String(error),
+      });
+      set({ userValueSettings: userValueSettings });
+      const revertedAnalysis = calculationService.calculateImpactAnalysis(
+        transactions,
+        creditState.appliedCredit,
+        userValueSettings
+      );
+      set({
+        impactAnalysis: revertedAnalysis,
+        creditState: {
+          ...creditState,
+          availableCredit: revertedAnalysis.availableCredit,
+        },
+      });
+    }
+  },
+  getUserValueMultiplier: (practiceCategoryName) => {
+    /* ... implementation from prev response ... */
+    if (!practiceCategoryName) return 1.0;
+    const userValueSettings = get().userValueSettings;
+    const categoryDefinition = VALUE_CATEGORIES.find(
+      (catDef) => catDef.name === practiceCategoryName
+    );
+    if (!categoryDefinition) return 1.0;
+    const userLevel = userValueSettings[categoryDefinition.id] || NEUTRAL_LEVEL;
+    return NEGATIVE_PRACTICE_MULTIPLIERS[userLevel] || 1.0;
+  },
+  resetUserValuesToDefault: async (userId) => {
+    /* ... implementation from prev response ... */
+    if (!userId) return;
+    const defaultSettings = VALUE_CATEGORIES.reduce((acc, category) => {
+      acc[category.id] = category.defaultLevel;
+      return acc;
+    }, {} as UserValueSettings);
+    set({ userValueSettings: defaultSettings });
+    const { transactions, creditState } = get();
+    const analysis = calculationService.calculateImpactAnalysis(
+      transactions,
+      creditState.appliedCredit,
+      defaultSettings
+    );
+    set({
+      impactAnalysis: analysis,
+      creditState: {
+        ...creditState,
+        availableCredit: analysis.availableCredit,
+      },
+    });
+    try {
+      const settingsDocRef = doc(db, "userValueSettings", userId);
+      await setDoc(settingsDocRef, { settings: defaultSettings });
+      console.log(`User values reset to default for ${userId}.`);
+    } catch (error) {
+      console.error("Error resetting user values in Firestore:", error);
+    }
+  },
+})); // End create store

@@ -24,9 +24,7 @@ interface GraphQLCharityResult {
 }
 
 export async function GET(req: NextRequest) {
-  console.log(
-    "--- SERVER HIT (GraphQL Simplified Query): /api/charity/navigator/search ---"
-  );
+
 
   try {
     // 1. Extract Search Params
@@ -45,7 +43,6 @@ export async function GET(req: NextRequest) {
 
     // Use validated 'term'
     const { term } = validationResult.data;
-    console.log(`API Route Info: Validated search term: "${term}"`);
 
     // 3. Core Logic (GraphQL call - remains mostly the same)
     const apiUrl = config.charityNavigator?.apiUrl;
@@ -74,7 +71,6 @@ export async function GET(req: NextRequest) {
       method: "POST", headers: headers, body: JSON.stringify({ query: graphqlQuery, variables: variables }),
     });
 
-    console.log(`API Route Info: External CN GraphQL API response status: ${response.status}`);
 
     if (!response.ok) {
         const errorText = await response.text();
@@ -103,7 +99,6 @@ export async function GET(req: NextRequest) {
        // Use standardized error response
        return errorResponse("Unexpected data structure from Charity Navigator GraphQL API", 502);
     }
-    console.log(`API Route Info: Received ${results.length} results from GraphQL API.`);
 
     // Transform data (remains same)
     const charities = results.map((charity: GraphQLCharityResult) => {
@@ -117,7 +112,6 @@ export async function GET(req: NextRequest) {
         cause: charity.cause ?? null, hasAdvisories: false,
       };
     });
-    console.log(`API Route Info: Transformed ${charities.length} charities.`);
 
     return NextResponse.json({ charities });
 

@@ -78,7 +78,7 @@ export async function analyzeTransactionsHandler(req: NextRequest) {
     // 4. Core Logic (Call the analysis service)
     // analysisResults should conform to the updated Transaction type from the service
     const analysisResults = await analyzeTransactionsViaAPI(transactionsToAnalyze);
-
+    console.log(analysisResults)
     console.log(`analyzeTransactionsHandler: Analysis complete, returning ${analysisResults.length} results for user ${decodedToken.uid}`);
 
     // Return the raw analysis results

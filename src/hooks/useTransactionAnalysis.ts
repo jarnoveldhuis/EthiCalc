@@ -84,17 +84,15 @@ export function useTransactionAnalysis(
           const mergedTransactions = mergeTransactions(savedTransactions, newTransactions);
           
           // Use calculationService for all calculations
-          const totalSocietalDebt = calculationService.calculateNetSocietalDebt(mergedTransactions);
-          const totalPositiveImpact = calculationService.calculatePositiveImpact(mergedTransactions);
-          const totalNegativeImpact = calculationService.calculateNegativeImpact(mergedTransactions);
-          const debtPercentage = calculationService.calculateDebtPercentage(mergedTransactions);
+          const impactAnalysisResult = calculationService.calculateImpactAnalysis(mergedTransactions);
+          const { netSocietalDebt, debtPercentage, positiveImpact, negativeImpact } = impactAnalysisResult;
           
           setAnalyzedData({
             transactions: mergedTransactions,
-            totalSocietalDebt,
+            totalSocietalDebt: netSocietalDebt,
             debtPercentage,
-            totalPositiveImpact,
-            totalNegativeImpact
+            totalPositiveImpact: positiveImpact,
+            totalNegativeImpact: negativeImpact
           });
         }
         
@@ -143,18 +141,21 @@ export function useTransactionAnalysis(
         : mergedTransactions;
         
       // Recalculate all metrics using the service
-      const totalSocietalDebt = calculationService.calculateNetSocietalDebt(finalTransactions);
-      const totalPositiveImpact = calculationService.calculatePositiveImpact(finalTransactions);
-      const totalNegativeImpact = calculationService.calculateNegativeImpact(finalTransactions);
-      const debtPercentage = calculationService.calculateDebtPercentage(finalTransactions);
+      const finalImpactAnalysis = calculationService.calculateImpactAnalysis(finalTransactions);
+      const { 
+        netSocietalDebt: finalNetSocietalDebt, 
+        debtPercentage: finalDebtPercentage, 
+        positiveImpact: finalPositiveImpact, 
+        negativeImpact: finalNegativeImpact 
+      } = finalImpactAnalysis;
   
       // Set the analyzed data with all metrics calculated by the service
       setAnalyzedData({
         transactions: finalTransactions,
-        totalSocietalDebt,
-        debtPercentage,
-        totalPositiveImpact,
-        totalNegativeImpact
+        totalSocietalDebt: finalNetSocietalDebt,
+        debtPercentage: finalDebtPercentage,
+        totalPositiveImpact: finalPositiveImpact,
+        totalNegativeImpact: finalNegativeImpact
       });
       
       setAnalysisStatus({ status: 'success', error: null });

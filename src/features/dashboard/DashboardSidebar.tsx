@@ -6,13 +6,13 @@ import React, {
   useMemo,
   useRef,
 } from "react";
+import { UserValuesEditor } from '@/features/values/UserValuesEditor';
 import { useTransactionStore } from "@/store/transactionStore";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { useCountUp } from "@/hooks/useCountUp";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
 import { useAuth } from "@/hooks/useAuth";
-import { calculationService } from "@/core/calculations/impactService";
 import { ShareImpactButton } from "./ShareImpactButton";
 
 // // --- Helper: Format Currency (Now rounds by default due to AnimatedCounter change) ---
@@ -101,7 +101,6 @@ export function DashboardSidebar() {
   const isBankConnected = useTransactionStore(
     (state) => state.connectionStatus.isConnected
   );
-  const transactions = useTransactionStore((state) => state.transactions);
   const impactAnalysis = useTransactionStore((state) => state.impactAnalysis);
   const appStatus = useTransactionStore((state) => state.appStatus);
   const applyCreditAction = useTransactionStore((state) => state.applyCredit);
@@ -214,40 +213,7 @@ export function DashboardSidebar() {
       ? "bg-rose-200 dark:bg-rose-900/[.5]"
       : "bg-emerald-200 dark:bg-emerald-900/[.5]";
 
-  const categoryDataForSharing = useMemo(() => {
-    if (
-      !isBankConnected ||
-      !transactions ||
-      transactions.length === 0 ||
-      !impactAnalysis
-    )
-      return {};
-    const catImpacts =
-      calculationService.calculateCategoryImpacts(transactions);
-    const sharingData: Record<string, { score: number }> = {};
-    const definedCategories = [
-      "Environment",
-      "Labor Ethics",
-      "Animal Welfare",
-      "Political Ethics",
-      "Transparency",
-      "Digital Rights",
-      "Community Support",
-    ];
-    definedCategories.forEach((category) => {
-      const values = catImpacts[category] || {
-        positiveImpact: 0,
-        negativeImpact: 0,
-        totalSpent: 0,
-      };
-      const { positiveImpact, negativeImpact } = values;
-      const score = positiveImpact - negativeImpact;
-      if (Math.abs(score) > 0.01) {
-        sharingData[category] = { score };
-      }
-    });
-    return sharingData;
-  }, [transactions, isBankConnected, impactAnalysis]);
+  
 
   // --- Effects (Unchanged) ---
   useEffect(() => {
@@ -536,7 +502,6 @@ export function DashboardSidebar() {
                   {/* Share Button */}
                   <div>
                     <ShareImpactButton
-                      categoryData={categoryDataForSharing}
                       overallRatio={actualAppliedRatio}
                       totalPositiveImpact={totalPositiveImpact}
                     />
@@ -558,6 +523,12 @@ export function DashboardSidebar() {
           </div>
         )}
       </div>
+
+      {isBankConnected && user && (
+         <div className="mt-6"> {/* Add margin if needed */}
+             <UserValuesEditor />
+         </div>
+      )}
 
       {/* Donation Modal (Unchanged) */}
       {modalState.isOpen && (

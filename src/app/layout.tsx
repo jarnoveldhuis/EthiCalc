@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 
 
 export const metadata: Metadata = {
-  title: "SocialBalance",
-  description: "SocialBalance is a tool that helps you align your spending with your values.",
+  title: "Value-Balance",
+  description: "Value-Balance is a tool that helps you align your spending with your values.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

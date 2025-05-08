@@ -89,16 +89,16 @@ export async function getTransactions(
   try {
     const today = new Date();
     // Get transactions from the last 30 days
-    const startDate = new Date();
-    startDate.setDate(today.getDate() - 30);
-
+    // const startDate = new Date();
+    // startDate.setDate(today.getDate() - 30);
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     // Log the request attempt
     console.log(`🔄 Fetching Plaid transactions (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
-    console.log(`Date range: ${startDate.toISOString().split('T')[0]} to ${today.toISOString().split('T')[0]}`);
+    console.log(`Date range: ${firstDayOfMonth.toISOString().split('T')[0]} to ${today.toISOString().split('T')[0]}`);
 
     const response = await plaidClient.transactionsGet({
       access_token: accessToken,
-      start_date: startDate.toISOString().split('T')[0],
+      start_date: firstDayOfMonth.toISOString().split('T')[0],
       end_date: today.toISOString().split('T')[0],
       options: {
         include_personal_finance_category: true

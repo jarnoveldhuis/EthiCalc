@@ -15,7 +15,7 @@ Instructions:
     * **DO NOT cite the vendor's own website**, press releases, or marketing materials as primary evidence for ethical/unethical practices (citing their stated goals from official reports is okay if noted in 'information').
     * **It is better to provide an empty array [] than an irrelevant or broken link.** If no suitable citation is found for a practice, use [].
 * **ENSURE URLS ARE COMPLETE:** Double-check that any provided URL is a complete, absolute URL (e.g., "https://www.example.com/report").
-* Generate specific "practiceSearchTerms" for charity lookups (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate".
+* Generate short generic practiceSearchTerms for charity initiatives counteracting the practice to search for relevent charities. (e.g., Factory Farming -> "animal welfare", High Emissions -> "climate", )
 * Assign one of the following "practiceCategories" to each practice: Environment, Animal Welfare, Labor Ethics, Political Ethics, Transparency, Digital Rights, Community Support.
 * **Output MUST BE ONLY strict JSON** matching the example schema below. DO NOT include any explanatory text before or after the JSON block.
 
