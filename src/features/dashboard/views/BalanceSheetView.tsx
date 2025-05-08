@@ -8,7 +8,6 @@ import { Transaction, Citation } from "@/shared/types/transactions";
 import { EnrichedCharityResult } from "@/features/charity/types";
 import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
 import { enhancedCharityService } from "@/features/charity/enhancedCharityService";
-import { enhancedCharityService } from "@/features/charity/enhancedCharityService";
 import { CharityImage } from "@/features/charity/CharityImage";
 import { CharityRating } from "@/features/charity/CharityRating";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
@@ -30,19 +29,8 @@ interface CombinedImpactDetail {
   citations?: Citation[];
   isPositive: boolean;
   contributingTxCount: number;
-  vendorName: string;
-  practice: string;
-  totalImpactAmount: number;
-  totalOriginalAmount: number;
-  impactWeight: number;
-  information?: string;
-  citations?: Citation[];
-  isPositive: boolean;
-  contributingTxCount: number;
 }
 interface DetailItemProps {
-  detail: CombinedImpactDetail;
-  amountColor: string;
   detail: CombinedImpactDetail;
   amountColor: string;
 }

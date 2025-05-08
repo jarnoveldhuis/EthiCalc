@@ -4,9 +4,7 @@
 
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth } from "@/core/firebase/firebase"; // Correct path based on your structure
-import { auth } from "@/core/firebase/firebase"; // Correct path based on your structure
 import { useRouter } from "next/navigation";
-import Image from 'next/image'; // Import Next.js Image component
 import Image from 'next/image'; // Import Next.js Image component
 
 export default function SigninPage() {
