@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import { UserValuesEditor } from '@/features/values/UserValuesEditor';
+import { UserValuesEditor } from "@/features/values/UserValuesEditor";
 import { useTransactionStore } from "@/store/transactionStore";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { useCountUp } from "@/hooks/useCountUp";
@@ -213,8 +213,6 @@ export function DashboardSidebar() {
       ? "bg-rose-200 dark:bg-rose-900/[.5]"
       : "bg-emerald-200 dark:bg-emerald-900/[.5]";
 
-  
-
   // --- Effects (Unchanged) ---
   useEffect(() => {
     if (!isBankConnected) {
@@ -403,11 +401,43 @@ export function DashboardSidebar() {
         {/* Conditionally Rendered Content Wrapper */}
         {isBankConnected && (
           <div className={`flex-grow flex flex-col`}>
-            {/* Section 2: Overall Progress Bar */}
+
+            {/* START: Moved Tier Info Section */}
+            <div className="p-4 text-center border-b border-slate-200 dark:border-slate-700">
+              {impactAnalysis !== null && appStatus !== "error" && (
+                <div className="mb-3"> {/* Original Tier Info inner div, mb-3 might be adjusted if only element */}
+                  <p
+                    className={`text-sm font-medium ${currentTierInfo.colorClass}`}
+                  >
+                    <span className="font-semibold mr-1.5">
+                      {currentTierInfo.name
+                        ? `${currentTierInfo.name} Tier:`
+                        : ""}
+                    </span>
+                    {currentTierInfo.description}
+                  </p>
+                  {actualAppliedRatio !== null && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      (
+                      <span className="font-semibold">
+                        {animatedAppliedRatioPercentString}
+                      </span>
+                      % Offset Applied)
+                    </p>
+                  )}
+                </div>
+              )}
+              {!impactAnalysis && appStatus !== "error" && isBankConnected && (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Tier information unavailable.
+                </p>
+              )}
+            </div>
+            {/* END: Moved Tier Info Section */}
+
+            {/* Section 2: Overall Progress Bar - Border removed */}
             {impactAnalysis !== null && appStatus !== "error" ? (
-              <div className="p-4 space-y-2 border-b border-slate-200 dark:border-slate-700">
-                {" "}
-                {/* Use updated card border color */}
+              <div className="p-4 space-y-2"> {/* Removed border-b border-slate-200 dark:border-slate-700 */}
                 <div className="flex justify-between text-xs sm:text-sm mb-1">
                   <span className="font-medium text-[var(--muted-foreground)]">
                     Applied Credit
@@ -463,42 +493,28 @@ export function DashboardSidebar() {
                           )}`
                     } // Precise on hover
                   />
+                  
                 </div>
               </div>
             ) : (
-              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 border-b border-slate-200 dark:border-slate-700">
+              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400"> {/* Removed border-b border-slate-200 dark:border-slate-700 */}
                 {appStatus === "error"
                   ? "Error loading data"
                   : "Calculating progress..."}
               </div>
             )}
 
-            {/* Section 3: Tier Info & Share Button - Stacked Layout Below Progress */}
+            {/* Section 3: Now primarily Share Button - Tier Info and its fallback are moved out */}
+
+            
+            {isBankConnected && user && (
+               <div className=""> 
+                   <UserValuesEditor />
+               </div>
+            )}
             <div className="p-4 mt-auto text-center">
               {impactAnalysis !== null && appStatus !== "error" && (
                 <>
-                  {/* Tier Info */}
-                  <div className="mb-3">
-                    <p
-                      className={`text-sm font-medium ${currentTierInfo.colorClass}`}
-                    >
-                      <span className="font-semibold mr-1.5">
-                        {currentTierInfo.name
-                          ? `${currentTierInfo.name} Tier:`
-                          : ""}
-                      </span>
-                      {currentTierInfo.description}
-                    </p>
-                    {actualAppliedRatio !== null && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        (
-                        <span className="font-semibold">
-                          {animatedAppliedRatioPercentString}
-                        </span>
-                        % Offset Applied)
-                      </p>
-                    )}
-                  </div>
                   {/* Share Button */}
                   <div>
                     <ShareImpactButton
@@ -508,11 +524,7 @@ export function DashboardSidebar() {
                   </div>
                 </>
               )}
-              {!impactAnalysis && appStatus !== "error" && (
-                <p className="text-sm text-center text-gray-500 dark:text-gray-400">
-                  Tier information unavailable.
-                </p>
-              )}
+              {/* "Tier information unavailable" message was here, MOVED UP */}
             </div>
           </div>
         )}
@@ -523,12 +535,6 @@ export function DashboardSidebar() {
           </div>
         )}
       </div>
-
-      {isBankConnected && user && (
-         <div className="mt-6"> {/* Add margin if needed */}
-             <UserValuesEditor />
-         </div>
-      )}
 
       {/* Donation Modal (Unchanged) */}
       {modalState.isOpen && (

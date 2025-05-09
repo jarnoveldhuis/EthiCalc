@@ -24,9 +24,9 @@ export const TOTAL_VALUE_POINTS = VALUE_CATEGORIES.length * NEUTRAL_LEVEL;
 
 // Multipliers for NEGATIVE practices. Positive practices always use 1.0x.
 export const NEGATIVE_PRACTICE_MULTIPLIERS: { [level: number]: number } = {
-  1: 0.5,
-  2: 0.75,
-  3: 1.0,
-  4: 1.25,
-  5: 1.5,
+  1: 0.0,    // Least important to user -> 0% of original debt
+  2: 0.25,   // -> 25% of original debt
+  3: 0.50,   // Neutral/Default -> 50% of original debt
+  4: 0.75,   // -> 75% of original debt
+  5: 1.0,    // Most important to user -> 100% of original debt
 };

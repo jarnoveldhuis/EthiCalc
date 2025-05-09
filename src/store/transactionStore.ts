@@ -27,7 +27,6 @@ import {
   NEUTRAL_LEVEL,
   MIN_LEVEL,
   MAX_LEVEL,
-  TOTAL_VALUE_POINTS,
   NEGATIVE_PRACTICE_MULTIPLIERS,
 } from "@/config/valuesConfig";
 
@@ -1334,7 +1333,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         }
         firebaseDebug.log("INIT_VALUES", { status: "loaded_from_db" });
 
-        let currentTotalPoints = 0;
         VALUE_CATEGORIES.forEach((category) => {
           if (
             loadedSettings[category.id] === undefined ||
@@ -1348,17 +1346,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
             loadedSettings[category.id] = category.defaultLevel;
             needsUpdate = true;
           }
-          currentTotalPoints += loadedSettings[category.id];
         });
-        if (currentTotalPoints !== TOTAL_VALUE_POINTS) {
-          console.warn(
-            `Loaded settings total (${currentTotalPoints}) != expected (${TOTAL_VALUE_POINTS}). Resetting.`
-          );
-          loadedSettings = defaultSettings;
-          needsUpdate = true;
-        }
+
         if (needsUpdate) {
-          console.log("Correcting/updating settings in Firestore.");
+          console.log("Correcting/updating settings in Firestore because individual values were invalid or missing.");
           await setDoc(settingsDocRef, { settings: loadedSettings });
         }
       } else {

@@ -24,7 +24,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.1",
-    "vercel": "^41.4.0",
+    "vercel": "^25.2.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

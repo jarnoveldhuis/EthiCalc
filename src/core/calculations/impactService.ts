@@ -19,7 +19,7 @@ const getNegativePracticeMultiplierForCategory = (
   );
   if (!categoryDefinition) return 1.0;
   const userLevel = userValueSettings[categoryDefinition.id] || NEUTRAL_LEVEL;
-  return NEGATIVE_PRACTICE_MULTIPLIERS[userLevel] || 1.0;
+  return NEGATIVE_PRACTICE_MULTIPLIERS[userLevel] || 0;
 };
 
 // src/core/calculations/impactService.ts LINT FIX

@@ -68,8 +68,12 @@ export function ShareImpactButton({
 
   return (
     <div className={`mt-4 text-center ${className}`}>
-      <button onClick={handleShare} className="..."> {/* Your button styling */}
-        Share My Impact & Values
+        <button
+          onClick={handleShare}
+          className="text-xs px-3 py-1 border border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400 rounded hover:bg-blue-50 dark:hover:bg-blue-900/[0.3] whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          title="Reset all values to neutral (Level 3)"
+        >
+        Share My Values
       </button>
       {feedback && ( <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 animate-pulse">{feedback}</p> )}
     </div>

@@ -105,9 +105,9 @@ const DetailItem: React.FC<DetailItemProps> = ({ detail, amountColor }) => {
   /* ... */ const [citationsVisible, setCitationsVisible] = useState(false);
   const citations = detail.citations;
   const hasCitations = Array.isArray(citations) && citations.length > 0;
-  const preciseFormatImpact = (amount: number) => {
-    const prefix = amount >= 0 ? "+" : "-";
-    return `${prefix}${formatCurrency(Math.abs(amount))}`;
+  const preciseFormatImpact = (amount: number, isPositive: boolean) => {
+    const sign = isPositive ? "+" : "-";
+    return `${sign}${formatCurrency(amount)}`;
   };
   return (
     <div className="border-b border-slate-200 dark:border-slate-700 pb-2 last:border-b-0 last:pb-0">
@@ -141,10 +141,10 @@ const DetailItem: React.FC<DetailItemProps> = ({ detail, amountColor }) => {
           {" "}
           <AnimatedCounter
             value={detail.totalImpactAmount}
-            prefix={detail.totalImpactAmount >= 0 ? "+$" : "-$"}
+            prefix={detail.isPositive ? "+$" : "-$"}
             className={`block font-medium ${amountColor} text-sm`}
             decimalPlaces={0}
-            title={`Precise: ${preciseFormatImpact(detail.totalImpactAmount)}`}
+            title={`Precise: ${preciseFormatImpact(detail.totalImpactAmount, detail.isPositive)}`}
           />{" "}
           <span className="block text-xs text-[var(--muted-foreground)]">
             {" "}
@@ -575,7 +575,7 @@ const UnifiedCategoryCard: React.FC<UnifiedCategoryCardProps> = ({
           <div className="flex items-center flex-shrink-0 gap-2">
             {" "}
             <AnimatedCounter
-              value={netImpact}
+              value={Math.abs(netImpact)}
               prefix={netImpact >= 0 ? "+$" : "-$"}
               className={`font-bold ${getNetImpactColor(
                 netImpact
