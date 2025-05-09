@@ -43,7 +43,7 @@ export function UserValuesModal({ isOpen, onClose, onCommit }: UserValuesModalPr
         {/* Modal Body */}
         <div className="p-4 sm:p-6 flex-grow space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-300">
-            Adjust the sliders to reflect how much each category's negative impact should contribute to your societal debt. Your choices here will directly influence your ethical debt calculation.
+            Adjust the sliders to reflect how much each category is negative impact should contribute to your societal debt. Your choices here will directly influence your ethical debt calculation.
           </p>
           <p className="text-sm text-orange-600 dark:text-orange-400 font-semibold">
             Committing your values will lock them until the end of the current month.

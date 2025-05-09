@@ -25,8 +25,6 @@ import { firebaseDebug } from "@/core/firebase/debugUtils";
 import {
   VALUE_CATEGORIES,
   NEUTRAL_LEVEL,
-  MIN_LEVEL,
-  MAX_LEVEL,
   NEGATIVE_PRACTICE_MULTIPLIERS,
 } from "@/config/valuesConfig";
 
