@@ -43,6 +43,7 @@ export type AppStatus =
   | "loading_latest"
   | "loading_credit_state"
   | "loading_settings"
+  | "saving_settings"
   | "error";
 interface BankConnectionStatus {
   isConnected: boolean;
@@ -89,6 +90,7 @@ export interface TransactionState {
   appStatus: AppStatus;
   hasSavedData: boolean;
   userValueSettings: UserValueSettings;
+  valuesCommittedUntil: Timestamp | null;
   // Actions
   setTransactions: (transactions: Transaction[]) => void;
   connectBank: (publicToken: string, user: User | null) => Promise<void>;
@@ -112,6 +114,7 @@ export interface TransactionState {
   ) => Promise<void>;
   getUserValueMultiplier: (practiceCategoryName: string | undefined) => number;
   resetUserValuesToDefault: (userId: string) => Promise<void>;
+  commitUserValues: (userId: string) => Promise<void>;
 }
 
 // --- Helper Functions --- (Keep as before)
@@ -190,6 +193,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     acc[category.id] = category.defaultLevel;
     return acc;
   }, {} as UserValueSettings),
+  valuesCommittedUntil: null,
 
   // --- Core Actions ---
 
@@ -302,6 +306,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       appStatus: "idle",
       hasSavedData: false,
       userValueSettings: defaultSettings,
+      valuesCommittedUntil: null,
     });
   },
   disconnectBank: () => {
@@ -1286,133 +1291,79 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   // --- Value Setting Actions ---
   initializeUserValueSettings: async (userId) => {
-    /* ... implementation from prev response ... */
-    if (!userId) {
-      console.warn("initializeUserValueSettings: No userId provided.");
-      const defaultSettings = VALUE_CATEGORIES.reduce((acc, category) => {
-        acc[category.id] = category.defaultLevel;
-        return acc;
-      }, {} as UserValueSettings);
-      set({ userValueSettings: defaultSettings });
-      return;
-    }
-    const currentStatus = get().appStatus;
-    if (
-      currentStatus !== "initializing" &&
-      currentStatus !== "idle" &&
-      currentStatus !== "error" &&
-      currentStatus !== "loading_latest" /* Allow during init/load */
-    ) {
-      console.log(
-        `initializeUserValueSettings: Skipping due to app status ${currentStatus}`
-      );
-      return;
-    }
     set({ appStatus: "loading_settings" });
-    firebaseDebug.log("INIT_VALUES", { status: "starting", userId });
     try {
-      const settingsDocRef = doc(db, "userValueSettings", userId);
-      const docSnap = await getDoc(settingsDocRef);
-      let loadedSettings: UserValueSettings = {};
-      const defaultSettings = VALUE_CATEGORIES.reduce((acc, category) => {
+      const userSettingsRef = doc(db, "userValueSettings", userId);
+      const docSnap = await getDoc(userSettingsRef);
+
+      let settingsToSet = VALUE_CATEGORIES.reduce((acc, category) => {
         acc[category.id] = category.defaultLevel;
         return acc;
       }, {} as UserValueSettings);
-      let needsUpdate = false;
+      let committedUntilDate: Timestamp | null = null;
+
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const potentialSettings = data.settings || data;
-        if (
-          typeof potentialSettings === "object" &&
-          potentialSettings !== null
-        ) {
-          loadedSettings = { ...potentialSettings } as UserValueSettings;
-        } else {
-          loadedSettings = defaultSettings;
-          needsUpdate = true;
+        if (data && data.userValueSettings) {
+          const fetchedSettings = data.userValueSettings;
+          settingsToSet = VALUE_CATEGORIES.reduce((acc, category) => {
+            acc[category.id] =
+              fetchedSettings[category.id] !== undefined
+                ? fetchedSettings[category.id]
+                : category.defaultLevel;
+            return acc;
+          }, {} as UserValueSettings);
         }
-        firebaseDebug.log("INIT_VALUES", { status: "loaded_from_db" });
-
-        VALUE_CATEGORIES.forEach((category) => {
-          if (
-            loadedSettings[category.id] === undefined ||
-            typeof loadedSettings[category.id] !== "number" ||
-            loadedSettings[category.id] < MIN_LEVEL ||
-            loadedSettings[category.id] > MAX_LEVEL
-          ) {
-            console.warn(
-              `Setting for ${category.id} missing or invalid, defaulting.`
-            );
-            loadedSettings[category.id] = category.defaultLevel;
-            needsUpdate = true;
+        if (data && data.valuesCommittedUntil) {
+          committedUntilDate = data.valuesCommittedUntil as Timestamp;
+        }
+        firebaseDebug.log(
+          "INIT_USER_SETTINGS", {
+            status: "Loaded user value settings",
+            userId,
+            settings: settingsToSet,
+            committedUntil: committedUntilDate
           }
-        });
-
-        if (needsUpdate) {
-          console.log("Correcting/updating settings in Firestore because individual values were invalid or missing.");
-          await setDoc(settingsDocRef, { settings: loadedSettings });
-        }
+        );
       } else {
-        loadedSettings = defaultSettings;
-        await setDoc(settingsDocRef, { settings: loadedSettings });
-        firebaseDebug.log("INIT_VALUES", { status: "initialized_in_db" });
+        firebaseDebug.log(
+          "INIT_USER_SETTINGS", {
+            status: "No value settings found, initializing with defaults.",
+            userId
+          }
+        );
+        await setDoc(userSettingsRef, { userValueSettings: settingsToSet, valuesCommittedUntil: null }, { merge: true });
       }
-      const { transactions, creditState } = get();
-      const analysis = calculationService.calculateImpactAnalysis(
-        transactions,
-        creditState.appliedCredit,
-        loadedSettings
-      );
       set({
-        userValueSettings: loadedSettings,
-        impactAnalysis: analysis,
-        creditState: {
-          ...creditState,
-          availableCredit: analysis.availableCredit,
-        } /* appStatus: 'idle' */,
+        userValueSettings: settingsToSet,
+        valuesCommittedUntil: committedUntilDate,
+        appStatus: "idle",
       });
-      firebaseDebug.log("INIT_VALUES", { status: "success" });
     } catch (error) {
       console.error("Error initializing user value settings:", error);
-      firebaseDebug.log("INIT_VALUES", {
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-      });
-      const defaultSettings = VALUE_CATEGORIES.reduce((acc, category) => {
-        acc[category.id] = category.defaultLevel;
-        return acc;
-      }, {} as UserValueSettings);
-      set({ userValueSettings: defaultSettings, appStatus: "error" });
-    } finally {
-      if (get().appStatus === "loading_settings") {
-        set({ appStatus: "idle" });
-      }
+      firebaseDebug.log(
+        "INIT_USER_SETTINGS_ERROR", {
+          userId,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+      set({ appStatus: "error" });
     }
   },
   updateUserValue: async (userId, categoryId, newLevel) => {
-    /* ... implementation from prev response ... */
     if (!userId) {
-      console.error("updateUserValue: No userId provided.");
+      console.warn("updateUserValue: No userId provided.");
       return;
     }
-    if (newLevel < MIN_LEVEL || newLevel > MAX_LEVEL) {
-      console.warn(
-        `updateUserValue: Invalid newLevel ${newLevel} provided for ${categoryId}.`
-      );
-      return;
-    }
-    const { userValueSettings, transactions, creditState } = get();
-    const currentLevel = userValueSettings[categoryId];
-    if (newLevel === currentLevel) {
-      return;
-    }
-    const updatedSettings = { ...userValueSettings, [categoryId]: newLevel };
-    set({ userValueSettings: updatedSettings });
-    firebaseDebug.log("VALUES_UPDATE", {
-      status: "optimistic_set",
-      categoryId,
-      newLevel,
-    });
+    const currentSettings = get().userValueSettings;
+    const updatedSettings = {
+      ...currentSettings,
+      [categoryId]: newLevel,
+    };
+
+    set({ userValueSettings: updatedSettings, appStatus: "saving_settings" });
+
+    const { transactions, creditState } = get();
     const analysis = calculationService.calculateImpactAnalysis(
       transactions,
       creditState.appliedCredit,
@@ -1425,47 +1376,31 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         availableCredit: analysis.availableCredit,
       },
     });
-    firebaseDebug.log("VALUES_UPDATE", {
-      status: "recalculated_impact",
-      categoryId,
-      newLevel,
-    });
+
     try {
-      console.log(
-        `Saving updated value settings for ${userId} to Firestore...`,
-        updatedSettings
+      const userSettingsRef = doc(db, "userValueSettings", userId);
+      await setDoc(userSettingsRef, { userValueSettings: updatedSettings }, { merge: true });
+      set({ appStatus: "idle" });
+      firebaseDebug.log("UPDATE_USER_VALUE",{
+          status: "User value updated and saved.",
+          userId,
+          categoryId,
+          newLevel
+        }
       );
-      const settingsDocRef = doc(db, "userValueSettings", userId);
-      await setDoc(settingsDocRef, { settings: updatedSettings });
-      console.log(`Settings saved for ${userId}.`);
-      firebaseDebug.log("VALUES_UPDATE", {
-        status: "firestore_saved",
-        categoryId,
-        newLevel,
-      });
     } catch (error) {
-      console.error("Error saving updated user value settings:", error);
-      firebaseDebug.log("VALUES_UPDATE", {
-        status: "firestore_error",
-        error: error instanceof Error ? error.message : String(error),
-      });
-      set({ userValueSettings: userValueSettings });
-      const revertedAnalysis = calculationService.calculateImpactAnalysis(
-        transactions,
-        creditState.appliedCredit,
-        userValueSettings
+      console.error("Error saving user value settings:", error);
+      firebaseDebug.log("UPDATE_USER_VALUE_ERROR", {
+          userId,
+          categoryId,
+          newLevel,
+          error: error instanceof Error ? error.message : String(error)
+        }
       );
-      set({
-        impactAnalysis: revertedAnalysis,
-        creditState: {
-          ...creditState,
-          availableCredit: revertedAnalysis.availableCredit,
-        },
-      });
+      set({ appStatus: "error" });
     }
   },
   getUserValueMultiplier: (practiceCategoryName) => {
-    /* ... implementation from prev response ... */
     if (!practiceCategoryName) return 1.0;
     const userValueSettings = get().userValueSettings;
     const categoryDefinition = VALUE_CATEGORIES.find(
@@ -1475,33 +1410,58 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const userLevel = userValueSettings[categoryDefinition.id] || NEUTRAL_LEVEL;
     return NEGATIVE_PRACTICE_MULTIPLIERS[userLevel] || 1.0;
   },
-  resetUserValuesToDefault: async (userId) => {
-    /* ... implementation from prev response ... */
-    if (!userId) return;
+  resetUserValuesToDefault: async (userId: string) => {
     const defaultSettings = VALUE_CATEGORIES.reduce((acc, category) => {
       acc[category.id] = category.defaultLevel;
       return acc;
     }, {} as UserValueSettings);
-    set({ userValueSettings: defaultSettings });
-    const { transactions, creditState } = get();
-    const analysis = calculationService.calculateImpactAnalysis(
-      transactions,
-      creditState.appliedCredit,
-      defaultSettings
-    );
-    set({
-      impactAnalysis: analysis,
-      creditState: {
-        ...creditState,
-        availableCredit: analysis.availableCredit,
-      },
-    });
+
+    set({ userValueSettings: defaultSettings, appStatus: "saving_settings" });
+
     try {
-      const settingsDocRef = doc(db, "userValueSettings", userId);
-      await setDoc(settingsDocRef, { settings: defaultSettings });
-      console.log(`User values reset to default for ${userId}.`);
+      const userSettingsRef = doc(db, "userValueSettings", userId);
+      await setDoc(userSettingsRef, { userValueSettings: defaultSettings, valuesCommittedUntil: null }, { merge: true });
+      set({ appStatus: "idle", valuesCommittedUntil: null });
+      firebaseDebug.log("RESET_USER_VALUES", {
+          status: "User value settings reset to default.",
+          userId
+        }
+      );
     } catch (error) {
-      console.error("Error resetting user values in Firestore:", error);
+      console.error("Error resetting user value settings:", error);
+      firebaseDebug.log("RESET_USER_VALUES_ERROR", {
+          userId,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+      set({ appStatus: "error" });
+    }
+  },
+  commitUserValues: async (userId: string) => {
+    set({ appStatus: "saving_settings" });
+    try {
+      const now = new Date();
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      const endOfMonthTimestamp = Timestamp.fromDate(endOfMonth);
+
+      const userSettingsRef = doc(db, "userValueSettings", userId);
+      await setDoc(userSettingsRef, { valuesCommittedUntil: endOfMonthTimestamp }, { merge: true });
+
+      set({ valuesCommittedUntil: endOfMonthTimestamp, appStatus: "idle" });
+      firebaseDebug.log("COMMIT_USER_VALUES", {
+          status: "User values committed.",
+          userId,
+          commitUntil: endOfMonth.toISOString()
+        }
+      );
+    } catch (error) {
+      console.error("Error committing user values:", error);
+      firebaseDebug.log("COMMIT_USER_VALUES_ERROR", {
+          userId,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+      set({ appStatus: "error" });
     }
   },
 })); // End create store

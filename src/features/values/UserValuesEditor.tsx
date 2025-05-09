@@ -9,6 +9,7 @@ import {
   NEUTRAL_LEVEL,
   ValueCategoryDefinition,
 } from "@/config/valuesConfig";
+import { Timestamp } from "firebase/firestore";
 
 // Square visual component - Smaller Size
 const ValueSquare = ({
@@ -56,14 +57,17 @@ interface ValueRowProps {
   category: ValueCategoryDefinition;
   currentLevel: number;
   onUpdate: (categoryId: string, newLevel: number) => void;
+  disabled: boolean;
 }
 
 const ValueRow: React.FC<ValueRowProps> = ({
   category,
   currentLevel,
   onUpdate,
+  disabled,
 }) => {
   const handleSquareClick = (levelClicked: number) => {
+    if (disabled) return;
     onUpdate(category.id, levelClicked);
   };
 
@@ -99,8 +103,7 @@ const ValueRow: React.FC<ValueRowProps> = ({
               levelPosition={levelPos}
               currentLevel={currentLevel}
               onClick={() => handleSquareClick(levelPos)}
-              // Determine disabled state (optional, could prevent clicking current level again)
-              // disabled={levelPos === currentLevel}
+              disabled={disabled}
             />
           ))}
         </div>
@@ -119,9 +122,29 @@ export const UserValuesEditor: React.FC = () => {
   const initializeUserValueSettings = useTransactionStore(
     (state) => state.initializeUserValueSettings
   );
+  const valuesCommittedUntil = useTransactionStore(
+    (state) => state.valuesCommittedUntil
+  );
 
   const appStatus = useTransactionStore((state) => state.appStatus);
   const initRanForUserRef = useRef<string | null>(null);
+
+  // Determine if editing is disabled
+  const isEditingDisabled = React.useMemo(() => {
+    if (valuesCommittedUntil && valuesCommittedUntil instanceof Timestamp) {
+      return valuesCommittedUntil.toDate() > new Date();
+    }
+    return false;
+  }, [valuesCommittedUntil]);
+
+  const committedUntilDateString = React.useMemo(() => {
+    if (isEditingDisabled && valuesCommittedUntil) {
+      return valuesCommittedUntil.toDate().toLocaleDateString(undefined, {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+    }
+    return "";
+  }, [isEditingDisabled, valuesCommittedUntil]);
 
   // Effect to initialize settings (remains the same logic)
   useEffect(() => {
@@ -162,7 +185,7 @@ export const UserValuesEditor: React.FC = () => {
   }, [user, authLoading, initializeUserValueSettings, userValueSettings]);
 
   const handleUpdate = (categoryId: string, newLevel: number) => {
-    // ... (handleUpdate logic remains the same) ...
+    if (isEditingDisabled) return;
     if (user) {
       updateUserValue(user.uid, categoryId, newLevel);
     } else {
@@ -171,7 +194,10 @@ export const UserValuesEditor: React.FC = () => {
   };
 
   // const handleReset = () => {
-  //   // ... (handleReset logic remains the same) ...
+  //   if (isEditingDisabled) {
+  //     alert("Values are committed and cannot be reset at this time.");
+  //     return;
+  //   }
   //   if (
   //     user &&
   //     window.confirm(
@@ -234,33 +260,34 @@ export const UserValuesEditor: React.FC = () => {
   // Main Render Output
   return (
     <div className="bg-white dark:bg-gray-800">
+      {isEditingDisabled && committedUntilDateString && (
+        <div className="p-3 sm:p-4 bg-yellow-100 dark:bg-yellow-700 border-b border-yellow-300 dark:border-yellow-600">
+          <p className="text-sm text-yellow-800 dark:text-yellow-100 text-center">
+            Your values are committed and locked until{" "}
+            <strong>{committedUntilDateString}</strong>.
+          </p>
+        </div>
+      )}
       {/* Header Section */}
       <div className="p-3 sm:p-4 flex justify-between items-center flex-wrap gap-2">
         {/* ... Header content remains the same ... */}
         <div>
           {" "}
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
-            Balance Your Values:
-          </h2>{" "}
 
         </div>
       </div>
       {/* --- STYLE CHANGE: Removed divide-y class --- */}
       <div className="px-2">
         {" "}
-        {VALUE_CATEGORIES.map((category) => {
-          const currentLevel =
-            userValueSettings[category.id] ?? category.defaultLevel;
-          return (
-            <ValueRow
-              key={category.id}
-              category={category}
-              currentLevel={currentLevel}
-              onUpdate={handleUpdate}
-              // Enablement props not needed for ValueRow anymore
-            />
-          );
-        })}
+        {VALUE_CATEGORIES.map((category) => (
+          <ValueRow
+            key={category.id}
+            category={category}
+            currentLevel={userValueSettings[category.id] || NEUTRAL_LEVEL}
+            onUpdate={handleUpdate}
+            disabled={isEditingDisabled}
+          />
+        ))}
       </div>
       {/* Footer Explanation Section */}
       {/* <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">

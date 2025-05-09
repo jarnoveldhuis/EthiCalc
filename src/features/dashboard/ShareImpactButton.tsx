@@ -45,37 +45,58 @@ export function ShareImpactButton({
   }, [userValueSettings, overallRatio, totalPositiveImpact]); // Dependencies are correct
 
   const handleShare = useCallback(async () => {
-    // ... (clipboard logic remains the same) ...
-     const shareText = generateShareText();
-     const successFeedback = 'Copied Impact & Values to Clipboard!';
-     const errorFeedback = 'Copying failed.';
-     setFeedback(null);
-     if (navigator.clipboard && navigator.clipboard.writeText) {
-       try { await navigator.clipboard.writeText(shareText); setFeedback(successFeedback); }
-       catch (error) { console.error('Clipboard write failed:', error); setFeedback(errorFeedback); }
-     } else {
-       try {
-         const textArea = document.createElement("textarea"); textArea.value = shareText; textArea.style.position = "fixed"; textArea.style.left = "-9999px"; document.body.appendChild(textArea); textArea.focus(); textArea.select(); document.execCommand('copy'); document.body.removeChild(textArea); setFeedback(successFeedback);
-       } catch (error) { console.error('Fallback copy failed:', error); alert("Copying not supported. Please copy the text manually:\n\n" + shareText); setFeedback('Manual copy needed.'); }
-     }
-     setTimeout(() => setFeedback(null), 3500);
+    const shareText = generateShareText();
+    const successFeedback = 'Copied Impact & Values to Clipboard!';
+    const errorFeedback = 'Copying failed.';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try { 
+        await navigator.clipboard.writeText(shareText); 
+        setFeedback(successFeedback); 
+      }
+      catch (error) { 
+        console.error('Clipboard write failed:', error); 
+        setFeedback(errorFeedback); 
+      }
+    } else {
+      try {
+        const textArea = document.createElement("textarea"); 
+        textArea.value = shareText; 
+        textArea.style.position = "fixed"; 
+        textArea.style.left = "-9999px"; 
+        document.body.appendChild(textArea); 
+        textArea.focus(); 
+        textArea.select(); 
+        document.execCommand('copy'); 
+        document.body.removeChild(textArea); 
+        setFeedback(successFeedback); 
+      } catch (error) { 
+        console.error('Fallback copy failed:', error); 
+        alert("Copying not supported. Please copy the text manually:\n\n" + shareText); 
+        setFeedback('Manual copy needed.'); 
+      }
+    }
+    setTimeout(() => setFeedback(null), 3500);
   }, [generateShareText]);
 
   if (!userValueSettings || Object.keys(userValueSettings).length < VALUE_CATEGORIES.length) {
-     // Don't render if value settings aren't fully loaded
      return null;
   }
 
   return (
-    <div className={`mt-4 text-center ${className}`}>
+    <div className={`inline-block ${className}`}>
         <button
           onClick={handleShare}
           className="text-xs px-3 py-1 border border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400 rounded hover:bg-blue-50 dark:hover:bg-blue-900/[0.3] whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          title="Reset all values to neutral (Level 3)"
         >
-        Share My Values
+        Share Impact
       </button>
-      {feedback && ( <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 animate-pulse">{feedback}</p> )}
+      <p 
+        className={`text-xs text-center text-gray-600 dark:text-gray-400 mt-2 transition-opacity duration-300 ease-in-out ${
+          feedback ? 'opacity-100 animate-pulse' : 'opacity-0'
+        }`}
+      >
+        {feedback || '\u00A0'}
+      </p>
     </div>
   );
 }

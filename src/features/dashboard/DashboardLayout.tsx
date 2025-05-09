@@ -2,9 +2,11 @@
 "use client";
 
 import { User } from "firebase/auth";
-import { ReactNode, useMemo } from "react"; // Import useMemo
+import { ReactNode, useMemo, useState } from "react"; // Import useState
 import { Header } from "@/shared/components/Header";
 import Image from "next/image";
+import { UserValuesModal } from "@/features/values/UserValuesModal"; // Import the modal
+import { useTransactionStore } from "@/store/transactionStore"; // Added import
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -34,8 +36,25 @@ export function DashboardLayout({
   effectiveDebt = 0 // <-- Receive the prop, default to 0
 }: DashboardLayoutProps) {
 
+  const [isValuesModalOpen, setIsValuesModalOpen] = useState(false); // State for the modal
+  const commitUserValues = useTransactionStore((state) => state.commitUserValues); // Get action
+
   // Calculate the background color using useMemo for efficiency
   const headerBackgroundColor = useMemo(() => getHeaderBackgroundColor(effectiveDebt), [effectiveDebt]);
+
+  const handleCommitValues = async () => {
+    if (user && user.uid) {
+      try {
+        await commitUserValues(user.uid);
+        console.log("User values committed successfully.");
+        // Optionally: show a success notification to the user
+      } catch (error) {
+        console.error("Failed to commit user values:", error);
+        // Optionally: show an error notification to the user
+      }
+    }
+    setIsValuesModalOpen(false); // Close modal regardless of success/failure for now
+  };
 
   return (
     <div className="min-h-screen"> {/* Removed bg-gray-100, uses CSS var */}
@@ -61,6 +80,7 @@ export function DashboardLayout({
               onLogout={onLogout}
               onDisconnectBank={onDisconnectBank}
               isBankConnected={isBankConnected}
+              onOpenValuesModal={() => setIsValuesModalOpen(true)} // Pass the handler
             />
           </div>
         </div>
@@ -70,6 +90,15 @@ export function DashboardLayout({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
+
+      {/* Render UserValuesModal */}
+      {isValuesModalOpen && (
+        <UserValuesModal 
+          isOpen={isValuesModalOpen} 
+          onClose={() => setIsValuesModalOpen(false)} 
+          onCommit={handleCommitValues} // Pass the handler
+        />
+      )}
     </div>
   );
 }

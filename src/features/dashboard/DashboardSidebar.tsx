@@ -6,7 +6,6 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import { UserValuesEditor } from "@/features/values/UserValuesEditor";
 import { useTransactionStore } from "@/store/transactionStore";
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { useCountUp } from "@/hooks/useCountUp";
@@ -14,12 +13,6 @@ import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
 import { useAuth } from "@/hooks/useAuth";
 import { ShareImpactButton } from "./ShareImpactButton";
-
-// // --- Helper: Format Currency (Now rounds by default due to AnimatedCounter change) ---
-// const formatCurrency = (value: number | null | undefined): string => {
-//   // Use toFixed(0) for non-animated contexts if needed, or rely on AnimatedCounter default
-//   return `$${Math.round(value ?? 0)}`;
-// };
 
 // --- Helper: Tier Calculation (Updated Colors) ---
 const getTierInfo = (
@@ -32,9 +25,7 @@ const getTierInfo = (
   colorClass: string;
   displayRatio?: number;
 } => {
-  // Use Tailwind classes matching the updated CSS variables
   const textColor = "text-gray-700 dark:text-gray-300";
-
   if (totalNegativeImpact <= 0) {
     if (totalPositiveImpact > 0)
       return {
@@ -51,7 +42,6 @@ const getTierInfo = (
     };
   }
   const ratio = scoreRatio ?? 0;
-  // Updated color classes to match new palette potentially
   if (ratio >= 1.0)
     return {
       name: "S",
@@ -65,34 +55,34 @@ const getTierInfo = (
       description: "Conscious Contributor",
       displayRatio: ratio,
       colorClass: "text-lime-600 dark:text-lime-400",
-    }; // Keep lime for variety?
+    };
   if (ratio >= 0.5)
     return {
       name: "B",
       description: "Neutral Navigator",
       displayRatio: ratio,
       colorClass: "text-yellow-500 dark:text-yellow-400",
-    }; // Adjusted yellow
+    };
   if (ratio >= 0.35)
     return {
       name: "C",
       description: "Passive Liability",
       displayRatio: ratio,
       colorClass: "text-amber-500 dark:text-amber-400",
-    }; // Adjusted amber
+    };
   if (ratio >= 0.2)
     return {
       name: "D",
       description: "Dead Weight",
       displayRatio: ratio,
       colorClass: "text-orange-500 dark:text-orange-400",
-    }; // Adjusted orange
+    };
   return {
     name: "F",
     description: "Societal Parasite",
     displayRatio: ratio,
     colorClass: "text-rose-600 dark:text-rose-400",
-  }; // Use rose
+  };
 };
 
 // --- Sidebar Component ---
@@ -110,7 +100,6 @@ export function DashboardSidebar() {
   const [currentAppliedPercentage, setCurrentAppliedPercentage] = useState(0);
   const overallAnimationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- Calculations (Mostly Unchanged, rely on AnimatedCounter default for rounding) ---
   const applied = useMemo(
     () => (isBankConnected ? impactAnalysis?.appliedCredit ?? 0 : 0),
     [impactAnalysis, isBankConnected]
@@ -154,7 +143,6 @@ export function DashboardSidebar() {
     return totalNegativeImpact === 0 ? null : applied / totalNegativeImpact;
   }, [impactAnalysis, applied, totalNegativeImpact, isBankConnected]);
 
-  // Note: animatedAppliedRatioPercentString still needs decimal places for the percentage display
   const animatedAppliedRatioPercentString = useCountUp(
     isBankConnected && actualAppliedRatio !== null
       ? Math.max(0, actualAppliedRatio * 100)
@@ -176,7 +164,6 @@ export function DashboardSidebar() {
     isBankConnected,
   ]);
 
-  // Tier background colors (consider using less saturated versions or removing altogether)
   const topCardBackgroundClass = useMemo(() => {
     if (!isBankConnected || !impactAnalysis)
       return "bg-gray-400 dark:bg-gray-600";
@@ -186,13 +173,12 @@ export function DashboardSidebar() {
         : "bg-gray-400 dark:bg-gray-600";
     }
     const ratio = targetScoreRatio ?? 0;
-    // Example: Using slightly less saturated versions or alternatives
-    if (ratio >= 1.0) return "bg-emerald-500 dark:bg-emerald-700"; // S
-    if (ratio >= 0.75) return "bg-lime-500 dark:bg-lime-700"; // A
-    if (ratio >= 0.5) return "bg-yellow-400 dark:bg-yellow-600"; // B
-    if (ratio >= 0.35) return "bg-amber-400 dark:bg-amber-600"; // C
-    if (ratio >= 0.2) return "bg-orange-500 dark:bg-orange-700"; // D
-    return "bg-rose-600 dark:bg-rose-800"; // F (Using rose)
+    if (ratio >= 1.0) return "bg-emerald-500 dark:bg-emerald-700";
+    if (ratio >= 0.75) return "bg-lime-500 dark:bg-lime-700";
+    if (ratio >= 0.5) return "bg-yellow-400 dark:bg-yellow-600";
+    if (ratio >= 0.35) return "bg-amber-400 dark:bg-amber-600";
+    if (ratio >= 0.2) return "bg-orange-500 dark:bg-orange-700";
+    return "bg-rose-600 dark:bg-rose-800";
   }, [
     impactAnalysis,
     totalNegativeImpact,
@@ -207,13 +193,11 @@ export function DashboardSidebar() {
     return Math.min(100, Math.max(0, (applied / totalNegativeImpact) * 100));
   }, [applied, totalNegativeImpact, effective, isBankConnected]);
 
-  // Use updated CSS vars for progress bar track
   const progressBarTrackColor =
     effective > 0
       ? "bg-rose-200 dark:bg-rose-900/[.5]"
       : "bg-emerald-200 dark:bg-emerald-900/[.5]";
 
-  // --- Effects (Unchanged) ---
   useEffect(() => {
     if (!isBankConnected) {
       setIsOverallAnimationReady(false);
@@ -237,7 +221,6 @@ export function DashboardSidebar() {
     };
   }, [targetAppliedPercentage, impactAnalysis, isBankConnected]);
 
-  // --- Action Handlers (Unchanged) ---
   const handleApplyCredit = useCallback(async () => {
     if (
       !user ||
@@ -271,7 +254,6 @@ export function DashboardSidebar() {
     openDonationModal("All Societal Debt", amountToPotentiallyOffset);
   }, [openDonationModal, effective]);
 
-  // --- Conditional Button Logic (Updated Button Text) ---
   const getActionButton = () => {
     const isBusy = appStatus !== "idle" && appStatus !== "error";
     const isApplying = appStatus === "applying_credit";
@@ -281,8 +263,7 @@ export function DashboardSidebar() {
           disabled
           className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-gray-400 dark:bg-gray-500 text-white opacity-50 cursor-not-allowed"
         >
-          {" "}
-          Connect Bank{" "}
+          Connect Bank
         </button>
       );
     }
@@ -292,15 +273,13 @@ export function DashboardSidebar() {
           disabled
           className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-gray-400 dark:bg-gray-500 text-white opacity-50 cursor-not-allowed"
         >
-          {" "}
           {appStatus === "initializing"
             ? "Initializing..."
-            : "Processing..."}{" "}
+            : "Processing..."}
         </button>
       );
     }
 
-    // Apply Credit Button (Text unchanged, includes amount)
     if (available > 0 && effective > 0) {
       return (
         <button
@@ -313,15 +292,13 @@ export function DashboardSidebar() {
           }`}
           title={`Apply $${available.toFixed(2)} credit`}
         >
-          {" "}
           {isApplying
             ? "Applying..."
-            : `Apply Credit ($${available.toFixed(0)})`}{" "}
+            : `Apply Credit ($${available.toFixed(0)})`}
         </button>
       );
-    } // Rounded amount in button text
+    }
 
-    // Offset Remaining Debt Button (Text Simplified)
     if (available <= 0 && effective > 0) {
       return (
         <button
@@ -334,13 +311,11 @@ export function DashboardSidebar() {
           }`}
           title={`Offset $${effective.toFixed(2)} remaining debt`}
         >
-          {" "}
-          Offset{" "}
+          Offset
         </button>
       );
-    } // << TEXT UPDATED
+    }
 
-    // Donate Button (Text Simplified)
     if (effective <= 0) {
       return (
         <button
@@ -353,38 +328,30 @@ export function DashboardSidebar() {
           }`}
           title="Make an additional donation"
         >
-          {" "}
-          Donate{" "}
+          Donate
         </button>
       );
-    } // << TEXT UPDATED
+    }
 
     return (
       <button
         disabled
         className="w-full px-4 py-2 rounded-lg text-sm font-semibold bg-gray-400 dark:bg-gray-500 text-white opacity-50 cursor-not-allowed"
       >
-        {" "}
-        Calculating...{" "}
+        Calculating...
       </button>
     );
   };
 
-  // --- Render Logic ---
   return (
     <div className="w-full lg:col-span-1 min-h-[100px] lg:min-h-0">
       <div className="card mb-6 h-full flex flex-col">
-        {" "}
-        {/* Main card container */}
         {/* Section 1: Top Card - Debt Amount & Action Button */}
         <div
           className={`${topCardBackgroundClass} transition-colors duration-2000 p-4 sm:p-6 rounded-t-lg`}
         >
-          {" "}
-          {/* Adjusted rounding */}
           <div className="text-center mb-4">
             <div className="mb-1">
-              {/* Using decimalPlaces={0} explicitly */}
               <AnimatedCounter
                 value={effective}
                 prefix="$"
@@ -398,14 +365,14 @@ export function DashboardSidebar() {
           </div>
           <div className="mt-4">{getActionButton()}</div>
         </div>
+
         {/* Conditionally Rendered Content Wrapper */}
         {isBankConnected && (
           <div className={`flex-grow flex flex-col`}>
-
-            {/* START: Moved Tier Info Section */}
+            {/* Tier Info Section */}
             <div className="p-4 text-center border-b border-slate-200 dark:border-slate-700">
               {impactAnalysis !== null && appStatus !== "error" && (
-                <div className="mb-3"> {/* Original Tier Info inner div, mb-3 might be adjusted if only element */}
+                <div className="mb-3">
                   <p
                     className={`text-sm font-medium ${currentTierInfo.colorClass}`}
                   >
@@ -433,22 +400,20 @@ export function DashboardSidebar() {
                 </p>
               )}
             </div>
-            {/* END: Moved Tier Info Section */}
 
-            {/* Section 2: Overall Progress Bar - Border removed */}
+            {/* Overall Progress Bar */}
             {impactAnalysis !== null && appStatus !== "error" ? (
-              <div className="p-4 space-y-2"> {/* Removed border-b border-slate-200 dark:border-slate-700 */}
+              <div className="p-4 space-y-2">
                 <div className="flex justify-between text-xs sm:text-sm mb-1">
                   <span className="font-medium text-[var(--muted-foreground)]">
                     Applied Credit
                   </span>
                   <span className="font-medium text-[var(--muted-foreground)]">
-                    {" "}
                     {effective > 0
                       ? "Remaining Debt"
                       : totalNegativeImpact > 0
                       ? "Debt Offset"
-                      : "Net Positive"}{" "}
+                      : "Net Positive"}
                   </span>
                 </div>
                 <div
@@ -462,18 +427,15 @@ export function DashboardSidebar() {
                         : "0%",
                     }}
                     title={`Applied: $${applied.toFixed(2)}`}
-                  />{" "}
-                  {/* Show precise on hover */}
+                  />
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm">
-                  {/* Applied Amount - Rounded Display */}
                   <AnimatedCounter
                     value={applied}
                     prefix="$"
                     className="font-semibold text-[var(--success)]"
                     decimalPlaces={0}
                   />
-                  {/* Effective Debt Amount - Rounded Display */}
                   <AnimatedCounter
                     value={effective}
                     prefix="$"
@@ -491,52 +453,38 @@ export function DashboardSidebar() {
                         : `Net Positive Impact: $${Math.abs(effective).toFixed(
                             2
                           )}`
-                    } // Precise on hover
+                    }
                   />
-                  
                 </div>
               </div>
             ) : (
-              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400"> {/* Removed border-b border-slate-200 dark:border-slate-700 */}
+              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
                 {appStatus === "error"
                   ? "Error loading data"
                   : "Calculating progress..."}
               </div>
             )}
-
-            {/* Section 3: Now primarily Share Button - Tier Info and its fallback are moved out */}
-
             
-            {isBankConnected && user && (
-               <div className=""> 
-                   <UserValuesEditor />
-               </div>
-            )}
+            {/* Share Button Section */}
             <div className="p-4 mt-auto text-center">
               {impactAnalysis !== null && appStatus !== "error" && (
-                <>
-                  {/* Share Button */}
-                  <div>
-                    <ShareImpactButton
-                      overallRatio={actualAppliedRatio}
-                      totalPositiveImpact={totalPositiveImpact}
-                    />
-                  </div>
-                </>
+                <ShareImpactButton
+                  overallRatio={actualAppliedRatio}
+                  totalPositiveImpact={totalPositiveImpact}
+                />
               )}
-              {/* "Tier information unavailable" message was here, MOVED UP */}
             </div>
           </div>
         )}
+
         {!isBankConnected && (
           <div className="p-6 text-center text-gray-500 dark:text-gray-400 text-sm">
-            {" "}
-            Connect your bank account to see your impact analysis.{" "}
+            Connect your bank account to see your impact analysis.
           </div>
         )}
       </div>
 
-      {/* Donation Modal (Unchanged) */}
+      {/* Donation Modal */}
       {modalState.isOpen && (
         <DonationModal
           isOpen={modalState.isOpen}

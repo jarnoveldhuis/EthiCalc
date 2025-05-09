@@ -6,6 +6,7 @@ import { DisconnectBankButton } from "@/features/banking/DisconnectBankButton";
 interface HeaderProps {
   user: User | null;
   onLogout: () => void;
+  onOpenValuesModal: () => void; // New prop
   onDisconnectBank?: () => void; // Optional disconnect function
   isBankConnected?: boolean; // Status passed from parent
 }
@@ -13,6 +14,7 @@ interface HeaderProps {
 export function Header({
   user,
   onLogout,
+  onOpenValuesModal, // New prop
   onDisconnectBank,
   isBankConnected = false
 }: HeaderProps) {
@@ -31,7 +33,15 @@ export function Header({
   }, []);
 
   return (
-    <div className="flex items-center space-x-4">
+    <div className="flex items-center space-x-2"> {/* Reduced space-x-4 to space-x-2 to make room */}
+      {/* "Customize Values" Button - Updated with Gradient */}
+      <button
+        onClick={onOpenValuesModal}
+        className="px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-md whitespace-nowrap bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 transition-all duration-300 ease-in-out"
+      >
+        Customize Values
+      </button>
+
       {/* User Menu */}
       <div className="relative" ref={dropdownRef}>
         <button
