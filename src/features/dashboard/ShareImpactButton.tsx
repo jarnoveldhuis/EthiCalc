@@ -38,8 +38,8 @@ export function ShareImpactButton({
     });
 
     const valueParams = VALUE_CATEGORIES.map(cat => `${cat.id}:${userValueSettings[cat.id] || NEUTRAL_LEVEL}`).join(',');
-    // !!! IMPORTANT: Replace 'https://your-app-url.com/dashboard' with your actual URL !!!
-    const shareLink = `https://your-app-url.com/dashboard?sharedValues=${encodeURIComponent(valueParams)}`; 
+
+    const shareLink = `https://mordebt.vercel.app/dashboard?sharedValues=${encodeURIComponent(valueParams)}`; 
 
     return `${overallImpactText}\n\n${valuesText}\nCheck out Virtue Balance & set your values!\n${shareLink}`;
   }, [userValueSettings, overallRatio, totalPositiveImpact]); // Dependencies are correct

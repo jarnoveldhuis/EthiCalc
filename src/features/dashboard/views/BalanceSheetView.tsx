@@ -14,12 +14,13 @@ import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal";
 import { valueEmojis } from "@/config/valueEmojis"; // Correct import
+import { DesktopCategoryRow } from "./DesktopCategoryRow"; // Import the new component
 
-// --- Interface Definitions --- (Keep as before)
-interface BalanceSheetViewProps {
-  transactions: Transaction[];
-}
-interface CombinedImpactDetail {
+
+// --- Interface Definitions (ProcessedCategoryData, CategoryInlineOffsetState, CombinedImpactDetail, DetailItemProps) ---
+// These might need to be moved to a shared types file or ensure they are correctly defined/exported
+// For brevity, I'm assuming they are available as previously defined.
+export interface CombinedImpactDetail { // Make sure this is available to DesktopCategoryRow
   vendorName: string;
   practice: string;
   totalImpactAmount: number;
@@ -30,18 +31,7 @@ interface CombinedImpactDetail {
   isPositive: boolean;
   contributingTxCount: number;
 }
-interface DetailItemProps {
-  detail: CombinedImpactDetail;
-  amountColor: string;
-}
-interface CategoryInlineOffsetState {
-  recommendationStatus: "idle" | "loading" | "loaded" | "error";
-  recommendedCharity: EnrichedCharityResult | null;
-  donationAmount: number;
-  errorMessage: string | null;
-}
-
-interface ProcessedCategoryData {
+export interface ProcessedCategoryData { // Make sure this is available
   name: string;
   icon: string;
   totalPositiveImpact: number;
@@ -49,31 +39,14 @@ interface ProcessedCategoryData {
   positiveDetails: CombinedImpactDetail[];
   negativeDetails: CombinedImpactDetail[];
 }
-
-interface CategoryCardProps {
-  category: ProcessedCategoryData;
-  isPositive: boolean;
-  isExpanded: boolean;
-  onToggleExpand: (categoryName: string) => void;
-  onOpenModal: (categoryName: string, amount: number) => void;
-  inlineOffsetState?: CategoryInlineOffsetState;
-  fetchRecommendation: (categoryName: string) => Promise<void>;
-  updateInlineOffsetState: (categoryName: string, updates: Partial<CategoryInlineOffsetState>) => void;
-  triggerWidget: (charity: EnrichedCharityResult, amount: number) => void;
+export interface CategoryInlineOffsetState { // Make sure this is available
+  recommendationStatus: "idle" | "loading" | "loaded" | "error";
+  recommendedCharity: EnrichedCharityResult | null;
+  donationAmount: number;
+  errorMessage: string | null;
 }
 
-interface UnifiedCategoryCardProps {
-  category: ProcessedCategoryData;
-  isExpanded: boolean;
-  onToggleExpand: (categoryName: string) => void;
-  onOpenModal: (categoryName: string, amount: number) => void;
-  inlineOffsetState?: CategoryInlineOffsetState;
-  fetchRecommendation: (categoryName: string) => Promise<void>;
-  updateInlineOffsetState: (categoryName: string, updates: Partial<CategoryInlineOffsetState>) => void;
-  triggerWidget: (charity: EnrichedCharityResult, amount: number) => void;
-}
-
-// --- Helper Functions --- (Keep as before)
+// --- Helper Functions ---
 const formatCurrency = (value: number | undefined | null): string => {
   const num = value ?? 0;
   return `$${num.toFixed(2)}`;
@@ -99,96 +72,80 @@ const getWidgetIdentifier = (
     .replace(/^-+|-+$/g, "");
 };
 
-// --- Sub-Components (Keep DetailItem, CategoryCard, UnifiedCategoryCard definitions) ---
-// Ensure these components use CharityImage and CharityRating imports correctly within their JSX
-const DetailItem: React.FC<DetailItemProps> = ({ detail, amountColor }) => {
-  /* ... */ const [citationsVisible, setCitationsVisible] = useState(false);
+// --- DetailItem Component ---
+// This should be defined here or imported if it's in a separate file.
+// For this example, let's assume it's defined above or imported.
+export const DetailItem: React.FC<{detail: CombinedImpactDetail, amountColor: string}> = ({ detail, amountColor }) => {
+  const [citationsVisible, setCitationsVisible] = useState(false);
   const citations = detail.citations;
   const hasCitations = Array.isArray(citations) && citations.length > 0;
   const preciseFormatImpact = (amount: number, isPositive: boolean) => {
     const sign = isPositive ? "+" : "-";
-    return `${sign}${formatCurrency(amount)}`;
+    return `${sign}$${Math.abs(amount ?? 0).toFixed(2)}`;
   };
   return (
-    <div className="border-b border-slate-200 dark:border-slate-700 pb-2 last:border-b-0 last:pb-0">
-      {" "}
+    <div className="border-b border-slate-200 dark:border-slate-700 pb-2 last:border-b-0 last:pb-0 mb-2 last:mb-0">
       <div className="flex justify-between items-start mb-1 gap-2">
-        {" "}
         <div className="flex-grow min-w-0">
-          {" "}
           <span
             className="block font-medium text-[var(--card-foreground)] text-sm truncate"
             title={detail.vendorName}
           >
-            {" "}
-            {detail.vendorName}{" "}
-          </span>{" "}
+            {detail.vendorName}
+          </span>
           <span
             className="block text-xs text-blue-600 dark:text-blue-400 truncate"
             title={detail.practice}
           >
-            {" "}
-            {detail.practice} ({detail.impactWeight}%){" "}
-          </span>{" "}
+            {detail.practice} ({detail.impactWeight}%)
+          </span>
           {detail.contributingTxCount > 1 && (
             <span className="block text-xxs text-[var(--muted-foreground)]">
-              {" "}
-              ({detail.contributingTxCount} transactions){" "}
+              ({detail.contributingTxCount} transactions)
             </span>
-          )}{" "}
-        </div>{" "}
+          )}
+        </div>
         <div className="text-right flex-shrink-0">
-          {" "}
           <AnimatedCounter
-            value={detail.totalImpactAmount}
+            value={Math.abs(detail.totalImpactAmount)}
             prefix={detail.isPositive ? "+$" : "-$"}
             className={`block font-medium ${amountColor} text-sm`}
             decimalPlaces={0}
             title={`Precise: ${preciseFormatImpact(detail.totalImpactAmount, detail.isPositive)}`}
-          />{" "}
+          />
           <span className="block text-xs text-[var(--muted-foreground)]">
-            {" "}
-            (Orig: {formatCurrency(detail.totalOriginalAmount)}){" "}
-          </span>{" "}
-        </div>{" "}
-      </div>{" "}
+            (Orig: $${(detail.totalOriginalAmount ?? 0).toFixed(2)})
+          </span>
+        </div>
+      </div>
       {detail.information && (
         <p className="mt-1 pl-2 border-l-2 border-gray-300 dark:border-gray-600 text-xs text-[var(--card-foreground)] opacity-80 italic">
-          {" "}
           <span aria-hidden="true">ℹ️ </span>
-          {detail.information}{" "}
+          {detail.information}
           {hasCitations && !citationsVisible && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setCitationsVisible(true);
-              }}
+              onClick={(e) => { e.stopPropagation(); setCitationsVisible(true); }}
               className="ml-2 text-blue-500 hover:underline text-[10px] font-medium"
             >
               [Show Sources]
             </button>
-          )}{" "}
+          )}
           {hasCitations && citationsVisible && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setCitationsVisible(false);
-              }}
+              onClick={(e) => { e.stopPropagation(); setCitationsVisible(false); }}
               className="ml-2 text-blue-500 hover:underline text-[10px] font-medium"
             >
               [Hide Sources]
             </button>
-          )}{" "}
+          )}
         </p>
-      )}{" "}
+      )}
       {hasCitations && citationsVisible && (
         <ul className="mt-1 ml-6 list-disc text-xs space-y-0.5">
-          {" "}
           {citations.map(
             (citation: Citation, urlIndex: number) =>
               citation?.url && (
                 <li key={urlIndex}>
-                  {" "}
                   <a
                     href={citation.url}
                     target="_blank"
@@ -197,604 +154,24 @@ const DetailItem: React.FC<DetailItemProps> = ({ detail, amountColor }) => {
                     onClick={(e) => e.stopPropagation()}
                     title={citation.url}
                   >
-                    {" "}
-                    {citation.title || `Source ${urlIndex + 1}`}{" "}
-                  </a>{" "}
+                    {citation.title || `Source ${urlIndex + 1}`}
+                  </a>
                 </li>
               )
-          )}{" "}
+          )}
         </ul>
-      )}{" "}
-    </div>
-  );
-};
-const CategoryCard: React.FC<CategoryCardProps> = ({
-  category,
-  isPositive,
-  isExpanded,
-  onToggleExpand,
-  onOpenModal,
-  inlineOffsetState,
-  fetchRecommendation,
-  updateInlineOffsetState,
-  triggerWidget,
-}) => {
-  /* ... */ const details = isPositive
-    ? category.positiveDetails
-    : category.negativeDetails;
-  const amountColor = isPositive
-    ? "text-[var(--success)] dark:text-emerald-400"
-    : "text-[var(--destructive)] dark:text-rose-400";
-  const totalImpact = isPositive
-    ? category.totalPositiveImpact
-    : category.totalNegativeImpact;
-  const showDetails = isExpanded;
-  const isEmpty = details.length === 0;
-  const showInlineOffsetUI =
-    isPositive && isEmpty && category.totalNegativeImpact > 0;
-  useEffect(() => {
-    if (
-      isExpanded &&
-      showInlineOffsetUI &&
-      inlineOffsetState?.recommendationStatus === "idle"
-    ) {
-      fetchRecommendation(category.name);
-    }
-  }, [
-    isExpanded,
-    showInlineOffsetUI,
-    category.name,
-    fetchRecommendation,
-    inlineOffsetState?.recommendationStatus,
-  ]);
-  const handleInlineWidgetTrigger = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const charity = inlineOffsetState?.recommendedCharity;
-    const amount =
-      inlineOffsetState?.donationAmount ?? category.totalNegativeImpact;
-    if (charity && amount >= 1) {
-      triggerWidget(charity, amount);
-    } else {
-      updateInlineOffsetState(category.name, {
-        errorMessage: "Please enter amount >= $1.",
-      });
-    }
-  };
-  const handleInlineAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newAmount = Math.max(1, Number(e.target.value));
-    updateInlineOffsetState(category.name, { donationAmount: newAmount });
-  };
-  const handleOpenModalForChange = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const amount =
-      inlineOffsetState?.donationAmount ?? category.totalNegativeImpact;
-    onOpenModal(category.name, amount);
-  };
-  const handleOpenModalClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onOpenModal(category.name, Math.abs(totalImpact));
-  };
-  return (
-    <div className="card flex flex-col h-full">
-      {" "}
-      <div
-        role="button"
-        tabIndex={0}
-        className={`w-full bg-gray-50 dark:bg-gray-700/[.5] p-3 flex justify-between items-center text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-t-lg cursor-pointer`}
-        onClick={() => onToggleExpand(category.name)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") onToggleExpand(category.name);
-        }}
-        aria-expanded={isExpanded}
-      >
-        {" "}
-        <div className="flex items-center flex-grow min-w-0">
-          {" "}
-          <span className="text-lg mr-2 sm:mr-3">{category.icon}</span>{" "}
-          <span
-            className="font-semibold text-gray-700 dark:text-gray-200 text-sm sm:text-base truncate mr-3"
-            title={category.name}
-          >
-            {" "}
-            {category.name}{" "}
-          </span>{" "}
-        </div>{" "}
-        <div className="flex items-center flex-shrink-0 gap-2">
-          {" "}
-          <AnimatedCounter
-            value={Math.abs(totalImpact)}
-            prefix="$"
-            className={`font-bold ${amountColor} text-sm sm:text-base w-20 text-right`}
-            decimalPlaces={0}
-            title={`Precise: ${formatCurrency(totalImpact)}`}
-          />{" "}
-          {!isPositive && totalImpact > 0.005 && (
-            <button
-              onClick={handleOpenModalClick}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs px-2 py-1 rounded-full transition-colors whitespace-nowrap z-10"
-              title={`Offset ${category.name} impact`}
-            >
-              {" "}
-              Offset{" "}
-            </button>
-          )}{" "}
-          <svg
-            className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
-              isExpanded ? "rotate-180" : ""
-            }`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M19 9l-7 7-7-7"
-            ></path>
-          </svg>{" "}
-        </div>{" "}
-      </div>{" "}
-      <div
-        className={`flex-grow overflow-y-auto max-h-96 scrollable-content ${
-          showDetails ? "block" : "hidden"
-        }`}
-      >
-        {" "}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700 space-y-3">
-          {" "}
-          {!isEmpty &&
-            details.map((detail: CombinedImpactDetail, index: number) => (
-              <DetailItem
-                key={`${isPositive ? "pos" : "neg"}-detail-${
-                  category.name
-                }-${index}-${detail.vendorName}-${detail.practice}`}
-                detail={detail}
-                amountColor={amountColor}
-              />
-            ))}{" "}
-          {isEmpty && showDetails && !showInlineOffsetUI && (
-            <p className="text-xs text-center text-[var(--card-foreground)] opacity-70">
-              {" "}
-              No {isPositive ? "positive" : "negative"} impact details.{" "}
-            </p>
-          )}{" "}
-          {showInlineOffsetUI && showDetails && inlineOffsetState && (
-            <div className="space-y-3">
-              {" "}
-              <p className="text-xs text-[var(--muted-foreground)] italic text-center">
-                {" "}
-                Offset negative impact:{" "}
-              </p>{" "}
-              {inlineOffsetState.recommendationStatus === "loading" && (
-                <LoadingSpinner message="Finding best charity..." />
-              )}{" "}
-              {inlineOffsetState.recommendationStatus === "error" && (
-                <p className="text-xs text-red-500 text-center">
-                  {" "}
-                  {inlineOffsetState.errorMessage || "Could not load."}{" "}
-                </p>
-              )}{" "}
-              {inlineOffsetState.recommendationStatus === "loaded" &&
-                !inlineOffsetState.recommendedCharity && (
-                  <p className="text-xs text-gray-500 text-center">
-                    {" "}
-                    No specific charity found.{" "}
-                  </p>
-                )}{" "}
-              {inlineOffsetState.recommendedCharity && (
-                <div className="border rounded-md p-3 bg-white dark:bg-gray-700/[.5] space-y-2 border-slate-200 dark:border-slate-600">
-                  {" "}
-                  <div className="flex items-start space-x-3">
-                    {" "}
-                    <CharityImage
-                      src={inlineOffsetState.recommendedCharity.logoUrl}
-                      alt={inlineOffsetState.recommendedCharity.name}
-                      width={40}
-                      height={40}
-                    />{" "}
-                    <div className="flex-grow min-w-0">
-                      {" "}
-                      <p className="text-sm font-medium text-[var(--card-foreground)] truncate">
-                        {" "}
-                        {inlineOffsetState.recommendedCharity.name}{" "}
-                      </p>{" "}
-                      <CharityRating
-                        charity={inlineOffsetState.recommendedCharity}
-                      />{" "}
-                    </div>{" "}
-                  </div>{" "}
-                  <button
-                    onClick={handleOpenModalForChange}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    {" "}
-                    Change Charity{" "}
-                  </button>{" "}
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-600">
-                    {" "}
-                    <div className="flex items-center justify-between space-x-2">
-                      {" "}
-                      <label
-                        htmlFor={`donationAmount-${category.name}-desktop`}
-                        className="sr-only"
-                      >
-                        {" "}
-                        Amount:{" "}
-                      </label>{" "}
-                      <div className="flex items-center flex-grow">
-                        {" "}
-                        <span className="text-gray-500 dark:text-gray-400 mr-1">
-                          $
-                        </span>{" "}
-                        <input
-                          id={`donationAmount-${category.name}-desktop`}
-                          type="number"
-                          min="1"
-                          value={inlineOffsetState.donationAmount}
-                          onChange={handleInlineAmountChange}
-                          className="w-full p-1 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                          aria-label="Donation Amount"
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        />{" "}
-                      </div>{" "}
-                      <button
-                        onClick={handleInlineWidgetTrigger}
-                        className="flex-shrink-0 text-sm bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-md disabled:opacity-50"
-                        disabled={inlineOffsetState.donationAmount < 1}
-                      >
-                        {" "}
-                        Donate{" "}
-                      </button>{" "}
-                    </div>{" "}
-                    {inlineOffsetState.errorMessage && (
-                      <p className="text-xs text-red-500 mt-1">
-                        {" "}
-                        {inlineOffsetState.errorMessage}{" "}
-                      </p>
-                    )}{" "}
-                  </div>{" "}
-                </div>
-              )}{" "}
-              {(inlineOffsetState.recommendationStatus === "error" ||
-                (inlineOffsetState.recommendationStatus === "loaded" &&
-                  !inlineOffsetState.recommendedCharity)) && (
-                <button
-                  onClick={handleOpenModalClick}
-                  className="w-full mt-1 text-sm bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-md"
-                >
-                  {" "}
-                  Offset (Choose Charity){" "}
-                </button>
-              )}{" "}
-            </div>
-          )}{" "}
-        </div>{" "}
-      </div>{" "}
-    </div>
-  );
-};
-const UnifiedCategoryCard: React.FC<UnifiedCategoryCardProps> = ({
-  category,
-  isExpanded,
-  onToggleExpand,
-  onOpenModal,
-  inlineOffsetState,
-  fetchRecommendation,
-  updateInlineOffsetState,
-  triggerWidget,
-}) => {
-  /* ... */ const { totalPositiveImpact, totalNegativeImpact } = category;
-  const netImpact = totalPositiveImpact - totalNegativeImpact;
-  const negativeImpactForOffset = totalNegativeImpact;
-  const allDetails = [
-    ...category.negativeDetails,
-    ...category.positiveDetails,
-  ].sort((a, b) => {
-    if (a.isPositive !== b.isPositive) return a.isPositive ? 1 : -1;
-    return Math.abs(b.totalImpactAmount) - Math.abs(a.totalImpactAmount);
-  });
-  const showMobileInlineOffsetUI = isExpanded && totalNegativeImpact > 0.005;
-  useEffect(() => {
-    if (
-      isExpanded &&
-      showMobileInlineOffsetUI &&
-      inlineOffsetState?.recommendationStatus === "idle"
-    ) {
-      fetchRecommendation(category.name);
-    }
-  }, [
-    isExpanded,
-    showMobileInlineOffsetUI,
-    category.name,
-    fetchRecommendation,
-    inlineOffsetState?.recommendationStatus,
-  ]);
-  const handleInlineWidgetTrigger = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const charity = inlineOffsetState?.recommendedCharity;
-    const amount = inlineOffsetState?.donationAmount ?? negativeImpactForOffset;
-    if (charity && amount >= 1) {
-      triggerWidget(charity, amount);
-    } else {
-      updateInlineOffsetState(category.name, {
-        errorMessage: "Please enter amount >= $1.",
-      });
-    }
-  };
-  const handleInlineAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newAmount = Math.max(1, Number(e.target.value));
-    updateInlineOffsetState(category.name, { donationAmount: newAmount });
-  };
-  const handleOpenModalForChange = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const amount =
-      inlineOffsetState?.donationAmount ?? category.totalNegativeImpact;
-    onOpenModal(category.name, amount);
-  };
-  const handleOpenModalClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onOpenModal(category.name, negativeImpactForOffset);
-  };
-  const totalAbsoluteImpact = totalPositiveImpact + totalNegativeImpact;
-  let positivePercent = 0;
-  let negativePercent = 0;
-  if (totalAbsoluteImpact > 0.005) {
-    positivePercent = (totalPositiveImpact / totalAbsoluteImpact) * 100;
-    negativePercent = (totalNegativeImpact / totalAbsoluteImpact) * 100;
-  } else if (totalPositiveImpact > 0.005) positivePercent = 100;
-  else if (totalNegativeImpact > 0.005) negativePercent = 100;
-  return (
-    <div className="card flex flex-col">
-      {" "}
-      <div
-        role="button"
-        tabIndex={0}
-        className={`w-full bg-gray-50 dark:bg-gray-700/[.5] p-3 flex flex-col text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-t-lg cursor-pointer`}
-        onClick={() => onToggleExpand(category.name)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") onToggleExpand(category.name);
-        }}
-        aria-expanded={isExpanded}
-      >
-        {" "}
-        <div className="flex justify-between items-center w-full">
-          {" "}
-          <div className="flex items-center flex-grow min-w-0">
-            {" "}
-            <span className="text-lg mr-2 sm:mr-3">{category.icon}</span>{" "}
-            <span
-              className="font-semibold text-gray-700 dark:text-gray-200 text-sm sm:text-base truncate mr-3"
-              title={category.name}
-            >
-              {" "}
-              {category.name}{" "}
-            </span>{" "}
-          </div>{" "}
-          <div className="flex items-center flex-shrink-0 gap-2">
-            {" "}
-            <AnimatedCounter
-              value={Math.abs(netImpact)}
-              prefix={netImpact >= 0 ? "+$" : "-$"}
-              className={`font-bold ${getNetImpactColor(
-                netImpact
-              )} text-sm sm:text-base w-20 text-right`}
-              decimalPlaces={0}
-              title={`Precise: ${netImpact >= 0 ? "+" : ""}${formatCurrency(
-                netImpact
-              )}`}
-            />{" "}
-            {negativeImpactForOffset > 0.005 && (
-              <button
-                onClick={handleOpenModalClick}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs px-2 py-1 rounded-full transition-colors whitespace-nowrap z-10"
-                title={`Offset ${
-                  category.name
-                } negative impact (${formatCurrency(negativeImpactForOffset)})`}
-              >
-                {" "}
-                Offset{" "}
-              </button>
-            )}{" "}
-            <svg
-              className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
-                isExpanded ? "rotate-180" : ""
-              }`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M19 9l-7 7-7-7"
-              ></path>
-            </svg>{" "}
-          </div>{" "}
-        </div>{" "}
-        {(totalPositiveImpact > 0.005 || totalNegativeImpact > 0.005) && (
-          <div className="w-full mt-2 px-1">
-            {" "}
-            <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden flex">
-              {" "}
-              <div
-                className="bg-[var(--success)] dark:bg-emerald-400 h-full"
-                style={{ width: `${positivePercent}%` }}
-                title={`Positive Impact: ${formatCurrency(
-                  totalPositiveImpact
-                )}`}
-              />{" "}
-              <div
-                className="bg-[var(--destructive)] dark:bg-rose-400 h-full"
-                style={{ width: `${negativePercent}%` }}
-                title={`Negative Impact: ${formatCurrency(
-                  totalNegativeImpact
-                )}`}
-              />{" "}
-            </div>{" "}
-          </div>
-        )}{" "}
-      </div>{" "}
-      <div
-        className={`flex-grow overflow-y-auto max-h-96 scrollable-content ${
-          isExpanded ? "block" : "hidden"
-        }`}
-      >
-        {" "}
-        <div className="p-3 space-y-2 border-t border-slate-200 dark:border-slate-700">
-          {" "}
-          {allDetails.length === 0 && isExpanded && (
-            <p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">
-              {" "}
-              No specific impact details.{" "}
-            </p>
-          )}{" "}
-          {allDetails.map((detail, index) => {
-            const detailAmountColor = detail.isPositive
-              ? "text-[var(--success)] dark:text-emerald-400"
-              : "text-[var(--destructive)] dark:text-rose-400";
-            const detailBackgroundClass = detail.isPositive
-              ? "bg-emerald-50/[.6] dark:bg-emerald-900/[.3]"
-              : "bg-rose-50/[.6] dark:bg-rose-900/[.3]";
-            return (
-              <div
-                key={`unified-detail-${category.name}-${index}-${detail.vendorName}-${detail.practice}`}
-                className={`${detailBackgroundClass} p-2 rounded border-b border-gray-200/[.5] dark:border-gray-700/[.5] last:border-b-0`}
-              >
-                {" "}
-                <DetailItem
-                  detail={detail}
-                  amountColor={detailAmountColor}
-                />{" "}
-              </div>
-            );
-          })}{" "}
-          {showMobileInlineOffsetUI && inlineOffsetState && (
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-700 mt-3 space-y-3">
-              {" "}
-              <p className="text-xs text-[var(--muted-foreground)] italic text-center">
-                {" "}
-                Offset negative impact:{" "}
-              </p>{" "}
-              {inlineOffsetState.recommendationStatus === "loading" && (
-                <LoadingSpinner message="Finding best charity..." />
-              )}{" "}
-              {inlineOffsetState.recommendationStatus === "error" && (
-                <p className="text-xs text-red-500 text-center">
-                  {" "}
-                  {inlineOffsetState.errorMessage || "Could not load."}{" "}
-                </p>
-              )}{" "}
-              {inlineOffsetState.recommendationStatus === "loaded" &&
-                !inlineOffsetState.recommendedCharity && (
-                  <p className="text-xs text-gray-500 text-center">
-                    {" "}
-                    No specific charity found.{" "}
-                  </p>
-                )}{" "}
-              {inlineOffsetState.recommendedCharity && (
-                <div className="border rounded-md p-3 bg-white dark:bg-gray-700/[.5] space-y-2 border-slate-200 dark:border-slate-600">
-                  {" "}
-                  <div className="flex items-start space-x-3">
-                    {" "}
-                    <CharityImage
-                      src={inlineOffsetState.recommendedCharity.logoUrl}
-                      alt={inlineOffsetState.recommendedCharity.name}
-                      width={40}
-                      height={40}
-                    />{" "}
-                    <div className="flex-grow min-w-0">
-                      {" "}
-                      <p className="text-sm font-medium text-[var(--card-foreground)] truncate">
-                        {" "}
-                        {inlineOffsetState.recommendedCharity.name}{" "}
-                      </p>{" "}
-                      <CharityRating
-                        charity={inlineOffsetState.recommendedCharity}
-                      />{" "}
-                    </div>{" "}
-                  </div>{" "}
-                  <button
-                    onClick={handleOpenModalForChange}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    {" "}
-                    Change Charity{" "}
-                  </button>{" "}
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-600">
-                    {" "}
-                    <div className="flex items-center justify-between space-x-2">
-                      {" "}
-                      <label
-                        htmlFor={`donationAmount-${category.name}-mobile`}
-                        className="sr-only"
-                      >
-                        {" "}
-                        Amount:{" "}
-                      </label>{" "}
-                      <div className="flex items-center flex-grow">
-                        {" "}
-                        <span className="text-gray-500 dark:text-gray-400 mr-1">
-                          $
-                        </span>{" "}
-                        <input
-                          id={`donationAmount-${category.name}-mobile`}
-                          type="number"
-                          min="1"
-                          value={inlineOffsetState.donationAmount}
-                          onChange={handleInlineAmountChange}
-                          className="w-full p-1 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                          aria-label="Donation Amount"
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        />{" "}
-                      </div>{" "}
-                      <button
-                        onClick={handleInlineWidgetTrigger}
-                        className="flex-shrink-0 text-sm bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-md disabled:opacity-50"
-                        disabled={inlineOffsetState.donationAmount < 1}
-                      >
-                        {" "}
-                        Donate{" "}
-                      </button>{" "}
-                    </div>{" "}
-                    {inlineOffsetState.errorMessage && (
-                      <p className="text-xs text-red-500 mt-1">
-                        {" "}
-                        {inlineOffsetState.errorMessage}{" "}
-                      </p>
-                    )}{" "}
-                  </div>{" "}
-                </div>
-              )}{" "}
-              {(inlineOffsetState.recommendationStatus === "error" ||
-                (inlineOffsetState.recommendationStatus === "loaded" &&
-                  !inlineOffsetState.recommendedCharity)) && (
-                <button
-                  onClick={handleOpenModalClick}
-                  className="w-full mt-1 text-sm bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-md"
-                >
-                  {" "}
-                  Offset (Choose Charity){" "}
-                </button>
-              )}{" "}
-            </div>
-          )}{" "}
-        </div>{" "}
-      </div>{" "}
+      )}
     </div>
   );
 };
 
+
 // --- Main Balance Sheet Component ---
-export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
+export function BalanceSheetView({ transactions }: { transactions: Transaction[] }) { // Added type for props
   const impactAnalysis = useTransactionStore((state) => state.impactAnalysis);
   const userValueSettings = useTransactionStore(
     (state) => state.userValueSettings
   );
-  // <<< FIX: Get function from the store hook >>>
   const getUserValueMultiplier = useTransactionStore(
     (state) => state.getUserValueMultiplier
   );
@@ -807,334 +184,254 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
   >({});
 
   const processedData = useMemo(() => {
-    console.log("BalanceSheetView: Recalculating processedData memo...");
-    // Calculate base category impacts (positive=1x, negative=value-adjusted)
-    const categoryImpacts = calculationService.calculateCategoryImpacts(
-      transactions ?? [],
-      userValueSettings
-    );
+    // ... (Keep your existing processedData memoization logic) ...
+    // Ensure this logic correctly populates ProcessedCategoryData including positiveDetails and negativeDetails
+        const categoryImpacts = calculationService.calculateCategoryImpacts(
+          transactions ?? [],
+          userValueSettings
+        );
 
-    // Initialize category map
-    const categoryMap: Record<
-      string,
-      {
-        name: string;
-        icon: string;
-        totalPositiveImpact: number;
-        totalNegativeImpact: number;
-        positiveDetails: CombinedImpactDetail[];
-        negativeDetails: CombinedImpactDetail[];
-      }
-    > = {};
-    Object.keys(categoryImpacts).forEach((catName) => {
-      const icon =
-        valueEmojis[catName] || valueEmojis["Default Category"] || "❓";
-      categoryMap[catName] = {
-        name: catName,
-        icon: icon,
-        totalPositiveImpact: categoryImpacts[catName].positiveImpact,
-        totalNegativeImpact: categoryImpacts[catName].negativeImpact,
-        positiveDetails: [],
-        negativeDetails: [],
-      };
-    });
+        const categoryMap: Record<string, ProcessedCategoryData> = {};
+        Object.keys(categoryImpacts).forEach((catName) => {
+          const icon =
+            valueEmojis[catName] || valueEmojis["Default Category"] || "❓";
+          categoryMap[catName] = {
+            name: catName,
+            icon: icon,
+            totalPositiveImpact: categoryImpacts[catName].positiveImpact,
+            totalNegativeImpact: categoryImpacts[catName].negativeImpact,
+            positiveDetails: [],
+            negativeDetails: [],
+          };
+        });
 
-    // Aggregate detailed impacts for display (Applying multipliers again for detail view consistency)
-    // Note: This duplicates some calculation but ensures details reflect applied multipliers
-    const aggregatedDetails: Record<
-      string,
-      Record<string, CombinedImpactDetail>
-    > = {}; // category -> comboKey -> detail
+        const aggregatedDetails: Record<
+          string, // categoryName
+          Record<string, CombinedImpactDetail> // practiceKey -> detail
+        > = {};
 
-    (transactions ?? []).forEach((tx) => {
-      const processPracticesForDetail = (isPositive: boolean) => {
-        const practices = isPositive
-          ? tx.ethicalPractices || []
-          : tx.unethicalPractices || [];
-        practices.forEach((practice) => {
-          const categoryName = tx.practiceCategories?.[practice];
-          if (categoryName && categoryMap[categoryName]) {
-            // Check if category is relevant
-            const weight = tx.practiceWeights?.[practice] || 0;
-            const baseImpactAmount = tx.amount * (weight / 100);
-            let finalImpactAmount = baseImpactAmount;
+        (transactions ?? []).forEach((tx) => {
+          const processPracticesForDetail = (isPositivePractice: boolean) => {
+            const practices = isPositivePractice
+              ? tx.ethicalPractices || []
+              : tx.unethicalPractices || [];
+            practices.forEach((practice) => {
+              const categoryName = tx.practiceCategories?.[practice];
+              if (categoryName && categoryMap[categoryName]) {
+                const weight = tx.practiceWeights?.[practice] || 0;
+                const baseImpactAmount = tx.amount * (weight / 100);
+                let finalImpactAmount = baseImpactAmount;
 
-            // <<< FIX: Apply multiplier for NEGATIVE practices using the store function >>>
-            if (!isPositive) {
-              const multiplier = getUserValueMultiplier(categoryName); // Get from store
-              finalImpactAmount *= multiplier;
-            }
+                if (!isPositivePractice) {
+                  const multiplier = getUserValueMultiplier(categoryName);
+                  finalImpactAmount *= multiplier;
+                }
 
-            if (
-              isNaN(finalImpactAmount) ||
-              Math.abs(finalImpactAmount) <= 0.005
-            )
-              return;
+                if (
+                  isNaN(finalImpactAmount) ||
+                  Math.abs(finalImpactAmount) <= 0.005
+                )
+                  return;
 
-            const vendorKey = tx.name || "Unknown Vendor";
-            const comboKey = `${vendorKey}|${practice}|${categoryName}`; // Include category in key
+                const vendorKey = tx.name || "Unknown Vendor";
+                const comboKey = `${vendorKey}|${practice}`; 
 
-            if (!aggregatedDetails[categoryName])
-              aggregatedDetails[categoryName] = {};
+                if (!aggregatedDetails[categoryName])
+                  aggregatedDetails[categoryName] = {};
 
-            if (aggregatedDetails[categoryName][comboKey]) {
-              // Aggregate onto existing detail
-              aggregatedDetails[categoryName][comboKey].totalImpactAmount +=
-                finalImpactAmount;
-              aggregatedDetails[categoryName][comboKey].totalOriginalAmount +=
-                tx.amount;
-              aggregatedDetails[categoryName][
-                comboKey
-              ].contributingTxCount += 1;
-              // Keep citation from first encountered, or merge if needed (complex)
-              // Keep information from first encountered
-            } else {
-              // Create new detail entry
-              aggregatedDetails[categoryName][comboKey] = {
-                vendorName: vendorKey,
-                practice,
-                totalImpactAmount: finalImpactAmount,
-                totalOriginalAmount: tx.amount,
-                impactWeight: weight,
-                information: tx.information?.[practice],
-                citations: tx.citations?.[practice] ?? [],
-                isPositive,
-                contributingTxCount: 1,
-              };
-            }
+                if (aggregatedDetails[categoryName][comboKey]) {
+                  aggregatedDetails[categoryName][comboKey].totalImpactAmount += finalImpactAmount;
+                  aggregatedDetails[categoryName][comboKey].totalOriginalAmount += tx.amount; 
+                  aggregatedDetails[categoryName][comboKey].contributingTxCount += 1;
+                } else {
+                  aggregatedDetails[categoryName][comboKey] = {
+                    vendorName: vendorKey,
+                    practice,
+                    totalImpactAmount: finalImpactAmount,
+                    totalOriginalAmount: tx.amount,
+                    impactWeight: weight,
+                    information: tx.information?.[practice],
+                    citations: tx.citations?.[practice] ?? [],
+                    isPositive: isPositivePractice,
+                    contributingTxCount: 1,
+                  };
+                }
+              }
+            });
+          };
+          processPracticesForDetail(true);
+          processPracticesForDetail(false);
+        });
+
+        Object.keys(aggregatedDetails).forEach((catName) => {
+          if (categoryMap[catName]) {
+            Object.values(aggregatedDetails[catName]).forEach((detail) => {
+              if (detail.isPositive)
+                categoryMap[catName].positiveDetails.push(detail);
+              else categoryMap[catName].negativeDetails.push(detail);
+            });
+            categoryMap[catName].positiveDetails.sort(
+              (a, b) =>
+                Math.abs(b.totalImpactAmount) - Math.abs(a.totalImpactAmount)
+            );
+            categoryMap[catName].negativeDetails.sort(
+              (a, b) =>
+                Math.abs(b.totalImpactAmount) - Math.abs(a.totalImpactAmount)
+            );
           }
         });
-      };
-      processPracticesForDetail(true); // Process positive practices
-      processPracticesForDetail(false); // Process negative practices
-    });
-
-    // Assign aggregated details to categoryMap and sort
-    Object.keys(aggregatedDetails).forEach((catName) => {
-      if (categoryMap[catName]) {
-        Object.values(aggregatedDetails[catName]).forEach((detail) => {
-          if (detail.isPositive)
-            categoryMap[catName].positiveDetails.push(detail);
-          else categoryMap[catName].negativeDetails.push(detail);
+         const finalCategories = Object.values(categoryMap).sort((a, b) => {
+            const netA = a.totalPositiveImpact - a.totalNegativeImpact;
+            const netB = b.totalPositiveImpact - b.totalNegativeImpact;
+            if (netA < 0 && netB >= 0) return -1; 
+            if (netA >= 0 && netB < 0) return 1;  
+            if (netA < 0 && netB < 0) return netA - netB; 
+            if (netB !== netA) return netB - netA; 
+            return b.totalNegativeImpact - a.totalNegativeImpact; 
         });
-        // Sort details within each category
-        categoryMap[catName].positiveDetails.sort(
-          (a, b) =>
-            Math.abs(b.totalImpactAmount) - Math.abs(a.totalImpactAmount)
-        );
-        categoryMap[catName].negativeDetails.sort(
-          (a, b) =>
-            Math.abs(b.totalImpactAmount) - Math.abs(a.totalImpactAmount)
-        );
-      }
-    });
-
-    const finalCategories = Object.values(categoryMap).sort((a, b) => {
-      const netA = a.totalPositiveImpact - a.totalNegativeImpact;
-      const netB = b.totalPositiveImpact - b.totalNegativeImpact;
-      if (Math.abs(netA - netB) > 0.005) return netA - netB;
-      return b.totalNegativeImpact - a.totalNegativeImpact;
-    });
-
-    return {
-      categories: finalCategories,
-      overallPositive: impactAnalysis?.positiveImpact ?? 0,
-      overallNegative: impactAnalysis?.negativeImpact ?? 0,
-    };
-    // <<< FIX: Added getUserValueMultiplier dependency >>>
+        
+        return {
+          categories: finalCategories,
+          overallPositive: impactAnalysis?.positiveImpact ?? 0,
+          overallNegative: impactAnalysis?.negativeImpact ?? 0,
+        };
   }, [transactions, impactAnalysis, userValueSettings, getUserValueMultiplier]);
 
-  // ... (Rest of the component: other hooks, handlers, useEffect, render logic) ...
-  const updateInlineOffsetState = useCallback(
-    (categoryName: string, updates: Partial<CategoryInlineOffsetState>) => {
-      setCategoryInlineUIState((prev) => ({
-        ...prev,
-        [categoryName]: {
-          ...(prev[categoryName] || {
-            recommendationStatus: "idle",
-            recommendedCharity: null,
-            donationAmount: 0,
-            errorMessage: null,
-          }),
-          ...updates,
+  // ... (Keep updateInlineOffsetState, findDominantPracticeSearchTerm, fetchRecommendation, triggerEveryOrgWidget, useEffect for categoryInlineUIState, toggleCategory ) ...
+    const updateInlineOffsetState = useCallback(
+        (categoryName: string, updates: Partial<CategoryInlineOffsetState>) => {
+        setCategoryInlineUIState((prev) => ({
+            ...prev,
+            [categoryName]: {
+            ...(prev[categoryName] || {
+                recommendationStatus: "idle",
+                recommendedCharity: null,
+                donationAmount: 0,
+                errorMessage: null,
+            }),
+            ...updates,
+            },
+        }));
         },
-      }));
-    },
     []
   );
-  const findDominantPracticeSearchTerm = useCallback(
-    (categoryName: string) => {
-      if (
-        !transactions ||
-        transactions.length === 0 ||
-        categoryName === "All Societal Debt"
-      )
-        return categoryName === "All Societal Debt"
-          ? "environment"
-          : categoryName;
-      const pc: Record<string, { c: number; t?: string }> = {};
-      transactions.forEach((tx) => {
-        (tx.unethicalPractices || []).forEach((p) => {
-          if (tx.practiceCategories?.[p] === categoryName) {
-            const w = tx.practiceWeights?.[p] || 0;
-            const c = Math.abs(tx.amount) * (w / 100);
-            const cur = pc[p] || { c: 0 };
-            pc[p] = { c: cur.c + c, t: tx.practiceSearchTerms?.[p] || cur.t };
-          }
+
+  const findDominantPracticeSearchTerm = useCallback( /* ...as before... */ 
+      (categoryName: string): string => {
+        if (!transactions || transactions.length === 0 || categoryName === "All Societal Debt")
+            return categoryName === "All Societal Debt" ? "environment" : categoryName;
+        const practiceContributions: Record<string, { amount: number; term?: string }> = {};
+        transactions.forEach((tx) => {
+            (tx.unethicalPractices || []).forEach((practice) => {
+            if (tx.practiceCategories?.[practice] === categoryName) {
+                const weight = tx.practiceWeights?.[practice] || 0;
+                const contribution = Math.abs(tx.amount) * (weight / 100);
+                const currentTotal = practiceContributions[practice]?.amount || 0;
+                practiceContributions[practice] = {
+                    amount: currentTotal + contribution,
+                    term: tx.practiceSearchTerms?.[practice] || practiceContributions[practice]?.term
+                };
+            }
+            });
         });
-      });
-      if (Object.keys(pc).length === 0) return categoryName;
-      let dp: string | null = null;
-      let mc = -1;
-      let tdp: string | undefined = undefined;
-      for (const [p, d] of Object.entries(pc)) {
-        if (d.c > mc) {
-          mc = d.c;
-          dp = p;
-          tdp = d.t;
+        if (Object.keys(practiceContributions).length === 0) return categoryName;
+        let dominantPractice: string | null = null;
+        let maxContribution = -1;
+        let termForDominantPractice: string | undefined = undefined;
+        for (const [practice, data] of Object.entries(practiceContributions)) {
+            if (data.amount > maxContribution) {
+            maxContribution = data.amount;
+            dominantPractice = practice;
+            termForDominantPractice = data.term;
+            }
         }
-      }
-      if (tdp) return tdp;
-      else {
-        const fm: Record<string, string> = {
-          "Factory Farming": "animal welfare",
-          "High Emissions": "climate",
-          "Data Privacy Issues": "digital rights",
-          "Water Waste": "water conservation",
-          "Environmental Degradation": "conservation",
+        if (termForDominantPractice) return termForDominantPractice;
+        const fallbackMappings: Record<string, string> = {
+            "Factory Farming": "animal welfare", "High Emissions": "climate",
+            "Data Privacy Issues": "digital rights", "Water Waste": "water conservation",
+            "Environmental Degradation": "conservation", "Labor Exploitation": "labor rights"
         };
-        const ft = (dp && fm[dp]) || categoryName;
-        return ft;
-      }
-    },
-    [transactions]
-  );
-  const fetchRecommendation = useCallback(
+        return (dominantPractice && fallbackMappings[dominantPractice]) || categoryName;
+    }, [transactions]);
+  
+  const fetchRecommendation = useCallback( /* ...as before... */ 
     async (categoryName: string) => {
-      if (categoryInlineUIState[categoryName]?.recommendationStatus !== "idle")
-        return;
-      updateInlineOffsetState(categoryName, {
-        recommendationStatus: "loading",
-        errorMessage: null,
-      });
+      if (categoryInlineUIState[categoryName]?.recommendationStatus !== "idle") return;
+      updateInlineOffsetState(categoryName, { recommendationStatus: "loading", errorMessage: null });
       try {
         const searchTerm = findDominantPracticeSearchTerm(categoryName);
-        const results =
-          await enhancedCharityService.getTopRatedCharitiesWithPaymentLinks(
-            searchTerm,
-            1
-          );
+        const results = await enhancedCharityService.getTopRatedCharitiesWithPaymentLinks(searchTerm, 1);
         const recommendation = results.length > 0 ? results[0] : null;
-        const categoryData = processedData.categories.find(
-          (c) => c.name === categoryName
-        );
-        const defaultAmount = Math.max(
-          1,
-          Math.round(categoryData?.totalNegativeImpact ?? 1)
-        );
+        const categoryData = processedData.categories.find((c) => c.name === categoryName);
+        const defaultAmount = Math.max(1, Math.round(Math.abs(categoryData?.totalNegativeImpact ?? 1)));
         updateInlineOffsetState(categoryName, {
           recommendationStatus: "loaded",
           recommendedCharity: recommendation,
-          donationAmount: defaultAmount,
+          donationAmount: defaultAmount, 
         });
       } catch (error) {
-        console.error(
-          `Error fetching recommendation for ${categoryName}:`,
-          error
-        );
+        console.error(`Error fetching recommendation for ${categoryName}:`, error);
         updateInlineOffsetState(categoryName, {
-          recommendationStatus: "error",
-          recommendedCharity: null,
-          errorMessage: "Failed to load.",
+          recommendationStatus: "error", recommendedCharity: null, errorMessage: "Failed to load charity suggestion.",
         });
       }
     },
-    [
-      categoryInlineUIState,
-      updateInlineOffsetState,
-      findDominantPracticeSearchTerm,
-      processedData.categories,
-    ]
+    [categoryInlineUIState, updateInlineOffsetState, findDominantPracticeSearchTerm, processedData.categories]
   );
-  const triggerEveryOrgWidget = useCallback(
+
+  const triggerEveryOrgWidget = useCallback( /* ...as before... */ 
     (charity: EnrichedCharityResult, amount: number) => {
       const charityIdentifier = getWidgetIdentifier(charity);
-      const categoryName =
-        Object.keys(categoryInlineUIState).find(
-          (cn) =>
-            categoryInlineUIState[cn]?.recommendedCharity?.id === charity.id
-        ) || "Unknown Category";
+      const categoryName = Object.keys(categoryInlineUIState).find(cn => 
+        categoryInlineUIState[cn]?.recommendedCharity?.id === charity.id ||
+        categoryInlineUIState[cn]?.recommendedCharity?.name === charity.name
+      ) || "Unknown Category";
       if (!charityIdentifier) {
-        updateInlineOffsetState(categoryName, {
-          errorMessage: "Could not identify charity.",
-        });
+        updateInlineOffsetState(categoryName, { errorMessage: "Could not identify charity for donation widget." });
         return;
       }
       const finalAmount = Math.max(1, Math.round(amount));
       if (window.everyDotOrgDonateButton) {
         try {
-          const optionsToSet = {
-            nonprofitSlug: charityIdentifier,
-            amount: finalAmount,
-            noExit: false,
-            primaryColor: "#3b82f6",
-          };
+          const optionsToSet = { nonprofitSlug: charityIdentifier, amount: finalAmount, noExit: false, primaryColor: "#3b82f6" };
           window.everyDotOrgDonateButton.setOptions(optionsToSet);
           window.everyDotOrgDonateButton.showWidget();
         } catch (widgetError) {
-          console.error(
-            "Error configuring/showing Every.org widget:",
-            widgetError
-          );
-          updateInlineOffsetState(categoryName, {
-            errorMessage: "Could not init widget.",
-          });
+          console.error("Error configuring/showing Every.org widget:", widgetError);
+          updateInlineOffsetState(categoryName, { errorMessage: "Could not initialize donation widget." });
         }
       } else {
         console.error("Every.org widget script not loaded.");
-        updateInlineOffsetState(categoryName, {
-          errorMessage: "Donation service unavailable.",
-        });
+        updateInlineOffsetState(categoryName, { errorMessage: "Donation service is unavailable." });
       }
     },
     [updateInlineOffsetState, categoryInlineUIState]
   );
-  useEffect(() => {
+
+  useEffect(() => { /* ...as before... */ 
     processedData.categories.forEach((category) => {
       if (!categoryInlineUIState[category.name]) {
         updateInlineOffsetState(category.name, {
-          recommendationStatus: "idle",
-          recommendedCharity: null,
-          donationAmount: Math.max(
-            1,
-            Math.round(category.totalNegativeImpact ?? 1)
-          ),
+          recommendationStatus: "idle", recommendedCharity: null,
+          donationAmount: Math.max(1, Math.round(Math.abs(category.totalNegativeImpact ?? 1))),
           errorMessage: null,
         });
       } else {
-        const currentAmountState =
-          categoryInlineUIState[category.name]?.donationAmount;
-        const newDefaultAmount = Math.max(
-          1,
-          Math.round(category.totalNegativeImpact ?? 1)
-        );
-        if (Math.abs(currentAmountState - newDefaultAmount) > 0.5) {
-          updateInlineOffsetState(category.name, {
-            donationAmount: newDefaultAmount,
-          });
+        const currentAmountState = categoryInlineUIState[category.name]?.donationAmount;
+        const newDefaultAmount = Math.max(1, Math.round(Math.abs(category.totalNegativeImpact ?? 1)));
+        if (currentAmountState === undefined || Math.abs(currentAmountState - newDefaultAmount) > 0.5) {
+           if (categoryInlineUIState[category.name]?.recommendationStatus !== 'loading') {
+             updateInlineOffsetState(category.name, { donationAmount: newDefaultAmount });
+           }
         }
       }
     });
-  }, [
-    processedData.categories,
-    categoryInlineUIState,
-    updateInlineOffsetState,
-  ]);
-  const toggleCategory = (categoryName: string) => {
-    setExpandedCategory((prev) =>
-      prev === categoryName ? null : categoryName
-    );
+  }, [processedData.categories, categoryInlineUIState, updateInlineOffsetState]);
+
+  const toggleCategory = (categoryName: string) => { /* ...as before... */ 
+    setExpandedCategory((prev) => (prev === categoryName ? null : categoryName));
   };
+
   if (!impactAnalysis && (!transactions || transactions.length === 0)) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1149,19 +446,143 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
       </div>
     );
   }
+  
   const fetchRecommendationCallback = fetchRecommendation;
+
+  // UnifiedCategoryCard - used for mobile view. This definition should be complete.
+  const UnifiedCategoryCard: React.FC<{
+      category: ProcessedCategoryData;
+      isExpanded: boolean;
+      onToggleExpand: (categoryName: string) => void;
+      onOpenModal: (categoryName: string, amount: number) => void;
+      inlineOffsetState?: CategoryInlineOffsetState;
+      fetchRecommendation: (categoryName: string) => Promise<void>;
+      updateInlineOffsetState: (categoryName: string, updates: Partial<CategoryInlineOffsetState>) => void;
+      triggerWidget: (charity: EnrichedCharityResult, amount: number) => void;
+    }> = ({
+      category, isExpanded, onToggleExpand, onOpenModal,
+      inlineOffsetState, fetchRecommendation, updateInlineOffsetState, triggerWidget
+    }) => {
+        const { totalPositiveImpact, totalNegativeImpact, name: categoryName, icon } = category;
+        const netImpact = totalPositiveImpact - totalNegativeImpact;
+        const negativeImpactForOffset = totalNegativeImpact;
+
+        const totalAbsoluteImpact = totalPositiveImpact + totalNegativeImpact;
+        let positivePercent = 0;
+        let negativePercent = 0;
+        if (totalAbsoluteImpact > 0.005) {
+            positivePercent = (totalPositiveImpact / totalAbsoluteImpact) * 100;
+            negativePercent = (totalNegativeImpact / totalAbsoluteImpact) * 100;
+        } else if (totalPositiveImpact > 0.005) positivePercent = 100;
+        else if (totalNegativeImpact > 0.005) negativePercent = 100;
+
+        const showMobileInlineOffsetUI = isExpanded && negativeImpactForOffset > 0.005;
+
+        useEffect(() => {
+            if (isExpanded && showMobileInlineOffsetUI && inlineOffsetState?.recommendationStatus === "idle") {
+            fetchRecommendation(categoryName);
+            }
+        }, [isExpanded, showMobileInlineOffsetUI, categoryName, fetchRecommendation, inlineOffsetState?.recommendationStatus]);
+
+        const handleOpenModalClick = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            onOpenModal(categoryName, negativeImpactForOffset);
+        };
+        const handleInlineWidgetTrigger = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            const charity = inlineOffsetState?.recommendedCharity;
+            const amount = inlineOffsetState?.donationAmount ?? negativeImpactForOffset;
+            if (charity && amount >= 1) triggerWidget(charity, amount);
+            else updateInlineOffsetState(categoryName, { errorMessage: "Please select a charity and enter amount >= $1."});
+        };
+        const handleInlineAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            const newAmount = Math.max(1, Number(e.target.value));
+            updateInlineOffsetState(categoryName, { donationAmount: newAmount });
+        };
+        const handleOpenModalForChangeCharity = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            const amount = inlineOffsetState?.donationAmount ?? negativeImpactForOffset;
+            onOpenModal(categoryName, amount);
+        };
+
+        return (
+            <div className="card flex flex-col">
+            <div
+                role="button" tabIndex={0}
+                className="w-full bg-gray-50 dark:bg-gray-700/[.5] p-3 flex flex-col text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-t-lg cursor-pointer"
+                onClick={() => onToggleExpand(categoryName)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onToggleExpand(categoryName); }}
+                aria-expanded={isExpanded}
+            >
+                <div className="flex justify-between items-center w-full">
+                <div className="flex items-center flex-grow min-w-0">
+                    <span className="text-lg mr-2 sm:mr-3">{icon}</span>
+                    <span className="font-semibold text-gray-700 dark:text-gray-200 text-sm sm:text-base truncate mr-3" title={categoryName}>{categoryName}</span>
+                </div>
+                <div className="flex items-center flex-shrink-0 gap-2">
+                    <AnimatedCounter value={Math.abs(netImpact)} prefix={netImpact >= 0 ? "+$" : "-$"} className={`font-bold ${getNetImpactColor(netImpact)} text-sm sm:text-base w-20 text-right`} decimalPlaces={0} title={`Precise: ${netImpact >= 0 ? "+" : ""}${(netImpact ?? 0).toFixed(2)}`} />
+                    {negativeImpactForOffset > 0.005 && (<button onClick={handleOpenModalClick} className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs px-2 py-1 rounded-full transition-colors whitespace-nowrap z-10" title={`Offset ${categoryName} negative impact (${formatCurrency(negativeImpactForOffset)})`}>Offset</button>)}
+                    <svg className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+                </div>
+                {(totalPositiveImpact > 0.005 || totalNegativeImpact > 0.005) && (
+                <div className="w-full mt-2 px-1">
+                    <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden flex">
+                    <div className="bg-[var(--success)] dark:bg-emerald-400 h-full" style={{ width: `${positivePercent}%` }} title={`Positive Impact: ${formatCurrency(totalPositiveImpact)}`} />
+                    <div className="bg-[var(--destructive)] dark:bg-rose-400 h-full" style={{ width: `${negativePercent}%` }} title={`Negative Impact: ${formatCurrency(totalNegativeImpact)}`} />
+                    </div>
+                </div>
+                )}
+            </div>
+            <div className={`flex-grow overflow-y-auto max-h-96 scrollable-content ${isExpanded ? "block" : "hidden"}`}>
+                <div className="p-3 space-y-2 border-t border-slate-200 dark:border-slate-700">
+                {category.negativeDetails.concat(category.positiveDetails).length === 0 && isExpanded && (<p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">No specific impact details.</p>)}
+                {category.negativeDetails.map((detail, index) => (<div key={`mob-neg-detail-${index}`} className="bg-rose-50/[.6] dark:bg-rose-900/[.3] p-2 rounded"><DetailItem detail={detail} amountColor="text-[var(--destructive)] dark:text-rose-400" /></div>))}
+                {category.positiveDetails.map((detail, index) => (<div key={`mob-pos-detail-${index}`} className="bg-emerald-50/[.6] dark:bg-emerald-900/[.3] p-2 rounded"><DetailItem detail={detail} amountColor="text-[var(--success)] dark:text-emerald-400" /></div>))}
+                {showMobileInlineOffsetUI && inlineOffsetState && (
+                    <div className="pt-3 border-t border-slate-200 dark:border-slate-700 mt-3 space-y-3">
+                    <p className="text-xs text-[var(--muted-foreground)] italic text-center">Offset {formatCurrency(negativeImpactForOffset)} negative impact:</p>
+                    {inlineOffsetState.recommendationStatus === "loading" && <LoadingSpinner message="Finding best charity..." />}
+                    {inlineOffsetState.recommendationStatus === "error" && <p className="text-xs text-red-500 text-center">{inlineOffsetState.errorMessage || "Could not load."}</p>}
+                    {inlineOffsetState.recommendationStatus === "loaded" && !inlineOffsetState.recommendedCharity && <p className="text-xs text-gray-500 text-center">No specific charity found.</p>}
+                    {inlineOffsetState.recommendedCharity && (
+                        <div className="border rounded-md p-3 bg-white dark:bg-gray-700/[.5] space-y-2 border-slate-200 dark:border-slate-600">
+                        <div className="flex items-start space-x-3">
+                            <CharityImage src={inlineOffsetState.recommendedCharity.logoUrl} alt={inlineOffsetState.recommendedCharity.name} width={40} height={40}/>
+                            <div className="flex-grow min-w-0"><p className="text-sm font-medium text-[var(--card-foreground)] truncate">{inlineOffsetState.recommendedCharity.name}</p><CharityRating charity={inlineOffsetState.recommendedCharity}/></div>
+                        </div>
+                        <button onClick={handleOpenModalForChangeCharity} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Change Charity</button>
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-600">
+                            <div className="flex items-center justify-between space-x-2">
+                            <label htmlFor={`donationAmount-${categoryName}-mobile`} className="sr-only">Amount:</label>
+                            <div className="flex items-center flex-grow"><span className="text-gray-500 dark:text-gray-400 mr-1">$</span><input id={`donationAmount-${categoryName}-mobile`} type="number" min="1" value={inlineOffsetState.donationAmount} onChange={handleInlineAmountChange} className="w-full p-1 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" aria-label="Donation Amount" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}/></div>
+                            <button onClick={handleInlineWidgetTrigger} className="flex-shrink-0 text-sm bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-md disabled:opacity-50" disabled={!inlineOffsetState.recommendedCharity || inlineOffsetState.donationAmount < 1} title={`Donate to ${inlineOffsetState.recommendedCharity?.name}`}>Donate</button>
+                            </div>
+                            {inlineOffsetState.errorMessage && <p className="text-xs text-red-500 mt-1">{inlineOffsetState.errorMessage}</p>}
+                        </div>
+                        </div>
+                    )}
+                    {(inlineOffsetState.recommendationStatus === "error" || (inlineOffsetState.recommendationStatus === "loaded" && !inlineOffsetState.recommendedCharity)) && <button onClick={handleOpenModalClick} className="w-full mt-1 text-sm bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded-md">Offset (Choose Charity)</button>}
+                    </div>
+                )}
+                </div>
+            </div>
+            </div>
+        );
+    };
+
+
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {" "}
+      {/* Mobile View (Unified Cards) */}
       <div className="lg:hidden space-y-4">
-        {" "}
         {processedData.categories.length === 0 && (
           <div className="card p-6 text-center">
             <p>No category impacts identified.</p>
           </div>
-        )}{" "}
+        )}
         {processedData.categories.map((category) => (
-          <UnifiedCategoryCard
+          <UnifiedCategoryCard // This remains for mobile
             key={`unified-mobile-${category.name}`}
             category={category}
             isExpanded={expandedCategory === category.name}
@@ -1172,87 +593,57 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
             updateInlineOffsetState={updateInlineOffsetState}
             triggerWidget={triggerEveryOrgWidget}
           />
-        ))}{" "}
-      </div>{" "}
-      <div className="hidden lg:block space-y-4">
-        {" "}
-        <div className="grid grid-cols-2 gap-x-6 pb-2 border-b border-slate-200 dark:border-slate-700">
-          {" "}
-          <h3 className="text-xl font-semibold text-center text-[var(--destructive)] dark:text-rose-400">
-            {" "}
-            Negative Impact{" "}
-            <span className="text-lg">
-              (
-              <AnimatedCounter
+        ))}
+      </div>
+
+      {/* Desktop View (NEW STRUCTURE USING DesktopCategoryRow) */}
+      <div className="hidden lg:block space-y-0"> {/* Changed space-y-4 to space-y-0 or adjust DesktopCategoryRow margin */}
+        <div className="grid grid-cols-2 gap-x-6 pb-2 mb-4 border-b border-slate-200 dark:border-slate-700">
+          <h3 className="text-xl font-semibold text-center text-[var(--card-foreground)] opacity-80">
+            Negative Details by Category
+            <span className="text-lg text-[var(--destructive)] dark:text-rose-400">
+              {" "}(Total: <AnimatedCounter
                 value={processedData.overallNegative}
                 prefix="$"
                 decimalPlaces={0}
-                title={`Precise: ${formatCurrency(
-                  processedData.overallNegative
-                )}`}
-              />
-              )
-            </span>{" "}
-          </h3>{" "}
-          <h3 className="text-xl font-semibold text-center text-[var(--success)] dark:text-emerald-400">
-            {" "}
-            Positive Impact{" "}
-            <span className="text-lg">
-              (
-              <AnimatedCounter
+                title={`Precise Total Negative: ${formatCurrency(processedData.overallNegative)}`}
+              />)
+            </span>
+          </h3>
+          <h3 className="text-xl font-semibold text-center text-[var(--card-foreground)] opacity-80">
+            Positive Details by Category
+             <span className="text-lg text-[var(--success)] dark:text-emerald-400">
+              {" "}(Total: <AnimatedCounter
                 value={processedData.overallPositive}
                 prefix="$"
                 decimalPlaces={0}
-                title={`Precise: ${formatCurrency(
-                  processedData.overallPositive
-                )}`}
-              />
-              )
-            </span>{" "}
-          </h3>{" "}
-        </div>{" "}
+                title={`Precise Total Positive: ${formatCurrency(processedData.overallPositive)}`}
+              />)
+            </span>
+          </h3>
+        </div>
         {processedData.categories.length === 0 && (
-          <div className="card p-6 text-center col-span-2">
+          <div className="card p-6 text-center col-span-2"> {/* Ensure this still works or remove col-span-2 if not in grid */}
             <p>No category impacts identified.</p>
           </div>
-        )}{" "}
+        )}
+        {/* THIS IS THE NEW LOOP FOR DESKTOP */}
         {processedData.categories.map((category) => (
-          <div
-            key={`cat-row-desktop-${category.name}`}
-            className="grid grid-cols-2 gap-x-6 items-start"
-          >
-            {" "}
-            <div>
-              {" "}
-              <CategoryCard
-                category={category}
-                isPositive={false}
-                isExpanded={expandedCategory === category.name}
-                onToggleExpand={toggleCategory}
-                onOpenModal={openDonationModal}
-                inlineOffsetState={categoryInlineUIState[category.name]}
-                fetchRecommendation={fetchRecommendationCallback}
-                updateInlineOffsetState={updateInlineOffsetState}
-                triggerWidget={triggerEveryOrgWidget}
-              />{" "}
-            </div>{" "}
-            <div>
-              {" "}
-              <CategoryCard
-                category={category}
-                isPositive={true}
-                isExpanded={expandedCategory === category.name}
-                onToggleExpand={toggleCategory}
-                onOpenModal={openDonationModal}
-                inlineOffsetState={categoryInlineUIState[category.name]}
-                fetchRecommendation={fetchRecommendationCallback}
-                updateInlineOffsetState={updateInlineOffsetState}
-                triggerWidget={triggerEveryOrgWidget}
-              />{" "}
-            </div>{" "}
-          </div>
-        ))}{" "}
-      </div>{" "}
+          <DesktopCategoryRow
+            key={`desktop-row-${category.name}`}
+            category={category}
+            isExpanded={expandedCategory === category.name}
+            onToggleExpand={toggleCategory}
+            onOpenModal={openDonationModal}
+            inlineOffsetState={categoryInlineUIState[category.name]}
+            fetchRecommendation={fetchRecommendationCallback}
+            updateInlineOffsetState={updateInlineOffsetState}
+            triggerWidget={triggerEveryOrgWidget}
+          />
+        ))}
+      </div>
+
+      {/* Donation Modal */}
       {modalState.isOpen && (
         <DonationModal
           isOpen={modalState.isOpen}
@@ -1260,8 +651,7 @@ export function BalanceSheetView({ transactions }: BalanceSheetViewProps) {
           amount={modalState.amount || 0}
           onClose={closeDonationModal}
         />
-      )}{" "}
+      )}
     </div>
   );
 }
-
