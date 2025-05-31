@@ -44,23 +44,9 @@ export function DesktopCategoryRow({
   const netImpact = totalPositiveImpact - totalNegativeImpact;
   const negativeImpactForOffset = totalNegativeImpact; // Amount to offset for this category
 
-  // Progress bar calculation
-  const totalAbsoluteImpact = totalPositiveImpact + totalNegativeImpact;
-  let positivePercent = 0;
-  let negativePercent = 0;
-  if (totalAbsoluteImpact > 0.005) {
-    positivePercent = (totalPositiveImpact / totalAbsoluteImpact) * 100;
-    negativePercent = (totalNegativeImpact / totalAbsoluteImpact) * 100;
-  } else if (totalPositiveImpact > 0.005) {
-    positivePercent = 100;
-  } else if (totalNegativeImpact > 0.005) {
-    negativePercent = 100;
-  }
-
   // Inline offset UI logic (for collapsed view or positive details empty view)
   const showInlineOffsetWhenCollapsed = !isExpanded && negativeImpactForOffset > 0.005 && inlineOffsetState?.recommendationStatus === 'loaded' && inlineOffsetState?.recommendedCharity;
   const showInlineOffsetInPositiveDetails = isExpanded && category.positiveDetails.length === 0 && negativeImpactForOffset > 0.005;
-
 
   useEffect(() => {
     // Fetch recommendation if card is collapsed but has debt, or if expanded and positive details are empty but has debt
@@ -265,22 +251,6 @@ export function DesktopCategoryRow({
             </svg>
           </div>
         </div>
-        {(totalPositiveImpact > 0.005 || totalNegativeImpact > 0.005) && (
-          <div className="w-full mt-2 px-1">
-            <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden flex">
-              <div
-                className="bg-[var(--success)] dark:bg-emerald-400 h-full"
-                style={{ width: `${positivePercent}%` }}
-                title={`Positive Impact: ${formatCurrency(totalPositiveImpact)}`}
-              />
-              <div
-                className="bg-[var(--destructive)] dark:bg-rose-400 h-full"
-                style={{ width: `${negativePercent}%` }}
-                title={`Negative Impact: ${formatCurrency(totalNegativeImpact)}`}
-              />
-            </div>
-          </div>
-        )}
         {/* Render inline offset section if card is collapsed and conditions met */}
         {renderInlineOffsetSection(true)}
       </div>
@@ -291,27 +261,27 @@ export function DesktopCategoryRow({
           {/* Negative Details Panel */}
           <div className="p-3 sm:p-4 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 space-y-3">
             <h4 className="text-sm font-semibold mb-2 text-center text-[var(--destructive)] dark:text-rose-400">
-              Negative Details ({formatCurrency(category.totalNegativeImpact)})
+              Negative Purchases ({formatCurrency(category.totalNegativeImpact)})
             </h4>
             {category.negativeDetails.length > 0 ? (
               category.negativeDetails.map((detail, index) => (
                 <DetailItem key={`desktop-neg-detail-${categoryName}-${index}`} detail={detail} amountColor="text-[var(--destructive)] dark:text-rose-400" />
               ))
             ) : (
-              <p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">No negative details for this category.</p>
+              <p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">No negative Purchases for this category.</p>
             )}
           </div>
-          {/* Positive Details Panel */}
+          {/* Positive Purchases Panel */}
           <div className="p-3 sm:p-4 space-y-3">
             <h4 className="text-sm font-semibold mb-2 text-center text-[var(--success)] dark:text-emerald-400">
-              Positive Details ({formatCurrency(category.totalPositiveImpact)})
+              Positive Purchases ({formatCurrency(category.totalPositiveImpact)})
             </h4>
             {category.positiveDetails.length > 0 ? (
               category.positiveDetails.map((detail, index) => (
                 <DetailItem key={`desktop-pos-detail-${categoryName}-${index}`} detail={detail} amountColor="text-[var(--success)] dark:text-emerald-400" />
               ))
             ) : (
-              <p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">No positive details for this category.</p>
+              <p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">No positive purchases for this category.</p>
             )}
             {/* Render inline offset section if positive details are empty and conditions met */}
             {renderInlineOffsetSection(false)}

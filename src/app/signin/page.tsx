@@ -43,7 +43,7 @@ export default function SigninPage() {
 
         {/* Title - Use card foreground variable */}
         <h1 className="text-2xl font-bold text-[var(--card-foreground)] mb-2"> {/* <-- TEXT COLOR CHANGED */}
-          Welcome to Value-Balance
+          Welcome to Social Balance
         </h1>
 
         {/* Premise Text - Use muted foreground variable */}

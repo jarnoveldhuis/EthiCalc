@@ -114,7 +114,7 @@ export const DetailItem: React.FC<{detail: CombinedImpactDetail, amountColor: st
             title={`Precise: ${preciseFormatImpact(detail.totalImpactAmount, detail.isPositive)}`}
           />
           <span className="block text-xs text-[var(--muted-foreground)]">
-            (Orig: $${(detail.totalOriginalAmount ?? 0).toFixed(2)})
+            (Orig: ${(detail.totalOriginalAmount ?? 0).toFixed(2)})
           </span>
         </div>
       </div>
@@ -467,15 +467,6 @@ export function BalanceSheetView({ transactions }: { transactions: Transaction[]
         const netImpact = totalPositiveImpact - totalNegativeImpact;
         const negativeImpactForOffset = totalNegativeImpact;
 
-        const totalAbsoluteImpact = totalPositiveImpact + totalNegativeImpact;
-        let positivePercent = 0;
-        let negativePercent = 0;
-        if (totalAbsoluteImpact > 0.005) {
-            positivePercent = (totalPositiveImpact / totalAbsoluteImpact) * 100;
-            negativePercent = (totalNegativeImpact / totalAbsoluteImpact) * 100;
-        } else if (totalPositiveImpact > 0.005) positivePercent = 100;
-        else if (totalNegativeImpact > 0.005) negativePercent = 100;
-
         const showMobileInlineOffsetUI = isExpanded && negativeImpactForOffset > 0.005;
 
         useEffect(() => {
@@ -525,14 +516,6 @@ export function BalanceSheetView({ transactions }: { transactions: Transaction[]
                     <svg className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                 </div>
                 </div>
-                {(totalPositiveImpact > 0.005 || totalNegativeImpact > 0.005) && (
-                <div className="w-full mt-2 px-1">
-                    <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden flex">
-                    <div className="bg-[var(--success)] dark:bg-emerald-400 h-full" style={{ width: `${positivePercent}%` }} title={`Positive Impact: ${formatCurrency(totalPositiveImpact)}`} />
-                    <div className="bg-[var(--destructive)] dark:bg-rose-400 h-full" style={{ width: `${negativePercent}%` }} title={`Negative Impact: ${formatCurrency(totalNegativeImpact)}`} />
-                    </div>
-                </div>
-                )}
             </div>
             <div className={`flex-grow overflow-y-auto max-h-96 scrollable-content ${isExpanded ? "block" : "hidden"}`}>
                 <div className="p-3 space-y-2 border-t border-slate-200 dark:border-slate-700">
@@ -600,9 +583,9 @@ export function BalanceSheetView({ transactions }: { transactions: Transaction[]
       <div className="hidden lg:block space-y-0"> {/* Changed space-y-4 to space-y-0 or adjust DesktopCategoryRow margin */}
         <div className="grid grid-cols-2 gap-x-6 pb-2 mb-4 border-b border-slate-200 dark:border-slate-700">
           <h3 className="text-xl font-semibold text-center text-[var(--card-foreground)] opacity-80">
-            Negative Details by Category
+            Negative Impact
             <span className="text-lg text-[var(--destructive)] dark:text-rose-400">
-              {" "}(Total: <AnimatedCounter
+              {" "}(Total: -<AnimatedCounter
                 value={processedData.overallNegative}
                 prefix="$"
                 decimalPlaces={0}
@@ -611,7 +594,7 @@ export function BalanceSheetView({ transactions }: { transactions: Transaction[]
             </span>
           </h3>
           <h3 className="text-xl font-semibold text-center text-[var(--card-foreground)] opacity-80">
-            Positive Details by Category
+            Positive Impact
              <span className="text-lg text-[var(--success)] dark:text-emerald-400">
               {" "}(Total: <AnimatedCounter
                 value={processedData.overallPositive}

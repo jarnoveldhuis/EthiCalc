@@ -14,17 +14,20 @@ import { useDonationModal } from "@/hooks/useDonationModal";
 import { useAuth } from "@/hooks/useAuth";
 import { ShareImpactButton } from "./ShareImpactButton";
 
-// --- Helper: Tier Calculation (Updated Colors) ---
-const getTierInfo = (
-  scoreRatio: number | null,
-  totalPositiveImpact: number,
-  totalNegativeImpact: number
-): {
+// TierInfo type
+type TierInfo = {
   name: string;
   description: string;
   colorClass: string;
   displayRatio?: number;
-} => {
+};
+
+// Helper: Tier Calculation (remains the same)
+const getTierInfo = (
+  scoreRatio: number | null,
+  totalPositiveImpact: number,
+  totalNegativeImpact: number
+): TierInfo => {
   const textColor = "text-gray-700 dark:text-gray-300";
   if (totalNegativeImpact <= 0) {
     if (totalPositiveImpact > 0)
@@ -45,7 +48,7 @@ const getTierInfo = (
   if (ratio >= 1.0)
     return {
       name: "S",
-      description: "Beacon of Virtue",
+      description: "Ethical Surplus",
       displayRatio: ratio,
       colorClass: "text-emerald-600 dark:text-emerald-400",
     };
@@ -94,8 +97,78 @@ export function DashboardSidebar() {
   const impactAnalysis = useTransactionStore((state) => state.impactAnalysis);
   const appStatus = useTransactionStore((state) => state.appStatus);
   const applyCreditAction = useTransactionStore((state) => state.applyCredit);
-  const { modalState, openDonationModal, closeDonationModal } =
-    useDonationModal();
+  const { modalState, openDonationModal, closeDonationModal } = useDonationModal();
+
+  const targetTierInfo = useMemo(() => {
+    if (!isBankConnected || !impactAnalysis) return getTierInfo(null, 0, 0);
+    const applied = impactAnalysis?.appliedCredit ?? 0;
+    const totalNegative = impactAnalysis?.negativeImpact ?? 0;
+    const actualAppliedRatio = totalNegative <= 0 ? null : applied / totalNegative;
+    return getTierInfo(
+      actualAppliedRatio,
+      impactAnalysis?.positiveImpact ?? 0,
+      totalNegative
+    );
+  }, [impactAnalysis, isBankConnected]);
+  
+  const [displayedTierInfo, setDisplayedTierInfo] = useState<TierInfo>(() => targetTierInfo);
+  const tierQueueRef = useRef<TierInfo[]>([]);
+  const isProcessingTierRef = useRef(false);
+  const tierDisplayTimeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const MIN_TIER_DISPLAY_TIME = 2500;
+
+  useEffect(() => {
+    const lastScheduledTier = tierQueueRef.current.length > 0
+        ? tierQueueRef.current[tierQueueRef.current.length - 1]
+        : displayedTierInfo;
+
+    if (targetTierInfo.name !== lastScheduledTier.name) {
+        tierQueueRef.current.push(targetTierInfo);
+    } else if (targetTierInfo !== lastScheduledTier) { 
+        if (tierQueueRef.current.length > 0) {
+            tierQueueRef.current[tierQueueRef.current.length - 1] = targetTierInfo;
+        } else {
+           if (!isProcessingTierRef.current || displayedTierInfo.name === targetTierInfo.name) {
+             setDisplayedTierInfo(targetTierInfo);
+           }
+        }
+    }
+  }, [targetTierInfo, displayedTierInfo]);
+
+  useEffect(() => {
+    const processQueue = () => {
+      if (isProcessingTierRef.current || tierQueueRef.current.length === 0) {
+        // If queue becomes empty and target is same as displayed (details updated), update displayed.
+        if (tierQueueRef.current.length === 0 && targetTierInfo.name === displayedTierInfo.name && targetTierInfo !== displayedTierInfo && !isProcessingTierRef.current) {
+             setDisplayedTierInfo(targetTierInfo);
+        }
+        return;
+      }
+
+      isProcessingTierRef.current = true;
+      const nextTier = tierQueueRef.current.shift()!;
+      setDisplayedTierInfo(nextTier);
+
+      if (tierDisplayTimeoutIdRef.current) clearTimeout(tierDisplayTimeoutIdRef.current);
+
+      tierDisplayTimeoutIdRef.current = setTimeout(() => {
+        isProcessingTierRef.current = false;
+        tierDisplayTimeoutIdRef.current = null; // Clear the ref after timeout
+        processQueue(); 
+      }, MIN_TIER_DISPLAY_TIME);
+    };
+
+    processQueue();
+
+    return () => { 
+      if (tierDisplayTimeoutIdRef.current) {
+        clearTimeout(tierDisplayTimeoutIdRef.current);
+      }
+      // isProcessingTierRef.current = false; // Resetting here might be problematic if effect re-runs quickly
+    };
+  }, [displayedTierInfo, targetTierInfo]); // Rerun when displayedTierInfo changes or targetTierInfo (to catch minor updates when queue is empty)
+
   const [isOverallAnimationReady, setIsOverallAnimationReady] = useState(false);
   const [currentAppliedPercentage, setCurrentAppliedPercentage] = useState(0);
   const overallAnimationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -121,71 +194,54 @@ export function DashboardSidebar() {
     [impactAnalysis, isBankConnected]
   );
 
-  const targetScoreRatio = useMemo(() => {
-    if (!isBankConnected || !impactAnalysis || totalNegativeImpact <= 0)
-      return null;
-    const totalPotentialOffset = applied + available;
-    return Math.min(
-      1,
-      totalNegativeImpact === 0 ? 1 : totalPotentialOffset / totalNegativeImpact
-    );
-  }, [
-    impactAnalysis,
-    applied,
-    available,
-    totalNegativeImpact,
-    isBankConnected,
-  ]);
-
   const actualAppliedRatio = useMemo(() => {
-    if (!isBankConnected || !impactAnalysis || totalNegativeImpact <= 0)
+    if (!isBankConnected || !impactAnalysis || totalNegativeImpact <= 0) {
       return null;
-    return totalNegativeImpact === 0 ? null : applied / totalNegativeImpact;
+    }
+    return applied / totalNegativeImpact;
   }, [impactAnalysis, applied, totalNegativeImpact, isBankConnected]);
 
   const animatedAppliedRatioPercentString = useCountUp(
-    isBankConnected && actualAppliedRatio !== null
+    isBankConnected && actualAppliedRatio !== null && totalNegativeImpact > 0
       ? Math.max(0, actualAppliedRatio * 100)
       : 0,
-    { duration: 2000, decimalPlaces: 1, easing: "easeOut" }
+    { duration: 3000, decimalPlaces: 1, easing: "easeOut" }
   );
 
   const currentTierInfo = useMemo(() => {
-    if (!isBankConnected) return getTierInfo(null, 0, 0);
+    if (!isBankConnected || !impactAnalysis) return getTierInfo(null, 0, 0);
     return getTierInfo(
-      targetScoreRatio,
+      actualAppliedRatio,
       totalPositiveImpact,
       totalNegativeImpact
     );
   }, [
-    targetScoreRatio,
+    actualAppliedRatio,
     totalPositiveImpact,
     totalNegativeImpact,
     isBankConnected,
+    impactAnalysis,
   ]);
 
   const topCardBackgroundClass = useMemo(() => {
-    if (!isBankConnected || !impactAnalysis)
+    if (!isBankConnected || !impactAnalysis) {
       return "bg-gray-400 dark:bg-gray-600";
-    if (totalNegativeImpact <= 0) {
-      return totalPositiveImpact > 0
+    }
+    const currentEffectiveDebt = effective;
+    const currentTotalNegativeImpact = totalNegativeImpact;
+    const currentTotalPositiveImpact = totalPositiveImpact;
+
+    if (currentTotalNegativeImpact <= 0) {
+      return currentTotalPositiveImpact > 0
         ? "bg-sky-500 dark:bg-sky-700"
         : "bg-gray-400 dark:bg-gray-600";
     }
-    const ratio = targetScoreRatio ?? 0;
-    if (ratio >= 1.0) return "bg-emerald-500 dark:bg-emerald-700";
-    if (ratio >= 0.75) return "bg-lime-500 dark:bg-lime-700";
-    if (ratio >= 0.5) return "bg-yellow-400 dark:bg-yellow-600";
-    if (ratio >= 0.35) return "bg-amber-400 dark:bg-amber-600";
-    if (ratio >= 0.2) return "bg-orange-500 dark:bg-orange-700";
+    if (currentEffectiveDebt <= 0) return "bg-emerald-500 dark:bg-emerald-700";
+    if (currentEffectiveDebt < 20) return "bg-lime-500 dark:bg-lime-700";
+    if (currentEffectiveDebt < 50) return "bg-yellow-400 dark:bg-yellow-600";
+    if (currentEffectiveDebt < 100) return "bg-orange-500 dark:bg-orange-700";
     return "bg-rose-600 dark:bg-rose-800";
-  }, [
-    impactAnalysis,
-    totalNegativeImpact,
-    totalPositiveImpact,
-    targetScoreRatio,
-    isBankConnected,
-  ]);
+  }, [isBankConnected, impactAnalysis, effective, totalNegativeImpact, totalPositiveImpact]);
 
   const targetAppliedPercentage = useMemo(() => {
     if (!isBankConnected || totalNegativeImpact <= 0)
@@ -193,10 +249,11 @@ export function DashboardSidebar() {
     return Math.min(100, Math.max(0, (applied / totalNegativeImpact) * 100));
   }, [applied, totalNegativeImpact, effective, isBankConnected]);
 
-  const progressBarTrackColor =
-    effective > 0
-      ? "bg-rose-200 dark:bg-rose-900/[.5]"
-      : "bg-emerald-200 dark:bg-emerald-900/[.5]";
+  const progressBarAnimationDuration = 2000;
+
+  const progressBarTrackColor = effective > 0
+    ? "bg-rose-200 dark:bg-rose-900/[.5]"
+    : "bg-emerald-200 dark:bg-emerald-900/[.5]";
 
   useEffect(() => {
     if (!isBankConnected) {
@@ -346,30 +403,30 @@ export function DashboardSidebar() {
   return (
     <div className="w-full lg:col-span-1 min-h-[100px] lg:min-h-0">
       <div className="card mb-6 h-full flex flex-col">
-        {/* Section 1: Top Card - Debt Amount & Action Button */}
         <div
           className={`${topCardBackgroundClass} transition-colors duration-2000 p-4 sm:p-6 rounded-t-lg`}
         >
           <div className="text-center mb-4">
             <div className="mb-1">
               <AnimatedCounter
-                value={effective}
-                prefix="$"
+                value={effective} // Value is always non-negative
+                // CHANGE: Prefix determined by whether 'effective' (debt) is > 0
+                prefix={effective > 0 ? "-$" : "$"}
                 className="font-bold text-4xl sm:text-5xl text-white drop-shadow-md"
                 decimalPlaces={0}
+                duration={3000}
               />
             </div>
+            {/* CHANGE: Text changed here */}
             <p className="text-sm font-medium text-white opacity-80">
-              Remaining Ethical Debt
+              Your Social Balance
             </p>
           </div>
           <div className="mt-4">{getActionButton()}</div>
         </div>
 
-        {/* Conditionally Rendered Content Wrapper */}
         {isBankConnected && (
           <div className={`flex-grow flex flex-col`}>
-            {/* Tier Info Section */}
             <div className="p-4 text-center border-b border-slate-200 dark:border-slate-700">
               {impactAnalysis !== null && appStatus !== "error" && (
                 <div className="mb-3">
@@ -383,13 +440,13 @@ export function DashboardSidebar() {
                     </span>
                     {currentTierInfo.description}
                   </p>
-                  {actualAppliedRatio !== null && (
+                  {actualAppliedRatio !== null && totalNegativeImpact > 0 && (
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       (
                       <span className="font-semibold">
                         {animatedAppliedRatioPercentString}
                       </span>
-                      % Offset Applied)
+                      % of Negative Impact Offset)
                     </p>
                   )}
                 </div>
@@ -401,7 +458,6 @@ export function DashboardSidebar() {
               )}
             </div>
 
-            {/* Overall Progress Bar */}
             {impactAnalysis !== null && appStatus !== "error" ? (
               <div className="p-4 space-y-2">
                 <div className="flex justify-between text-xs sm:text-sm mb-1">
@@ -417,14 +473,15 @@ export function DashboardSidebar() {
                   </span>
                 </div>
                 <div
-                  className={`w-full ${progressBarTrackColor} rounded-full h-3 overflow-hidden relative transition-colors duration-2000`}
+                  className={`w-full ${progressBarTrackColor} rounded-full h-3 overflow-hidden relative transition-colors duration-3000`}
                 >
                   <div
-                    className="bg-[var(--success)] h-3 rounded-l-full absolute top-0 left-0 transition-all duration-2000 ease-out"
+                    className="bg-[var(--success)] h-3 rounded-l-full absolute top-0 left-0 transition-all ease-out"
                     style={{
                       width: isOverallAnimationReady
                         ? `${currentAppliedPercentage}%`
                         : "0%",
+                      transitionDuration: `${progressBarAnimationDuration}ms`,
                     }}
                     title={`Applied: $${applied.toFixed(2)}`}
                   />
@@ -435,16 +492,19 @@ export function DashboardSidebar() {
                     prefix="$"
                     className="font-semibold text-[var(--success)]"
                     decimalPlaces={0}
+                    duration={3000}
                   />
                   <AnimatedCounter
-                    value={effective}
-                    prefix="$"
+                    value={effective} // Value is always non-negative
+                    // CHANGE: Prefix for this counter too if effective > 0
+                    prefix={effective > 0 ? "-$" : "$"}
                     className={`font-semibold ${
                       effective > 0
                         ? "text-[var(--destructive)]"
                         : "text-[var(--success)]"
                     }`}
                     decimalPlaces={0}
+                    duration={3000}
                     title={
                       effective > 0
                         ? `Remaining Debt: $${effective.toFixed(2)}`
@@ -464,8 +524,7 @@ export function DashboardSidebar() {
                   : "Calculating progress..."}
               </div>
             )}
-            
-            {/* Share Button Section */}
+
             <div className="p-4 mt-auto text-center">
               {impactAnalysis !== null && appStatus !== "error" && (
                 <ShareImpactButton
@@ -484,7 +543,6 @@ export function DashboardSidebar() {
         )}
       </div>
 
-      {/* Donation Modal */}
       {modalState.isOpen && (
         <DonationModal
           isOpen={modalState.isOpen}

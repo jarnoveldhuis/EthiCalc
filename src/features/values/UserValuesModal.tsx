@@ -2,7 +2,6 @@
 
 import React from "react";
 import { UserValuesEditor } from "./UserValuesEditor";
-import { ShareImpactButton } from "@/features/dashboard/ShareImpactButton";
 
 interface UserValuesModalProps {
   isOpen: boolean;
@@ -29,7 +28,8 @@ export function UserValuesModal({ isOpen, onClose, onCommit }: UserValuesModalPr
         {/* Modal Header */}
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Customize Your Values
+            <span className="hidden sm:inline">Customize Your Values</span>
+            <span className="sm:hidden text-2xl" aria-label="Values"><span role="img" aria-label="Heart">❤️</span></span>
           </h2>
           <button
             onClick={onClose}
@@ -53,11 +53,11 @@ export function UserValuesModal({ isOpen, onClose, onCommit }: UserValuesModalPr
 
         {/* Modal Footer */}
         <div className="flex items-center justify-between p-3 sm:p-4 border-t border-gray-200 dark:border-gray-700">
-          <ShareImpactButton 
+          {/* <ShareImpactButton 
             overallRatio={null} 
             totalPositiveImpact={0} 
             className="mt-0"
-          />
+          /> */}
           <button
             onClick={handleCommit}
             className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors"

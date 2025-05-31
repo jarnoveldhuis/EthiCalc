@@ -12,23 +12,21 @@ import { CharityRating } from './CharityRating';
 import { CharitySearch } from "./CharitySearch";
 import { CharityImage } from "./CharityImage";
 import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
-import { useTransactionStore } from "@/store/transactionStore";
-import { Transaction } from "@/shared/types/transactions";
+// Removed useTransactionStore and Transaction as they are no longer needed for findDominantPracticeSearchTerm
 
 interface DonationModalProps {
-  practice: string;
+  practice: string; // This is the category name or "All Societal Debt"
   amount: number;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export function DonationModal({
-  practice,
+  practice, // This prop directly represents the category or "All Societal Debt"
   amount,
   isOpen,
   onClose,
 }: DonationModalProps) {
-  const transactions = useTransactionStore(state => state.transactions);
   const [selectedCharity, setSelectedCharity] = useState<EnrichedCharityResult | null>(null);
   const [donationAmount, setDonationAmount] = useState(Math.max(5, Math.round(amount)));
   const [showSearch, setShowSearch] = useState(false);
@@ -37,58 +35,10 @@ export function DonationModal({
   const [initialRecommendation, setInitialRecommendation] = useState<EnrichedCharityResult | null>(null);
   const [dynamicSearchTerm, setDynamicSearchTerm] = useState<string>("");
 
-  const cleanedPractice = cleanPracticeName(practice);
+  const cleanedPractice = cleanPracticeName(practice); // Used for display and potentially initial search
   const displayPractice = cleanedPractice === "All Societal Debt" ? "Total Impact" : practice;
 
-  const findDominantPracticeSearchTerm = useCallback((categoryName: string): string => {
-     if (!transactions || transactions.length === 0 || categoryName === "All Societal Debt") {
-         return categoryName === "All Societal Debt" ? "environment" : categoryName;
-     }
-     const practiceContributions: { [practice: string]: number } = {};
-     let termForDominantPractice: string | undefined = undefined;
-     transactions.forEach((tx: Transaction) => {
-       (tx.unethicalPractices || []).forEach(practice => {
-         if (tx.practiceCategories?.[practice] === categoryName) {
-           const weight = tx.practiceWeights?.[practice] || 0;
-           const contribution = Math.abs(tx.amount) * (weight / 100);
-           practiceContributions[practice] = (practiceContributions[practice] || 0) + contribution;
-         }
-       });
-     });
-     if (Object.keys(practiceContributions).length === 0) {
-         console.log(`[DonationModal] No contributing practices found for category "${categoryName}". Falling back.`);
-         return categoryName;
-     }
-     let dominantPractice: string | null = null;
-     let maxContribution = -1;
-     for (const [practice, contribution] of Object.entries(practiceContributions)) {
-       if (contribution > maxContribution) {
-         maxContribution = contribution;
-         dominantPractice = practice;
-       }
-     }
-     if (dominantPractice) {
-         const txWithSearchTerm = transactions.find(
-             tx => tx.practiceSearchTerms?.[dominantPractice!]
-         );
-         termForDominantPractice = txWithSearchTerm?.practiceSearchTerms?.[dominantPractice!];
-         console.log(`[DonationModal] Dominant practice in "${categoryName}" is "${dominantPractice}" (Contribution: ${maxContribution.toFixed(2)}). Search Term: "${termForDominantPractice || 'Not Found'}"`);
-     }
-     if (termForDominantPractice) {
-         return termForDominantPractice;
-     } else {
-         const fallbackMappings: Record<string, string> = {
-             "Factory Farming": "animal welfare", "High Emissions": "climate",
-             "Data Privacy Issues": "digital rights", "Water Waste": "water conservation",
-             "Environmental Degradation": "conservation",
-         };
-         const fallback = (dominantPractice && fallbackMappings[dominantPractice]) || categoryName;
-         console.log(`[DonationModal] Search term for dominant practice "${dominantPractice}" not found. Using fallback: "${fallback}"`);
-         return fallback;
-     }
-  }, [transactions]); // Depends only on transactions
-
-  // *** FIX: Corrected useCallback dependencies ***
+  // Simplified fetchRecommendedCharities: searchTerm is now directly based on the practice/category prop
   const fetchRecommendedCharities = useCallback(async (searchTerm: string) => {
     setLoadingRecommendations(true);
     setError(null);
@@ -103,6 +53,7 @@ export function DonationModal({
         setInitialRecommendation(initialSelection);
         setSelectedCharity(initialSelection);
       } else {
+         // Fallback if no charities found for the direct category term
          const fallbackTerm = cleanedPractice === "All Societal Debt" ? "environment" : "charity";
          console.log(`[DonationModal] No results for "${searchTerm}", trying broader fallback: "${fallbackTerm}"`);
          charities = await enhancedCharityService.getTopRatedCharitiesWithPaymentLinks(fallbackTerm);
@@ -113,23 +64,18 @@ export function DonationModal({
              setSelectedCharity(initialSelection);
          } else {
              setError(`Could not find charity recommendations for "${searchTerm}" or fallback terms. Please try searching manually.`);
-             setShowSearch(true);
+             setShowSearch(true); // Encourage manual search
          }
       }
     } catch (err) {
       console.error("[DonationModal] Recommendation fetch error:", err);
       setError("Error loading charity recommendations. Please search manually.");
-      setShowSearch(true);
+      setShowSearch(true); // Encourage manual search
     } finally {
       setLoadingRecommendations(false);
     }
-  // *** FIX: Removed fetchRecommendedCharities from its own dependency array ***
-  // It depends on cleanedPractice (which derives from practice prop)
-  }, [cleanedPractice]);
+  }, [cleanedPractice]); // Depends on cleanedPractice for the fallback logic
 
-
-   // *** FIX: Corrected useEffect dependencies ***
-   // useEffect now depends on the *stable* function references
    useEffect(() => {
      if (isOpen) {
        setSelectedCharity(null);
@@ -137,15 +83,15 @@ export function DonationModal({
        setShowSearch(false);
        setDonationAmount(Math.max(5, Math.round(amount)));
 
-       // Calculate the term *inside* the effect or pass stable `practice`
-       const termToUse = findDominantPracticeSearchTerm(practice);
-       setDynamicSearchTerm(termToUse);
-       // Call the stable function reference
+       // Directly use the cleanedPractice (category name or mapped "All Societal Debt" via API)
+       // The API handler for /api/charity/recommend already maps "All Societal Debt" to "climate"
+       // and uses other practice names (category names) directly.
+       const termToUse = cleanedPractice;
+       
+       setDynamicSearchTerm(termToUse); // For CharitySearch initial term
        fetchRecommendedCharities(termToUse);
      }
-   // Ensure all stable dependencies that are used *within* the effect are listed
-   }, [isOpen, practice, amount, findDominantPracticeSearchTerm, fetchRecommendedCharities]);
-
+   }, [isOpen, practice, amount, fetchRecommendedCharities, cleanedPractice]); // Added cleanedPractice
 
   const handleSearchSelect = (charity: EnrichedCharityResult) => {
     setSelectedCharity(charity);
@@ -156,12 +102,10 @@ export function DonationModal({
   const handleTriggerEveryOrgWidget = () => {
      if (!selectedCharity) { setError("Please select a charity first."); return; }
      setError(null);
-     // Improved slug/ID finding logic
      const getSlugOrId = (char: EnrichedCharityResult): string => {
         if (char.slug) return char.slug;
         if (char.id?.startsWith('ein:')) return char.id.split(':')[1];
         if (char.id) return char.id;
-        // Fallback to name-based slug if absolutely necessary
         return char.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
      }
      const charityIdentifier = getSlugOrId(selectedCharity);
@@ -172,17 +116,13 @@ export function DonationModal({
      if (window.everyDotOrgDonateButton) {
          try {
              const optionsToSet = {
-                 nonprofitSlug: charityIdentifier, // Use the found identifier
+                 nonprofitSlug: charityIdentifier,
                  amount: finalAmount,
-                 noExit: false, // Allow user to exit widget
-                 primaryColor: '#3b82f6', // Example: Tailwind blue-500
+                 noExit: false,
+                 primaryColor: '#3b82f6',
              };
-             console.log(`[DonationModal] Calling setOptions with:`, optionsToSet);
              window.everyDotOrgDonateButton.setOptions(optionsToSet);
-             console.log(`[DonationModal] Calling showWidget()`);
              window.everyDotOrgDonateButton.showWidget();
-             // Consider closing the modal *after* the widget interaction is complete
-             // onClose(); // Maybe move this to a callback from the widget if possible
          } catch (widgetError) {
               console.error("Error configuring or showing Every.org widget:", widgetError);
               setError("Could not initiate donation widget.");
@@ -193,10 +133,8 @@ export function DonationModal({
      }
   };
 
-
   if (!isOpen) return null;
 
-  // --- JSX (No changes needed here from previous version) ---
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
@@ -227,20 +165,16 @@ export function DonationModal({
                                 <div className="flex-grow min-w-0">
                                     <h4 className="font-medium text-lg text-blue-800 dark:text-blue-300">{selectedCharity.name}</h4>
                                     <CharityRating charity={selectedCharity} />
-                                   
-
                                 </div>
-                               
                             </div>
                             <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 whitespace-normal break-words">{selectedCharity.mission || selectedCharity.cnRating?.mission}</p>
                             <div className="mt-1 space-x-3">
-                                        {(selectedCharity.websiteUrl || selectedCharity.cnRating?.websiteUrl) && (
-                                            <a href={selectedCharity.websiteUrl || selectedCharity.cnRating?.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-green-600 dark:text-green-400 hover:underline hover:text-green-800 dark:hover:text-green-300 inline-block">
-                                                Official Website ↗
-                                             </a>
-                                        )}
-
-                                    </div>
+                                {(selectedCharity.websiteUrl || selectedCharity.cnRating?.websiteUrl) && (
+                                    <a href={selectedCharity.websiteUrl || selectedCharity.cnRating?.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-green-600 dark:text-green-400 hover:underline hover:text-green-800 dark:hover:text-green-300 inline-block">
+                                        Official Website ↗
+                                     </a>
+                                )}
+                            </div>
                             <div className="text-right pt-2">
                                <button
                                  onClick={() => { setShowSearch(true); setError(null); }}
