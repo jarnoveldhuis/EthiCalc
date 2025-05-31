@@ -27,8 +27,8 @@ export const config = {
     // You could specify the preview model via env var if needed:
     // model: process.env.GEMINI_MODEL_OVERRIDE || "gemini-1.5-pro-latest",
     // Let's use the specific one you mentioned for now if ANALYSIS_PROVIDER is 'gemini'
-    previewModel: "gemini-2.5-flash-preview-04-17", // The specific model user wants
-    timeout: 170000, // Adjust timeout if needed
+    previewModel: "gemini-2.5-flash-preview-05-20", // The specific model user wants
+    timeout: 200000, // Adjust timeout if needed
   },
   firebase: {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
