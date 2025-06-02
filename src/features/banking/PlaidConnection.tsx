@@ -28,7 +28,7 @@ export function PlaidConnectionSection({
   const [linkLoading] = useState<boolean>(false);
 
   // Sample data state (keep if button is used)
-  const [showSampleOption] = useState(true);
+  const [showSampleOption] = useState<boolean>(true);
   const { generateSampleTransactions } = useSampleData(); // Ensure this hook exports correctly
 
   // Sample data handler

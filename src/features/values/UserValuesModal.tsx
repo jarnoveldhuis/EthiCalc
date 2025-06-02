@@ -29,7 +29,7 @@ export function UserValuesModal({ isOpen, onClose, onCommit }: UserValuesModalPr
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
             <span className="hidden sm:inline">Customize Your Values</span>
-            <span className="sm:hidden text-2xl" aria-label="Values"><span role="img" aria-label="Heart">❤️</span></span>
+            <span className="sm:hidden text-2xl" aria-label="Values"><span role="img" aria-label="Heart">Customize Your Values❤️</span></span>
           </h2>
           <button
             onClick={onClose}

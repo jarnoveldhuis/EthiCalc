@@ -78,19 +78,19 @@ export function useSampleData() {
           postal_code: "77002", country: "US", lat: null, lon: null, store_number: "S-1234"
         } as PlaidLocation,
       },
-      {
-        plaidTransactionId: generateSamplePlaidId(),
-        date: formatDate(10),
-        name: "Patagonia",
-        merchant_name: "Patagonia Inc.",
-        amount: 120.00,
-        analyzed: false,
-        plaidCategories: ["Shops", "Clothing"],
-        location: {
-          address: "259 W Santa Clara St", city: "Ventura", region: "CA",
-          postal_code: "93001", country: "US", lat: null, lon: null, store_number: null
-        } as PlaidLocation,
-      }
+      // {
+      //   plaidTransactionId: generateSamplePlaidId(),
+      //   date: formatDate(10),
+      //   name: "Patagonia",
+      //   merchant_name: "Patagonia Inc.",
+      //   amount: 120.00,
+      //   analyzed: false,
+      //   plaidCategories: ["Shops", "Clothing"],
+      //   location: {
+      //     address: "259 W Santa Clara St", city: "Ventura", region: "CA",
+      //     postal_code: "93001", country: "US", lat: null, lon: null, store_number: null
+      //   } as PlaidLocation,
+      // }
     ];
   }, []);
   

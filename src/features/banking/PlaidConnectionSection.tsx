@@ -9,7 +9,7 @@ import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
 
 // Determine if we're in development/sandbox mode
 const isSandboxMode = process.env.NODE_ENV === 'development' || config.plaid.isSandbox;
-
+console.log("Sandbox", isSandboxMode)
 interface PlaidConnectionSectionProps {
   onSuccess: (public_token: string | null) => void;
   isConnected: boolean;
@@ -25,7 +25,7 @@ export function PlaidConnectionSection({
   const [linkLoading] = useState(false);
   // We're keeping showSampleOption state even though we're not modifying it
   // because it might be needed in the future for UI toggling
-  const [showSampleOption] = useState(isSandboxMode);
+  const [showSampleOption] = useState(true);
   const { generateSampleTransactions } = useSampleData();
 
   // Sample data handler for development
@@ -86,7 +86,7 @@ export function PlaidConnectionSection({
               onClick={handleUseSampleData}
               className="text-blue-600 hover:text-blue-800 text-sm underline"
             >
-              Use Sample Data (Development Only)
+              Use Sample Data
             </button>
           </div>
         </div>

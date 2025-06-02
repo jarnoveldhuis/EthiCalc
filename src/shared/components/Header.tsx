@@ -39,7 +39,8 @@ export function Header({
         onClick={onOpenValuesModal}
         className="px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-md whitespace-nowrap bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 transition-all duration-300 ease-in-out"
       >
-        Customize Values
+        <span className="hidden md:inline">Customize Values</span>
+        <span className="md:hidden">❤️</span>
       </button>
 
       {/* User Menu */}
