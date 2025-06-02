@@ -3,7 +3,6 @@
 
 import React, { useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
-// import { AppStatus } from "@/store/transactionStore"; // REMOVED unused import
 import { useTransactionStore } from "@/store/transactionStore";
 import { ErrorAlert } from "@/shared/ui/ErrorAlert";
 import { DashboardLayout } from "@/features/dashboard/DashboardLayout";
@@ -60,7 +59,11 @@ export default function Dashboard() {
               default: setLoadingMessage("Loading dashboard...");
           }
       }
-  }, [authLoading, appStatus]);
+      if (appStatus === 'idle') {
+        console.log("Dashboard Idle. Transactions in store:", useTransactionStore.getState().transactions);
+        console.log("Number of transactions in store:", useTransactionStore.getState().transactions.length);
+      }
+  }, [user, authLoading, appStatus, initializeStore]);
 
 
   const effectiveConnectionStatus: boolean = connectionStatus.isConnected;
@@ -91,29 +94,46 @@ export default function Dashboard() {
 
 
   // --- Callbacks ---
-   const handleLoadSampleData = useCallback(async () => {
-     if (appStatus !== 'idle' && appStatus !== 'error') { console.log(`handleLoadSampleData: Skipping (Status: ${appStatus})...`); return; }
-     useTransactionStore.setState({ appStatus: 'analyzing' });
-     setLoadingMessage("Generating & Analyzing sample data...");
-     try {
-       const sampleTxs = generateSampleTransactions();
-       await analyzeAndCacheTransactions(sampleTxs);
-     } catch (error) {
-        console.error("Error loading/analyzing sample data:", error);
-        useTransactionStore.setState({ appStatus: 'error', connectionStatus: { ...connectionStatus, error: 'Failed to load sample data' } });
-     }
-   }, [generateSampleTransactions, analyzeAndCacheTransactions, appStatus, connectionStatus]);
+  const handleLoadSampleData = useCallback(async () => {
+    if (appStatus !== 'idle' && appStatus !== 'error') {
+      console.log(`handleLoadSampleData: Skipping (Status: ${appStatus})...`);
+      return;
+    }
+    setLoadingMessage("Loading and analyzing sample data...");
+    try {
+      const sampleTxs = generateSampleTransactions();
+      await analyzeAndCacheTransactions(sampleTxs); // This should set appStatus to idle at its end
 
-   const handlePlaidSuccess = useCallback(async (publicToken: string | null) => {
-     if (appStatus !== 'idle' && appStatus !== 'error') { console.log(`handlePlaidSuccess: Skipping (Status: ${appStatus})...`); return; }
-     try {
-       if (publicToken && user) {
-           await connectBank(publicToken, user);
-        } else {
-           await handleLoadSampleData();
-        }
-     } catch (error) { console.error("Error in handlePlaidSuccess flow:", error); }
-   }, [connectBank, user, handleLoadSampleData, appStatus]);
+      // ---- MODIFICATION START ----
+      // After sample data is processed and store is updated by analyzeAndCacheTransactions:
+      useTransactionStore.setState({
+        connectionStatus: { isConnected: true, error: null }, // Show as connected for sample data
+        // appStatus: 'idle' // Ensure it's idle, though analyzeAndCacheTransactions should do this
+      });
+      hasInitialized.current = true; // Mark as initialized to prevent initializeStore from potentially overriding the sample view immediately
+      
+      console.log("Sample data loaded and processed. Store impactAnalysis:", useTransactionStore.getState().impactAnalysis);
+      console.log("Store transactions after sample load:", useTransactionStore.getState().transactions);
+      setLoadingMessage("Dashboard ready with sample data.");
+      // ---- MODIFICATION END ----
+
+    } catch (error) {
+       console.error("Error loading/analyzing sample data:", error);
+       useTransactionStore.setState({ appStatus: 'error', connectionStatus: { ...connectionStatus, error: 'Failed to load sample data' } });
+    }
+  }, [generateSampleTransactions, analyzeAndCacheTransactions, appStatus, connectionStatus]);
+
+  const handlePlaidSuccess = useCallback(async (publicToken: string | null) => {
+    if (appStatus !== 'idle' && appStatus !== 'error') { console.log(`handlePlaidSuccess: Skipping (Status: ${appStatus})...`); return; }
+    try {
+      if (publicToken && user) {
+          await connectBank(publicToken, user);
+       } else { // This is the sample data path
+          await handleLoadSampleData();
+       }
+    } catch (error) { console.error("Error in handlePlaidSuccess flow:", error); }
+  }, [connectBank, user, handleLoadSampleData, appStatus]); // Make sure dependencies are correct
+
 
   const handleManualFetch = useCallback(async () => {
      if (appStatus !== 'idle' && appStatus !== 'error') { console.log(`handleManualFetch: Skipping (Status: ${appStatus})...`); return; }

@@ -1,6 +1,6 @@
 // src/features/debug/useSampleData.ts
 import { useCallback } from 'react';
-import { Transaction } from '@/shared/types/transactions';
+import { Transaction, PlaidLocation } from '@/shared/types/transactions'; // Added PlaidLocation
 
 /**
  * Hook to provide sample transaction data for testing
@@ -13,166 +13,98 @@ export function useSampleData() {
       const date = new Date(currentDate.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
       return date.toISOString().split('T')[0];
     };
-    
+
+    // Helper to create a unique plaidTransactionId for sample data
+    const generateSamplePlaidId = () => `sample-tx-${crypto.randomUUID()}`;
+
     return [
       {
+        plaidTransactionId: generateSamplePlaidId(),
         date: formatDate(1),
         name: "Whole Foods Market",
+        merchant_name: "Whole Foods Market",
         amount: 84.73,
-        unethicalPractices: ["Excessive Packaging"],
-        ethicalPractices: ["Organic Farming"],
-        practiceWeights: {
-          "Excessive Packaging": 15,
-          "Organic Farming": 25
-        },
-        information: {
-          "Excessive Packaging": "Uses plastic containers for many organic items.",
-          "Organic Farming": "Supports local organic farmers and sustainable agriculture."
-        },
-        practiceCategories: {
-          "Excessive Packaging": "Environmental Impact",
-          "Organic Farming": "Environmental Impact"
-        },
-        analyzed: true
+        analyzed: false, // Will be analyzed by the system
+        plaidCategories: ["Shops", "Supermarkets and Groceries"],
+        location: {
+          address: "101 Healthy Way", city: "Austin", region: "TX",
+          postal_code: "78701", country: "US", lat: null, lon: null, store_number: "1021"
+        } as PlaidLocation, // Ensure type correctness
+        // Removed pre-analyzed fields: unethicalPractices, ethicalPractices, practiceWeights, information, etc.
       },
       {
+        plaidTransactionId: generateSamplePlaidId(),
         date: formatDate(2),
         name: "Amazon",
+        merchant_name: "Amazon Marketplace",
         amount: 37.49,
-        unethicalPractices: ["Excessive Packaging", "Labor Exploitation"],
-        ethicalPractices: [],
-        practiceWeights: {
-          "Excessive Packaging": 20,
-          "Labor Exploitation": 15
-        },
-        information: {
-          "Excessive Packaging": "Uses oversized boxes and plastic mailers.",
-          "Labor Exploitation": "Reports of poor working conditions in warehouses."
-        },
-        practiceCategories: {
-          "Excessive Packaging": "Environmental Impact",
-          "Labor Exploitation": "Social Responsibility"
-        },
-        analyzed: true
+        analyzed: false,
+        plaidCategories: ["Shops", "Digital Purchase"],
+        location: null, // Example with no location
       },
       {
+        plaidTransactionId: generateSamplePlaidId(),
         date: formatDate(3),
         name: "Starbucks",
+        merchant_name: "Starbucks Coffee",
         amount: 5.25,
-        unethicalPractices: ["High Emissions", "Water Waste"],
-        ethicalPractices: ["Fair Trade Support"],
-        practiceWeights: {
-          "High Emissions": 10,
-          "Water Waste": 8,
-          "Fair Trade Support": 20
-        },
-        information: {
-          "High Emissions": "Coffee roasting and transport contributes to emissions.",
-          "Water Waste": "Coffee production requires significant water resources.",
-          "Fair Trade Support": "Participates in fair trade coffee practices."
-        },
-        practiceCategories: {
-          "High Emissions": "Climate Change",
-          "Water Waste": "Environmental Impact",
-          "Fair Trade Support": "Social Responsibility"
-        },
-        analyzed: true
+        analyzed: false,
+        plaidCategories: ["Food and Drink", "Restaurants", "Coffee Shop"],
+        location: {
+          address: "789 Cafe Lane", city: "Seattle", region: "WA",
+          postal_code: "98101", country: "US", lat: null, lon: null, store_number: "567"
+        } as PlaidLocation,
       },
       {
+        plaidTransactionId: generateSamplePlaidId(),
         date: formatDate(5),
         name: "Netflix",
+        merchant_name: "Netflix.com",
         amount: 15.99,
-        unethicalPractices: ["High Energy Usage", "Data Privacy Issues"],
-        ethicalPractices: ["Content Diversity"],
-        practiceWeights: {
-          "High Energy Usage": 15,
-          "Data Privacy Issues": 10,
-          "Content Diversity": 25
-        },
-        information: {
-          "High Energy Usage": "Streaming services consume significant server resources.",
-          "Data Privacy Issues": "Collects extensive viewing history and preferences.",
-          "Content Diversity": "Supports diverse content creators and storylines."
-        },
-        practiceCategories: {
-          "High Energy Usage": "Climate Change",
-          "Data Privacy Issues": "Digital Rights",
-          "Content Diversity": "Social Responsibility"
-        },
-        analyzed: true
+        analyzed: false,
+        plaidCategories: ["Service", "Subscription", "Entertainment"],
+        location: null,
       },
       {
+        plaidTransactionId: generateSamplePlaidId(),
         date: formatDate(7),
         name: "Shell",
+        merchant_name: "Shell Oil",
         amount: 48.22,
-        unethicalPractices: ["High Emissions", "Environmental Degradation"],
-        ethicalPractices: [],
-        practiceWeights: {
-          "High Emissions": 40,
-          "Environmental Degradation": 25
-        },
-        information: {
-          "High Emissions": "Fossil fuel products contribute significantly to carbon emissions.",
-          "Environmental Degradation": "Oil extraction and processing has environmental impacts."
-        },
-        practiceCategories: {
-          "High Emissions": "Climate Change",
-          "Environmental Degradation": "Environmental Impact"
-        },
-        analyzed: true
+        analyzed: false,
+        plaidCategories: ["Transportation", "Gas"],
+        location: {
+          address: "456 Fuel Rd", city: "Houston", region: "TX",
+          postal_code: "77002", country: "US", lat: null, lon: null, store_number: "S-1234"
+        } as PlaidLocation,
       },
       {
+        plaidTransactionId: generateSamplePlaidId(),
         date: formatDate(10),
         name: "Patagonia",
+        merchant_name: "Patagonia Inc.",
         amount: 120.00,
-        unethicalPractices: [],
-        ethicalPractices: ["Sustainable Materials", "Ethical Investment"],
-        practiceWeights: {
-          "Sustainable Materials": 35,
-          "Ethical Investment": 20
-        },
-        information: {
-          "Sustainable Materials": "Uses recycled and organic materials in products.",
-          "Ethical Investment": "Donates percentage of profits to environmental causes."
-        },
-        practiceCategories: {
-          "Sustainable Materials": "Environmental Impact",
-          "Ethical Investment": "Social Responsibility"
-        },
-        analyzed: true
+        analyzed: false,
+        plaidCategories: ["Shops", "Clothing"],
+        location: {
+          address: "259 W Santa Clara St", city: "Ventura", region: "CA",
+          postal_code: "93001", country: "US", lat: null, lon: null, store_number: null
+        } as PlaidLocation,
       }
     ];
   }, []);
   
-  // Calculate societal debt for the sample transactions
+  // Calculate societal debt for the sample transactions (this might be less relevant now as analysis is live)
   const calculateSampleDebt = useCallback((transactions: Transaction[]): number => {
     let totalDebt = 0;
-    
     transactions.forEach(tx => {
-      let transactionDebt = 0;
-      
-      // Add debt from unethical practices
-      (tx.unethicalPractices || []).forEach(practice => {
-        const weight = tx.practiceWeights?.[practice] || 0;
-        const practiceDebt = tx.amount * (weight / 100);
-        transactionDebt += practiceDebt;
-      });
-      
-      // Subtract debt from ethical practices
-      (tx.ethicalPractices || []).forEach(practice => {
-        const weight = tx.practiceWeights?.[practice] || 0;
-        const practiceCredit = tx.amount * (weight / 100);
-        transactionDebt -= practiceCredit;
-      });
-      
-      // Add this transaction's debt to the total
-      totalDebt += transactionDebt;
+      // This logic would need to be updated if we're not pre-calculating societalDebt
+      // For now, it will assume societalDebt is populated by the live analysis
+      totalDebt += (tx.societalDebt || 0);
     });
-    
     return totalDebt;
   }, []);
 
-  // Return the sample data generation functions
   return {
     generateSampleTransactions,
     calculateSampleDebt
