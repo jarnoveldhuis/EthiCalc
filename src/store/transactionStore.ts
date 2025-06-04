@@ -99,7 +99,6 @@ export interface TransactionState {
     rawTransactions: Transaction[]
   ) => Promise<void>;
   saveTransactionBatch: (transactions: Transaction[]) => Promise<void>;
-  applyCredit: (amount: number) => Promise<boolean>;
   loadLatestTransactions: () => Promise<boolean>;
   loadCreditState: () => Promise<CreditState | null>;
   resetState: () => void;
@@ -197,20 +196,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   setTransactions: (transactions) => {
     /* ... implementation from prev response ... */
-    const currentAppliedCredit = get().creditState.appliedCredit;
     const currentUserValueSettings = get().userValueSettings;
     const analysis = calculationService.calculateImpactAnalysis(
       transactions,
-      currentAppliedCredit,
       currentUserValueSettings
     );
     set({
       transactions: transactions,
       impactAnalysis: analysis,
-      creditState: {
-        ...get().creditState,
-        availableCredit: analysis.availableCredit,
-      },
+      creditState: get().creditState,
     });
   },
   connectBank: async (publicToken, user) => {
@@ -469,7 +463,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       );
       const analysis = calculationService.calculateImpactAnalysis(
         [],
-        creditState.appliedCredit,
         userValueSettings
       );
       set({
@@ -663,17 +656,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const latestUserValueSettings = get().userValueSettings;
       const finalImpact = calculationService.calculateImpactAnalysis(
         finalTransactions,
-        creditState.appliedCredit,
         latestUserValueSettings
       );
       set({
         transactions: finalTransactions,
         savedTransactions: finalTransactions,
         impactAnalysis: finalImpact,
-        creditState: {
-          ...creditState,
-          availableCredit: finalImpact.availableCredit,
-        },
+        creditState,
         appStatus: "idle",
         connectionStatus: { ...get().connectionStatus, error: null },
         hasSavedData: true,
@@ -738,7 +727,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const currentUserValueSettings = get().userValueSettings;
       const analysisForSave = calculationService.calculateImpactAnalysis(
         finalizedTransactions,
-        get().creditState.appliedCredit,
         currentUserValueSettings
       );
       const batchPayload = {
@@ -791,113 +779,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }));
     } finally {
       if (get().appStatus === "saving_batch") {
-        set({ appStatus: "idle" });
-      }
-    }
-  },
-  applyCredit: async (amount) => {
-    /* ... implementation from prev response ... */
-    const {
-      impactAnalysis,
-      creditState,
-      appStatus,
-      transactions,
-      userValueSettings,
-    } = get();
-    if (appStatus === "applying_credit") return false;
-    if (appStatus !== "idle" && appStatus !== "error") {
-      console.warn("Cannot apply credit while busy.");
-      return false;
-    }
-    if (!impactAnalysis || amount <= 0) {
-      console.warn("Cannot apply credit: Invalid amount or no analysis.");
-      return false;
-    }
-    const currentUserId = auth.currentUser?.uid;
-    if (!currentUserId) {
-      console.warn("Cannot apply credit: No user.");
-      return false;
-    }
-    set({ appStatus: "applying_credit" });
-    firebaseDebug.log("APPLY_CREDIT", { status: "starting", amount });
-    try {
-      const currentPositiveImpact =
-        calculationService.calculatePositiveImpact(transactions);
-      const currentAvailable = Math.max(
-        0,
-        currentPositiveImpact - creditState.appliedCredit
-      );
-      const valueAdjustedNegativeImpact =
-        calculationService.calculateNegativeImpact(
-          transactions,
-          userValueSettings
-        );
-      const currentEffectiveDebt = Math.max(
-        0,
-        valueAdjustedNegativeImpact - creditState.appliedCredit
-      );
-      const creditToActuallyApply = Math.min(
-        amount,
-        currentAvailable,
-        currentEffectiveDebt
-      );
-      firebaseDebug.log("APPLY_CREDIT", {
-        requested: amount,
-        available: currentAvailable,
-        effectiveDebt: currentEffectiveDebt,
-        applying: creditToActuallyApply,
-      });
-      if (creditToActuallyApply <= 0) {
-        console.log("No credit to apply or no debt to offset.");
-        set({ appStatus: "idle" });
-        return false;
-      }
-      const updatedAppliedCredit =
-        creditState.appliedCredit + creditToActuallyApply;
-      const updatedCreditStateValues = {
-        appliedCredit: updatedAppliedCredit,
-        lastAppliedAmount: creditToActuallyApply,
-        lastAppliedAt: Timestamp.now(),
-      };
-      const creditDocRef = doc(db, "creditState", currentUserId);
-      const sanitizedUpdate = sanitizeDataForFirestore(
-        updatedCreditStateValues
-      );
-      if (!sanitizedUpdate)
-        throw new Error("Failed to sanitize credit state update");
-      await setDoc(creditDocRef, sanitizedUpdate, { merge: true });
-      firebaseDebug.log("APPLY_CREDIT", { status: "firestore_updated" });
-      const newAnalysis = calculationService.calculateImpactAnalysis(
-        transactions,
-        updatedAppliedCredit,
-        userValueSettings
-      );
-      firebaseDebug.log("APPLY_CREDIT", {
-        status: "recalculated_impact",
-        newAnalysis,
-      });
-      set({
-        creditState: {
-          ...creditState,
-          appliedCredit: updatedAppliedCredit,
-          lastAppliedAmount: creditToActuallyApply,
-          lastAppliedAt: updatedCreditStateValues.lastAppliedAt,
-          availableCredit: newAnalysis.availableCredit,
-        },
-        impactAnalysis: newAnalysis,
-      });
-      firebaseDebug.log("APPLY_CREDIT", { status: "success" });
-      return true;
-    } catch (error) {
-      console.error("Error applying credit:", error);
-      firebaseDebug.log("APPLY_CREDIT", {
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-      });
-      set({ appStatus: "error" });
-      return false;
-    } finally {
-      if (get().appStatus === "applying_credit") {
         set({ appStatus: "idle" });
       }
     }
@@ -997,7 +878,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         });
         const analysis = calculationService.calculateImpactAnalysis(
           loadedTransactions,
-          currentAppliedCredit,
           currentUserValueSettings
         );
         firebaseDebug.log("LOAD_LATEST", {
@@ -1011,7 +891,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           hasSavedData: true,
           creditState: {
             ...currentCreditState,
-            availableCredit: analysis.availableCredit,
           },
           connectionStatus: { isConnected: true, error: null },
           appStatus: "idle",
@@ -1120,19 +999,17 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const currentUserValueSettings = get().userValueSettings;
       const analysis = calculationService.calculateImpactAnalysis(
         currentTransactions,
-        loadedAppliedCredit,
         currentUserValueSettings
       );
       firebaseDebug.log("LOAD_CREDIT", {
         status: "recalculated_impact",
         applied: loadedAppliedCredit,
-        available: analysis.availableCredit,
       });
       finalCreditState = {
         appliedCredit: loadedAppliedCredit,
         lastAppliedAmount: loadedLastAmount,
         lastAppliedAt: loadedLastAt,
-        availableCredit: analysis.availableCredit,
+        availableCredit: 0,
       };
       set({ creditState: finalCreditState, impactAnalysis: analysis });
     } catch (error) {
@@ -1361,17 +1238,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     set({ userValueSettings: updatedSettings, appStatus: "saving_settings" });
 
-    const { transactions, creditState } = get();
+    const { transactions } = get();
     const analysis = calculationService.calculateImpactAnalysis(
       transactions,
-      creditState.appliedCredit,
       updatedSettings
     );
     set({
       impactAnalysis: analysis,
       creditState: {
         ...creditState,
-        availableCredit: analysis.availableCredit,
       },
     });
 

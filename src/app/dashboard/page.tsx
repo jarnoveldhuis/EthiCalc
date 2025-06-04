@@ -22,7 +22,7 @@ export default function Dashboard() {
   const transactions = useTransactionStore(state => state.transactions);
   const connectionStatus = useTransactionStore(state => state.connectionStatus);
   const impactAnalysis = useTransactionStore(state => state.impactAnalysis);
-  const effectiveDebt = impactAnalysis?.effectiveDebt ?? 0;
+  const effectiveDebt = impactAnalysis?.balance ?? 0;
 
   const connectBank = useTransactionStore(state => state.connectBank);
   const disconnectBank = useTransactionStore(state => state.disconnectBank);
