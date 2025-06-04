@@ -6,12 +6,10 @@
  */
 export interface ImpactAnalysis {
     negativeImpact: number;       // The collective weight of your ethical failures
-    positiveImpact: number;       // Your pathetic attempts at redemption
-    netSocietalDebt: number;      // The final judgment (negative - positive)
-    effectiveDebt: number;        // What you still owe to society (after credit applied)
+    positiveImpact: number;       // Your attempts at redemption
+    netSocietalDebt: number;      // Negative minus positive
+    balance: number;              // Positive minus negative
     debtPercentage: number;       // Your guilt as a percentage of consumption
-    appliedCredit: number;        // How much you've already atoned for
-    availableCredit: number;      // How much more you could atone for if you tried
     
     // Statistics
     totalTransactions: number;    // Total spending decisions judged

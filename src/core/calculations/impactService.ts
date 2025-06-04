@@ -171,7 +171,6 @@ export const calculationService = {
   },
   calculateImpactAnalysis(
     transactions: Transaction[],
-    appliedCredit: number = 0,
     userValueSettings?: UserValueSettings
   ): ImpactAnalysis {
     /* ... */ const valueAdjustedNegativeImpact = this.calculateNegativeImpact(
@@ -180,10 +179,6 @@ export const calculationService = {
     );
     const totalPositiveImpact = this.calculatePositiveImpact(transactions);
     const netSocietalDebt = valueAdjustedNegativeImpact - totalPositiveImpact;
-    const effectiveDebt = Math.max(
-      0,
-      valueAdjustedNegativeImpact - appliedCredit
-    );
     const totalSpentExcludingCreditApplications = transactions
       .filter((tx) => !tx.isCreditApplication)
       .reduce((sum, tx) => sum + (tx.amount || 0), 0);
@@ -193,15 +188,12 @@ export const calculationService = {
             totalSpentExcludingCreditApplications) *
           100
         : 0;
-    const availableCredit = Math.max(0, totalPositiveImpact - appliedCredit);
     return {
       negativeImpact: valueAdjustedNegativeImpact,
       positiveImpact: totalPositiveImpact,
       netSocietalDebt,
-      effectiveDebt,
+      balance: totalPositiveImpact - valueAdjustedNegativeImpact,
       debtPercentage,
-      appliedCredit,
-      availableCredit,
       totalTransactions: transactions.length,
       transactionsWithDebt: transactions.filter(
         (tx) =>
