@@ -1,7 +1,7 @@
-// src/features/values/UserValuesEditor.tsx
+// src/features/values/UserValuesEditor.jsx
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTransactionStore } from "@/store/transactionStore";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -10,8 +10,17 @@ import {
   ValueCategoryDefinition,
 } from "@/config/valuesConfig";
 import { Timestamp } from "firebase/firestore";
+import { Reorder } from "framer-motion";
 
-// Square visual component - Smaller Size
+const usePrevious = <T,>(value: T): T | undefined => {
+  const ref = useRef<T | undefined>(undefined);
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+};
+
+
 const ValueSquare = ({
   levelPosition,
   currentLevel,
@@ -23,8 +32,7 @@ const ValueSquare = ({
   onClick: () => void;
   disabled?: boolean;
 }) => {
-  let bgColor =
-    "bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500";
+  let bgColor = "bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500";
   const isFilled = levelPosition <= currentLevel;
   const isActive = levelPosition === currentLevel;
 
@@ -36,13 +44,11 @@ const ValueSquare = ({
     else if (currentLevel === 5) bgColor = "bg-green-500 hover:bg-green-600";
   }
 
-  // --- STYLE CHANGE: Reduced square size ---
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      // Reduced size classes (e.g., w-5 h-5 base, sm:w-6 sm:h-6 medium)
       className={`w-5 h-5 sm:w-6 sm:h-6 rounded transition-colors duration-150 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${bgColor} ${
         isActive ? "ring-2 ring-black dark:ring-white ring-offset-1" : ""
       } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
@@ -52,51 +58,35 @@ const ValueSquare = ({
   );
 };
 
-// ValueRow component - Reduced Padding
 interface ValueRowProps {
   category: ValueCategoryDefinition;
   currentLevel: number;
   onUpdate: (categoryId: string, newLevel: number) => void;
   disabled: boolean;
+  highlightClass: string;
 }
 
-const ValueRow: React.FC<ValueRowProps> = ({
-  category,
-  currentLevel,
-  onUpdate,
-  disabled,
-}) => {
+const ValueRow: React.FC<ValueRowProps> = ({ category, currentLevel, onUpdate, disabled, highlightClass }) => {
   const handleSquareClick = (levelClicked: number) => {
     if (disabled) return;
-    onUpdate(category.id, levelClicked);
+    const newLevel = levelClicked === currentLevel ? 0 : levelClicked;
+    onUpdate(category.id, newLevel);
   };
-
-  // --- STYLE CHANGE: Removed border-b class ---
   return (
-    <div className="py-1 sm:py-1">
-      {" "}
-      {/* Removed border-b and last:border-b-0 */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center min-w-0 flex-1 pr-1 sm:pr-2">
-          <span
-            className="text-sm sm:text-2xl mr-2 sm:mr-3 select-none"
-            aria-hidden="true"
-          >
-            {category.emoji}
-          </span>
-          <span
-            className="text-sm sm:text-base font-medium text-gray-800 dark:text-gray-200 truncate"
-            title={category.name}
-          >
-            {category.name}
-          </span>
-        </div>
-        {/* --- STYLE CHANGE: Adjusted spacing for smaller squares --- */}
-        <div
-          className="flex items-center space-x-1 flex-shrink-0"
-          role="radiogroup"
-          aria-label={`${category.name} importance level`}
+    <div className={`py-2 sm:py-2 px-2 sm:px-3 rounded-md transition-colors duration-200 ${highlightClass}`}>
+      <div className="flex items-center gap-2 sm:gap-3 w-full">
+        <button 
+          onClick={() => onUpdate(category.id, 0)} // THIS IS THE FIX
+          disabled={disabled || currentLevel === 0}
+          className="text-gray-400 hover:text-red-500 disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed font-mono text-lg p-1"
+          title="Set value to zero"
         >
+          &times;
+        </button>
+        <span className="text-xl sm:text-2xl" aria-hidden="true">
+          {category.emoji}
+        </span>
+        <div className="flex items-center space-x-1" role="radiogroup" aria-label={`${category.name} importance level`}>
           {[1, 2, 3, 4, 5].map((levelPos) => (
             <ValueSquare
               key={levelPos}
@@ -107,37 +97,37 @@ const ValueRow: React.FC<ValueRowProps> = ({
             />
           ))}
         </div>
+        <span className="text-sm sm:text-base font-medium text-gray-800 dark:text-gray-200" title={category.name}>
+          {category.name}
+        </span>
       </div>
     </div>
   );
 };
 
-// Main Editor Component
 export const UserValuesEditor: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const userValueSettings = useTransactionStore(
-    (state) => state.userValueSettings
-  );
+  const userValueSettings = useTransactionStore((state) => state.userValueSettings);
   const updateUserValue = useTransactionStore((state) => state.updateUserValue);
-  const initializeUserValueSettings = useTransactionStore(
-    (state) => state.initializeUserValueSettings
-  );
-  const valuesCommittedUntil = useTransactionStore(
-    (state) => state.valuesCommittedUntil
-  );
-
+  const updateCategoryOrder = useTransactionStore((state) => state.updateCategoryOrder);
+  const initializeUserValueSettings = useTransactionStore((state) => state.initializeUserValueSettings);
+  const valuesCommittedUntil = useTransactionStore((state) => state.valuesCommittedUntil);
   const appStatus = useTransactionStore((state) => state.appStatus);
   const initRanForUserRef = useRef<string | null>(null);
+  
+  const [highlightedCategories, setHighlightedCategories] = useState<Record<string, boolean>>({});
+  const lastInteractedId = useRef<string | null>(null);
+  const prevUserValueSettings = usePrevious(userValueSettings);
+  const [orderedCategories, setOrderedCategories] = useState<ValueCategoryDefinition[]>([]);
 
-  // Determine if editing is disabled
-  const isEditingDisabled = React.useMemo(() => {
+  const isEditingDisabled = useMemo(() => {
     if (valuesCommittedUntil && valuesCommittedUntil instanceof Timestamp) {
       return valuesCommittedUntil.toDate() > new Date();
     }
     return false;
   }, [valuesCommittedUntil]);
 
-  const committedUntilDateString = React.useMemo(() => {
+  const committedUntilDateString = useMemo(() => {
     if (isEditingDisabled && valuesCommittedUntil) {
       return valuesCommittedUntil.toDate().toLocaleDateString(undefined, {
         year: 'numeric', month: 'long', day: 'numeric'
@@ -146,164 +136,116 @@ export const UserValuesEditor: React.FC = () => {
     return "";
   }, [isEditingDisabled, valuesCommittedUntil]);
 
-  // Effect to initialize settings (remains the same logic)
   useEffect(() => {
-    // ... initialization effect logic ...
-    const currentUserId = user?.uid;
-    if (
-      currentUserId &&
-      !authLoading &&
-      initRanForUserRef.current !== currentUserId
-    ) {
-      const settingsAreIncompleteOrPotentiallyDefault = VALUE_CATEGORIES.some(
-        (cat) =>
-          userValueSettings[cat.id] === undefined ||
-          userValueSettings[cat.id] === NEUTRAL_LEVEL
-      );
-      const settingsKeyCount = Object.keys(userValueSettings).length;
-      if (
-        settingsAreIncompleteOrPotentiallyDefault ||
-        settingsKeyCount < VALUE_CATEGORIES.length
-      ) {
-        console.log(
-          `UserValuesEditor Effect: Triggering initializeUserValueSettings for user ${currentUserId}.`
-        );
-        initializeUserValueSettings(currentUserId);
-        initRanForUserRef.current = currentUserId;
-      } else {
-        console.log(
-          `UserValuesEditor Effect: Settings seem populated for user ${currentUserId}. Marking init as done.`
-        );
-        initRanForUserRef.current = currentUserId;
+    const masterOrder = userValueSettings.order || [];
+    const newSorted = [...VALUE_CATEGORIES].sort((a, b) => {
+      const levelA = userValueSettings.levels[a.id] ?? NEUTRAL_LEVEL;
+      const levelB = userValueSettings.levels[b.id] ?? NEUTRAL_LEVEL;
+      if (levelB !== levelA) return levelB - levelA;
+      return masterOrder.indexOf(a.id) - masterOrder.indexOf(b.id);
+    });
+    setOrderedCategories(newSorted);
+  }, [userValueSettings]);
+
+  useEffect(() => {
+    if (prevUserValueSettings && prevUserValueSettings.levels) {
+      const changed: Record<string, boolean> = {};
+      let hasChanges = false;
+      for (const categoryId in userValueSettings.levels) {
+        if (userValueSettings.levels[categoryId] !== prevUserValueSettings.levels[categoryId] && categoryId !== lastInteractedId.current) {
+          changed[categoryId] = true;
+          hasChanges = true;
+        }
       }
+      if (hasChanges) {
+        setHighlightedCategories(changed);
+        const timer = setTimeout(() => { setHighlightedCategories({}); }, 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [userValueSettings, prevUserValueSettings]);
+
+  useEffect(() => {
+    const currentUserId = user?.uid;
+    if (currentUserId && !authLoading && initRanForUserRef.current !== currentUserId) {
+      initializeUserValueSettings(currentUserId);
+      initRanForUserRef.current = currentUserId;
     } else if (!currentUserId && !authLoading) {
-      console.log(
-        "UserValuesEditor Effect: User logged out, resetting init ref."
-      );
       initRanForUserRef.current = null;
     }
-  }, [user, authLoading, initializeUserValueSettings, userValueSettings]);
+  }, [user, authLoading, initializeUserValueSettings]);
 
   const handleUpdate = (categoryId: string, newLevel: number) => {
-    if (isEditingDisabled) return;
-    if (user) {
-      updateUserValue(user.uid, categoryId, newLevel);
-    } else {
-      console.error("User not authenticated, cannot update values.");
-    }
+    if (isEditingDisabled || !user) return;
+    lastInteractedId.current = categoryId;
+    updateUserValue(user.uid, categoryId, newLevel);
   };
+  
+  // This handler is now robust for reordering within a group
+  const handleReorder = (reorderedGroup: ValueCategoryDefinition[]) => {
+    if (!user || reorderedGroup.length <= 1) return;
 
-  // const handleReset = () => {
-  //   if (isEditingDisabled) {
-  //     alert("Values are committed and cannot be reset at this time.");
-  //     return;
-  //   }
-  //   if (
-  //     user &&
-  //     window.confirm(
-  //       "This will reset all your value weightings to neutral (Level 3).\nAre you sure?"
-  //     )
-  //   ) {
-  //     resetUserValuesToDefault(user.uid);
-  //   }
-  // };
+    const masterOrder = [...userValueSettings.order];
+    const reorderedIds = reorderedGroup.map(c => c.id);
+    const reorderedIdSet = new Set(reorderedIds);
 
-  const isLoading =
-    authLoading ||
-    appStatus === "loading_settings" ||
-    (appStatus === "initializing" && initRanForUserRef.current !== user?.uid);
-
-  if (isLoading) {
-    /* ... Loading UI ... */
-    return (
-      <div className="card rounded-lg shadow-md animate-pulse">
-        <div className="p-6 text-center">
-          <p>Loading value settings...</p>
-          <div className="space-y-3 mt-4">
-            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mx-auto"></div>
-            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-full mx-auto"></div>
-            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-full mx-auto"></div>
-          </div>
-        </div>
-      </div>
+    let groupIdx = 0;
+    const finalMasterOrder = masterOrder.map(id => 
+      reorderedIdSet.has(id) ? reorderedIds[groupIdx++] : id
     );
-  }
-  if (!user) {
-    /* ... No User UI ... */
-    return (
-      <div className="card rounded-lg shadow-md">
-        <div className="p-6 text-center">
-          <p>Please sign in to set your values.</p>
-        </div>
-      </div>
-    );
-  }
-  const settingsReady = VALUE_CATEGORIES.every(
-    (cat) => userValueSettings[cat.id] !== undefined
+
+    updateCategoryOrder(user.uid, finalMasterOrder);
+  };
+  
+  const isLoading = authLoading || appStatus === "loading_settings" || appStatus === "initializing";
+
+  const categoryGroups = useMemo(() => {
+    const groups: { [level: string]: ValueCategoryDefinition[] } = {};
+    const levels = userValueSettings.levels || {};
+    orderedCategories.forEach(cat => {
+      const level = levels[cat.id] ?? NEUTRAL_LEVEL;
+      if (!groups[level]) { groups[level] = []; }
+      groups[level].push(cat);
+    });
+    return groups;
+  }, [orderedCategories, userValueSettings.levels]);
+
+  const sortedLevels = useMemo(() => 
+    Object.keys(categoryGroups).sort((a, b) => Number(b) - Number(a)),
+    [categoryGroups]
   );
-  if (!settingsReady && !isLoading) {
-    /* ... Error UI ... */
-    return (
-      <div className="card rounded-lg shadow-md">
-        <div className="p-6 text-center">
-          <p className="text-red-600 dark:text-red-400 font-semibold">
-            Error loading value settings.
-          </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Please try refreshing the page.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
-  // Main Render Output
+  if (isLoading) { return <div className="p-6 text-center">Loading Values...</div>; }
+  if (!user) { return <div className="p-6 text-center">Please sign in to set your values.</div>; }
+
   return (
     <div className="bg-white dark:bg-gray-800">
-      {isEditingDisabled && committedUntilDateString && (
-        <div className="p-3 sm:p-4 bg-yellow-100 dark:bg-yellow-700 border-b border-yellow-300 dark:border-yellow-600">
-          <p className="text-sm text-yellow-800 dark:text-yellow-100 text-center">
-            Your values are committed and locked until{" "}
-            <strong>{committedUntilDateString}</strong>.
-          </p>
-        </div>
-      )}
-      {/* Header Section */}
-      <div className="p-3 sm:p-4 flex justify-between items-center flex-wrap gap-2">
-        {/* ... Header content remains the same ... */}
-        <div>
-          {" "}
-
-        </div>
-      </div>
-      {/* --- STYLE CHANGE: Removed divide-y class --- */}
-      <div className="px-2">
-        {" "}
-        {VALUE_CATEGORIES.map((category) => (
-          <ValueRow
-            key={category.id}
-            category={category}
-            currentLevel={userValueSettings[category.id] || NEUTRAL_LEVEL}
-            onUpdate={handleUpdate}
-            disabled={isEditingDisabled}
-          />
+      {isEditingDisabled && committedUntilDateString && (<div className="p-3 sm:p-4 bg-yellow-100 dark:bg-yellow-700 border-b border-yellow-300 dark:border-yellow-600"><p className="text-sm text-yellow-800 dark:text-yellow-100 text-center">Your values are committed and locked until <strong>{committedUntilDateString}</strong>.</p></div>)}
+      <div className="px-2 space-y-4">
+        {sortedLevels.map(level => (
+          <div key={`level-group-${level}`} className="p-2 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 px-2 mb-1">LEVEL {level}</p>
+            <Reorder.Group
+              axis="y"
+              values={categoryGroups[level]}
+              onReorder={handleReorder}
+              className="space-y-1"
+            >
+              {categoryGroups[level].map((category) => (
+                <Reorder.Item key={category.id} value={category} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-sm cursor-grab active:cursor-grabbing">
+                  <ValueRow
+                    category={category}
+                    currentLevel={userValueSettings.levels[category.id] ?? NEUTRAL_LEVEL}
+                    onUpdate={handleUpdate}
+                    disabled={isEditingDisabled}
+                    highlightClass={highlightedCategories[category.id] ? 'highlight-change' : ''}
+                  />
+                </Reorder.Item>
+              ))}
+            </Reorder.Group>
+          </div>
         ))}
       </div>
-      {/* Footer Explanation Section */}
-      {/* <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {" "}
-            Click a squares to set the importance levels.{" "}
-          </p>{" "} */}
-      {/* <div className="p-3 sm:p-4 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/[.35] rounded-b-lg">
-        <button
-          onClick={handleReset}
-          className="text-xs px-3 py-1 border border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400 rounded hover:bg-blue-50 dark:hover:bg-blue-900/[0.3] whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          title="Reset all values to neutral (Level 3)"
-        >
-          {" "}
-          Reset to Neutral{" "}
-        </button>
-      </div> */}
     </div>
   );
 };

@@ -112,3 +112,14 @@ div.scrollable-content::-webkit-scrollbar-thumb:hover {
 header {
     @apply bg-[var(--header-background)] transition-colors duration-3000;
 }
+
+@layer utilities {
+  .highlight-change {
+    animation: flash-yellow 1.5s ease-out;
+  }
+
+  @keyframes flash-yellow {
+    0% { background-color: rgba(254, 249, 195, 0.7); } /* yellow-200 with opacity */
+    100% { background-color: transparent; }
+  }
+}

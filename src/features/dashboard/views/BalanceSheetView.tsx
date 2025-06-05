@@ -266,8 +266,18 @@ export function BalanceSheetView({ transactions }: { transactions: Transaction[]
       const results = await enhancedCharityService.getTopRatedCharitiesWithPaymentLinks(searchTerm, 1);
       const recommendation = results.length > 0 ? results[0] : null;
       const categoryData = processedData.categories.find((c) => c.name === categoryName);
-      const defaultAmount = Math.max(1, Math.round(Math.abs(categoryData?.totalNegativeImpact ?? 1)));
-      updateInlineOffsetState(categoryName, { recommendationStatus: "loaded", recommendedCharity: recommendation, donationAmount: defaultAmount });
+
+
+
+      const netDebt = Math.max(0, (categoryData?.totalNegativeImpact ?? 0) - (categoryData?.totalPositiveImpact ?? 0));
+      const defaultAmount = Math.max(1, Math.round(netDebt));
+
+      
+      updateInlineOffsetState(categoryName, { 
+        recommendationStatus: "loaded", 
+        recommendedCharity: recommendation, 
+        donationAmount: defaultAmount 
+    });
     } catch (error) {
       console.error(`Error fetching recommendation for ${categoryName}:`, error);
       updateInlineOffsetState(categoryName, { recommendationStatus: "error", recommendedCharity: null, errorMessage: "Failed to load charity suggestion." });

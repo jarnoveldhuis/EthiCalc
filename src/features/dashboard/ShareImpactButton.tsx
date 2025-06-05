@@ -32,12 +32,12 @@ export function ShareImpactButton({
     let valuesText = "My Values:\n";
     // Sort categories by the order defined in VALUE_CATEGORIES for consistent output
     VALUE_CATEGORIES.forEach(categoryDef => {
-      const userLevel = userValueSettings[categoryDef.id] || NEUTRAL_LEVEL;
+      const userLevel = userValueSettings.levels[categoryDef.id] || NEUTRAL_LEVEL;
       const squares = generateValueDisplayEmojiSquares(userLevel, 5);
       valuesText += `${categoryDef.emoji} ${squares} ${categoryDef.name}\n`;
     });
 
-    const valueParams = VALUE_CATEGORIES.map(cat => `${cat.id}:${userValueSettings[cat.id] || NEUTRAL_LEVEL}`).join(',');
+    const valueParams = VALUE_CATEGORIES.map(cat => `${cat.id}:${userValueSettings.levels[cat.id] || NEUTRAL_LEVEL}`).join(',');
 
     const shareLink = `https://mordebt.vercel.app/dashboard?sharedValues=${encodeURIComponent(valueParams)}`; 
 

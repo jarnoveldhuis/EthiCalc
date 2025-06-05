@@ -15,7 +15,7 @@ export function ShareValuesButton({ className = "" }: ShareValuesButtonProps) {
   const generateShareText = useCallback((): string => {
     let shareText = "My Ethical Value Offsets:\n";
     VALUE_CATEGORIES.forEach(category => {
-      const level = userValueSettings[category.id] || category.defaultLevel;
+      const level = userValueSettings.levels[category.id] || category.defaultLevel;
       const multiplier = NEGATIVE_PRACTICE_MULTIPLIERS[level] !== undefined 
                          ? NEGATIVE_PRACTICE_MULTIPLIERS[level] 
                          : NEGATIVE_PRACTICE_MULTIPLIERS[category.defaultLevel];

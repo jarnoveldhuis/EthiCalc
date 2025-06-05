@@ -20,7 +20,7 @@ const getNegativePracticeMultiplierForCategory = (
   if (!categoryDefinition) return 1.0; // Default if category definition not found
 
   // Use the user's level for this category's ID, or the neutral level if not set.
-  const userLevel = userValueSettings[categoryDefinition.id] || NEUTRAL_LEVEL;
+  const userLevel = userValueSettings.levels[categoryDefinition.id] || NEUTRAL_LEVEL;
   // Return the multiplier for that level, or 0 if not defined (should not happen with current config).
   return NEGATIVE_PRACTICE_MULTIPLIERS[userLevel] || 0;
 };
