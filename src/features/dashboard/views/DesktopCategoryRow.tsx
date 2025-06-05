@@ -2,28 +2,32 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { ProcessedCategoryData, CategoryInlineOffsetState } from "./BalanceSheetView"; // Assuming types are exported or defined in a shared place
-import { DetailItem } from "./BalanceSheetView"; // Assuming DetailItem is also exported or accessible
+// CombinedImpactDetail and Citation are no longer directly imported here
+// as they are implicitly used via the DetailItem component imported from BalanceSheetView
+import { ProcessedCategoryData, CategoryInlineOffsetState } from "./BalanceSheetView";
+import { DetailItem } from "./BalanceSheetView"; 
 import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { LoadingSpinner } from "@/shared/ui/LoadingSpinner";
 import { CharityImage } from "@/features/charity/CharityImage";
 import { CharityRating } from "@/features/charity/CharityRating";
 import { EnrichedCharityResult } from "@/features/charity/types";
+// Citation type no longer needed here explicitly: import { Citation } from "@/shared/types/transactions"; 
 
-// Helper functions (can be moved to a shared utils file if not already)
-const formatCurrency = (value: number) => `$${(value ?? 0).toFixed(2)}`;
-const getNetImpactColor = (netImpact: number) => {
+const formatCurrency = (value: number | undefined | null): string => {
+  const num = value ?? 0;
+  return `$${num.toFixed(2)}`;
+};
+const getNetImpactColor = (netImpact: number): string => {
   if (netImpact > 0.01) return "text-[var(--success)] dark:text-emerald-400";
   if (netImpact < -0.01) return "text-[var(--destructive)] dark:text-rose-400";
   return "text-gray-500 dark:text-gray-400";
 };
 
-
 interface DesktopCategoryRowProps {
   category: ProcessedCategoryData;
   isExpanded: boolean;
   onToggleExpand: (categoryName: string) => void;
-  onOpenModal: (categoryName: string, amount: number) => void;
+  onOpenModal: (categoryName: string, amount: number, searchTerm?: string) => void;
   inlineOffsetState?: CategoryInlineOffsetState;
   fetchRecommendation: (categoryName: string) => Promise<void>;
   updateInlineOffsetState: (categoryName: string, updates: Partial<CategoryInlineOffsetState>) => void;
@@ -40,17 +44,14 @@ export function DesktopCategoryRow({
   updateInlineOffsetState,
   triggerWidget,
 }: DesktopCategoryRowProps) {
-  const { totalPositiveImpact, totalNegativeImpact, name: categoryName, icon } = category;
+  const { totalPositiveImpact, totalNegativeImpact, name: categoryName, icon, positiveDetails, negativeDetails } = category;
   const netImpact = totalPositiveImpact - totalNegativeImpact;
-  const negativeImpactForOffset = totalNegativeImpact; // Amount to offset for this category
+  const negativeImpactForOffset = totalNegativeImpact;
 
-  // Inline offset UI logic (for collapsed view or positive details empty view)
-  const showInlineOffsetWhenCollapsed = !isExpanded && negativeImpactForOffset > 0.005 && inlineOffsetState?.recommendationStatus === 'loaded' && inlineOffsetState?.recommendedCharity;
-  const showInlineOffsetInPositiveDetails = isExpanded && category.positiveDetails.length === 0 && negativeImpactForOffset > 0.005;
+  const showInlineOffsetInPositiveDetailsEmpty = isExpanded && positiveDetails.length === 0 && negativeImpactForOffset > 0.005;
 
   useEffect(() => {
-    // Fetch recommendation if card is collapsed but has debt, or if expanded and positive details are empty but has debt
-    const shouldFetch = (!isExpanded && negativeImpactForOffset > 0.005) || (isExpanded && category.positiveDetails.length === 0 && negativeImpactForOffset > 0.005);
+    const shouldFetch = (isExpanded && positiveDetails.length === 0 && negativeImpactForOffset > 0.005);
     if (
       shouldFetch &&
       inlineOffsetState?.recommendationStatus === "idle"
@@ -63,12 +64,12 @@ export function DesktopCategoryRow({
     categoryName,
     fetchRecommendation,
     inlineOffsetState?.recommendationStatus,
-    category.positiveDetails.length
+    positiveDetails.length
   ]);
 
   const handleOpenModalClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onOpenModal(categoryName, negativeImpactForOffset);
+    onOpenModal(categoryName, negativeImpactForOffset, categoryName);
   };
   
   const handleInlineWidgetTrigger = (e: React.MouseEvent) => {
@@ -92,29 +93,19 @@ export function DesktopCategoryRow({
   const handleOpenModalForChangeCharity = (e: React.MouseEvent) => {
     e.stopPropagation();
     const amount = inlineOffsetState?.donationAmount ?? negativeImpactForOffset;
-    onOpenModal(categoryName, amount);
+    onOpenModal(categoryName, amount, categoryName);
   };
 
-  const renderInlineOffsetSection = (isForCollapsedHeader: boolean = false) => {
-    if (isForCollapsedHeader) {
-      return null;
-    }
+  const renderInlineOffsetSection = () => {
     if (!inlineOffsetState) return null;
-    // Only show if there's a negative impact to offset
     if (negativeImpactForOffset <= 0.005) return null;
-    // Specific condition for collapsed header
-    if (isForCollapsedHeader && !(showInlineOffsetWhenCollapsed && inlineOffsetState.recommendedCharity)) return null;
-    // Specific condition for positive details section
-    if (!isForCollapsedHeader && !showInlineOffsetInPositiveDetails) return null;
-
+    if (!showInlineOffsetInPositiveDetailsEmpty) return null;
 
     return (
-      <div className={`mt-2 ${isForCollapsedHeader ? 'px-3 pb-3' : 'pt-3 border-t border-dashed border-slate-300 dark:border-slate-600'}`}>
-        {!isForCollapsedHeader && (
-            <p className="text-xs text-[var(--muted-foreground)] italic text-center mb-2">
-                This category has related negative impacts of {formatCurrency(negativeImpactForOffset)}. You can offset this:
-            </p>
-        )}
+      <div className="pt-3 border-t border-dashed border-slate-300 dark:border-slate-600 mt-3">
+        <p className="text-xs text-[var(--muted-foreground)] italic text-center mb-2">
+            Offset {formatCurrency(negativeImpactForOffset)} from {categoryName}:
+        </p>
         {inlineOffsetState.recommendationStatus === "loading" && (
           <LoadingSpinner message="Finding best charity..." />
         )}
@@ -126,7 +117,7 @@ export function DesktopCategoryRow({
         {inlineOffsetState.recommendationStatus === "loaded" &&
           !inlineOffsetState.recommendedCharity && (
              <div className="text-center">
-                <p className="text-xs text-gray-500">No specific charity found.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">No specific charity found.</p>
                  <button
                     onClick={handleOpenModalClick}
                     className="text-blue-500 hover:underline text-xs font-medium"
@@ -141,7 +132,7 @@ export function DesktopCategoryRow({
               <CharityImage
                 src={inlineOffsetState.recommendedCharity.logoUrl}
                 alt={inlineOffsetState.recommendedCharity.name}
-                width={32} height={32} // Slightly smaller for inline
+                width={32} height={32}
               />
               <div className="flex-grow min-w-0">
                 <p className="text-sm font-medium text-[var(--card-foreground)] truncate">
@@ -180,7 +171,7 @@ export function DesktopCategoryRow({
                 <button
                   onClick={handleInlineWidgetTrigger}
                   className="flex-shrink-0 text-sm bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-md disabled:opacity-50"
-                  disabled={!inlineOffsetState.recommendedCharity || inlineOffsetState.donationAmount < 1}
+                  disabled={!inlineOffsetState.recommendedCharity || (inlineOffsetState.donationAmount ?? 0) < 1}
                   title={`Donate to ${inlineOffsetState.recommendedCharity?.name}`}
                 >
                   Donate
@@ -204,10 +195,8 @@ export function DesktopCategoryRow({
     );
   };
 
-
   return (
     <div className="card mb-4">
-      {/* Unified Header */}
       <div
         role="button"
         tabIndex={0}
@@ -229,7 +218,7 @@ export function DesktopCategoryRow({
           <div className="flex items-center flex-shrink-0 gap-2">
             <AnimatedCounter
               value={Math.abs(netImpact)}
-              prefix={netImpact >= 0 ? "+$" : "-$"}
+              prefix={netImpact >= 0.005 ? "+$" : (netImpact <= -0.005 ? "-$" : "$")}
               className={`font-bold ${getNetImpactColor(netImpact)} text-sm sm:text-base w-20 text-right`}
               decimalPlaces={0}
               title={`Precise Net: ${netImpact >= 0 ? "+" : ""}${formatCurrency(netImpact)}`}
@@ -251,40 +240,34 @@ export function DesktopCategoryRow({
             </svg>
           </div>
         </div>
-        {/* Render inline offset section if card is collapsed and conditions met */}
-        {renderInlineOffsetSection(true)}
       </div>
 
-      {/* Details Section (conditionally rendered) */}
       {isExpanded && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-0 border-t border-slate-200 dark:border-slate-700">
-          {/* Negative Details Panel */}
           <div className="p-3 sm:p-4 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 space-y-3">
-            <h4 className="text-sm font-semibold mb-2 text-center text-[var(--destructive)] dark:text-rose-400">
-              Negative Purchases ({formatCurrency(category.totalNegativeImpact)})
-            </h4>
-            {category.negativeDetails.length > 0 ? (
-              category.negativeDetails.map((detail, index) => (
-                <DetailItem key={`desktop-neg-detail-${categoryName}-${index}`} detail={detail} amountColor="text-[var(--destructive)] dark:text-rose-400" />
-              ))
-            ) : (
-              <p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">No negative Purchases for this category.</p>
-            )}
-          </div>
-          {/* Positive Purchases Panel */}
-          <div className="p-3 sm:p-4 space-y-3">
             <h4 className="text-sm font-semibold mb-2 text-center text-[var(--success)] dark:text-emerald-400">
-              Positive Purchases ({formatCurrency(category.totalPositiveImpact)})
+              Positive Impact ({formatCurrency(totalPositiveImpact)})
             </h4>
-            {category.positiveDetails.length > 0 ? (
-              category.positiveDetails.map((detail, index) => (
+            {positiveDetails.length > 0 ? (
+              positiveDetails.map((detail, index) => (
                 <DetailItem key={`desktop-pos-detail-${categoryName}-${index}`} detail={detail} amountColor="text-[var(--success)] dark:text-emerald-400" />
               ))
             ) : (
-              <p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">No positive purchases for this category.</p>
+              <p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">No positive impact for this category.</p>
             )}
-            {/* Render inline offset section if positive details are empty and conditions met */}
-            {renderInlineOffsetSection(false)}
+            {renderInlineOffsetSection()}
+          </div>
+          <div className="p-3 sm:p-4 space-y-3">
+            <h4 className="text-sm font-semibold mb-2 text-center text-[var(--destructive)] dark:text-rose-400">
+              Negative Impact ({formatCurrency(totalNegativeImpact)})
+            </h4>
+            {negativeDetails.length > 0 ? (
+              negativeDetails.map((detail, index) => (
+                <DetailItem key={`desktop-neg-detail-${categoryName}-${index}`} detail={detail} amountColor="text-[var(--destructive)] dark:text-rose-400" />
+              ))
+            ) : (
+              <p className="text-xs text-center text-[var(--card-foreground)] opacity-70 py-4">No negative impact for this category.</p>
+            )}
           </div>
         </div>
       )}
