@@ -86,9 +86,9 @@ export function DesktopCategoryRow({
 
   const handleOpenModalClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onOpenModal(categoryName, netDebtForCategory, categoryName);
+    // Ensure it passes the correct, rounded netDebtForCategory to the modal.
+    onOpenModal(categoryName, Math.round(netDebtForCategory), categoryName);
   };
-
   const handleInlineWidgetTrigger = (e: React.MouseEvent) => {
     e.stopPropagation();
     const charity = inlineOffsetState?.recommendedCharity;
@@ -180,7 +180,7 @@ export function DesktopCategoryRow({
                     id={`donationAmount-${categoryName}-desktopRow`}
                     type="number"
                     min="1"
-                    value={inlineOffsetState.donationAmount}
+                    value={Math.round(netDebtForCategory)}
                     onChange={handleInlineAmountChange}
                     className="w-full p-1 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     aria-label="Donation Amount"
@@ -303,7 +303,7 @@ export function DesktopCategoryRow({
 
           <div className="p-3 sm:p-4 space-y-3">
             <h4 className="text-sm font-semibold mb-2 text-center text-[var(--destructive)] dark:text-rose-400">
-              Negative Impact ({formatCurrency(totalNegativeImpact)})
+              Negative Impact -({formatCurrency(totalNegativeImpact)})
             </h4>
             {negativeDetails.length > 0 ? (
               negativeDetails.map((detail, index) => (

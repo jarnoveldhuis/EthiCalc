@@ -1,8 +1,8 @@
-// src/features/dashboard/ShareImpactButton.tsx
+// src/features/dashboard/ShareImpactButton.jsx
 "use client";
 
 import React, { useState, useCallback } from 'react';
-import { useTransactionStore /* UserValueSettings */ } from '@/store/transactionStore'; // Removed unused import
+import { useTransactionStore } from '@/store/transactionStore';
 import { VALUE_CATEGORIES, NEUTRAL_LEVEL } from '@/config/valuesConfig';
 import { generateValueDisplayEmojiSquares } from '@/shared/utils/emojiUtils';
 
@@ -30,8 +30,12 @@ export function ShareImpactButton({
     }
 
     let valuesText = "My Values:\n";
-    // Sort categories by the order defined in VALUE_CATEGORIES for consistent output
-    VALUE_CATEGORIES.forEach(categoryDef => {
+    // Use the user's defined order for display
+    const sortedCategories = [...VALUE_CATEGORIES].sort((a, b) => {
+        return (userValueSettings.order.indexOf(a.id)) - (userValueSettings.order.indexOf(b.id));
+    });
+
+    sortedCategories.forEach(categoryDef => {
       const userLevel = userValueSettings.levels[categoryDef.id] || NEUTRAL_LEVEL;
       const squares = generateValueDisplayEmojiSquares(userLevel, 5);
       valuesText += `${categoryDef.emoji} ${squares} ${categoryDef.name}\n`;
@@ -42,7 +46,7 @@ export function ShareImpactButton({
     const shareLink = `https://mordebt.vercel.app/dashboard?sharedValues=${encodeURIComponent(valueParams)}`; 
 
     return `${overallImpactText}\n\n${valuesText}\nCheck out Virtue Balance & set your values!\n${shareLink}`;
-  }, [userValueSettings, overallRatio, totalPositiveImpact]); // Dependencies are correct
+  }, [userValueSettings, overallRatio, totalPositiveImpact]);
 
   const handleShare = useCallback(async () => {
     const shareText = generateShareText();
@@ -78,7 +82,8 @@ export function ShareImpactButton({
     setTimeout(() => setFeedback(null), 3500);
   }, [generateShareText]);
 
-  if (!userValueSettings || Object.keys(userValueSettings).length < VALUE_CATEGORIES.length) {
+  // CORRECTED LOGIC: Check the 'levels' property inside the settings object.
+  if (!userValueSettings || !userValueSettings.levels || Object.keys(userValueSettings.levels).length < VALUE_CATEGORIES.length) {
      return null;
   }
 

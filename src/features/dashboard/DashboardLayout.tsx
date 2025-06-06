@@ -47,13 +47,13 @@ export function DashboardLayout({
       try {
         await commitUserValues(user.uid);
         console.log("User values committed successfully.");
-        // Optionally: show a success notification to the user
+        return true;
       } catch (error) {
         console.error("Failed to commit user values:", error);
-        // Optionally: show an error notification to the user
+        return false;
       }
     }
-    setIsValuesModalOpen(false); // Close modal regardless of success/failure for now
+    return false;
   };
 
   return (

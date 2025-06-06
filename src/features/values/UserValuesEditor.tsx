@@ -105,6 +105,7 @@ const ValueRow: React.FC<ValueRowProps> = ({ category, currentLevel, onUpdate, d
   );
 };
 
+
 export const UserValuesEditor: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const userValueSettings = useTransactionStore((state) => state.userValueSettings);
@@ -199,53 +200,49 @@ export const UserValuesEditor: React.FC = () => {
   
   const isLoading = authLoading || appStatus === "loading_settings" || appStatus === "initializing";
 
-  const categoryGroups = useMemo(() => {
-    const groups: { [level: string]: ValueCategoryDefinition[] } = {};
-    const levels = userValueSettings.levels || {};
-    orderedCategories.forEach(cat => {
-      const level = levels[cat.id] ?? NEUTRAL_LEVEL;
-      if (!groups[level]) { groups[level] = []; }
-      groups[level].push(cat);
-    });
-    return groups;
-  }, [orderedCategories, userValueSettings.levels]);
 
-  const sortedLevels = useMemo(() => 
-    Object.keys(categoryGroups).sort((a, b) => Number(b) - Number(a)),
-    [categoryGroups]
-  );
+
 
   if (isLoading) { return <div className="p-6 text-center">Loading Values...</div>; }
   if (!user) { return <div className="p-6 text-center">Please sign in to set your values.</div>; }
 
   return (
     <div className="bg-white dark:bg-gray-800">
-      {isEditingDisabled && committedUntilDateString && (<div className="p-3 sm:p-4 bg-yellow-100 dark:bg-yellow-700 border-b border-yellow-300 dark:border-yellow-600"><p className="text-sm text-yellow-800 dark:text-yellow-100 text-center">Your values are committed and locked until <strong>{committedUntilDateString}</strong>.</p></div>)}
-      <div className="px-2 space-y-4">
-        {sortedLevels.map(level => (
-          <div key={`level-group-${level}`} className="p-2 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
-            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 px-2 mb-1">LEVEL {level}</p>
-            <Reorder.Group
-              axis="y"
-              values={categoryGroups[level]}
-              onReorder={handleReorder}
-              className="space-y-1"
-            >
-              {categoryGroups[level].map((category) => (
-                <Reorder.Item key={category.id} value={category} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-sm cursor-grab active:cursor-grabbing">
-                  <ValueRow
-                    category={category}
-                    currentLevel={userValueSettings.levels[category.id] ?? NEUTRAL_LEVEL}
-                    onUpdate={handleUpdate}
-                    disabled={isEditingDisabled}
-                    highlightClass={highlightedCategories[category.id] ? 'highlight-change' : ''}
-                  />
-                </Reorder.Item>
-              ))}
-            </Reorder.Group>
-          </div>
-        ))}
-      </div>
+      {isEditingDisabled && committedUntilDateString && (
+        <div className="p-3 sm:p-4 bg-yellow-100 dark:bg-yellow-700 border-b border-yellow-300 dark:border-yellow-600">
+          <p className="text-sm text-yellow-800 dark:text-yellow-100 text-center">
+            Your values are committed and locked until <strong>{committedUntilDateString}</strong>.
+          </p>
+        </div>
+      )}
+      <Reorder.Group
+        axis="y"
+        values={orderedCategories}
+        onReorder={handleReorder}
+        className="px-2"
+      >
+        {orderedCategories.map((category) => {
+          const currentLevel = userValueSettings.levels[category.id] ?? NEUTRAL_LEVEL;
+          
+          return (
+            <React.Fragment key={category.id}>
+              {/* {showHeader && <LevelHeader level={currentLevel} />} */}
+              <Reorder.Item 
+                value={category} 
+                className="bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-sm cursor-grab active:cursor-grabbing"
+              >
+                <ValueRow
+                  category={category}
+                  currentLevel={currentLevel}
+                  onUpdate={handleUpdate}
+                  disabled={isEditingDisabled}
+                  highlightClass={highlightedCategories[category.id] ? 'highlight-change' : ''}
+                />
+              </Reorder.Item>
+            </React.Fragment>
+          );
+        })}
+      </Reorder.Group>
     </div>
   );
 };

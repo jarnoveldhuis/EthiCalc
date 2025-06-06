@@ -7,7 +7,7 @@ import { ImpactAnalysis } from "@/core/calculations/type";
 import { calculationService } from "@/core/calculations/impactService";
 import { User } from "firebase/auth";
 import { auth, db } from "@/core/firebase/firebase";
-import { Timestamp, doc, getDoc, setDoc } from "firebase/firestore";
+import { Timestamp, doc, getDoc, setDoc, updateDoc } from "firebase/firestore"; // Ensure updateDoc is imported
 import { config } from "@/config";
 import {
   mapPlaidTransactions,
@@ -54,6 +54,11 @@ interface StoredTokenInfo {
   token: string;
   userId: string;
   timestamp: number;
+}
+export interface UserValueSettings {
+  levels: { [categoryId: string]: number };
+  order: string[];
+  valuesHash?: string; // A denormalized hash for easy querying
 }
 
 interface ApiAnalysisResultItem {
@@ -109,7 +114,14 @@ export interface TransactionState {
   ) => Promise<void>; // This is what we are changing
   getUserValueMultiplier: (practiceCategoryName: string | undefined) => number;
   resetUserValuesToDefault: (userId: string) => Promise<void>;
-  commitUserValues: (userId: string) => Promise<void>;
+  commitUserValues: (userId: string) => Promise<boolean>; 
+}
+
+function createValuesHash(levels: Record<string, number>): string {
+  return Object.keys(levels)
+    .sort()
+    .map((key) => `${key}:${levels[key]}`)
+    .join("_");
 }
 
 function getTransactionIdentifier(transaction: Transaction): string | null {
@@ -189,8 +201,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       acc[category.id] = category.defaultLevel;
       return acc;
     }, {} as { [key: string]: number }),
-    order: VALUE_CATEGORIES.map((cat) => cat.id), // Default order
-  },
+    order: VALUE_CATEGORIES.map((cat) => cat.id),
+    valuesHash: "", // Initialize empty
+},
+
   valuesCommittedUntil: null,
 
   setTransactions: (transactions) => {
@@ -1082,40 +1096,41 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           acc[category.id] = category.defaultLevel;
           return acc;
         }, {} as { [key: string]: number }),
-        order: VALUE_CATEGORIES.map((cat) => cat.id)
+        order: VALUE_CATEGORIES.map((cat) => cat.id),
+        valuesHash: "" // Default empty hash
       };
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        // Load saved levels and order, with fallbacks for safety
         const savedLevels = data.levels || {};
         const savedOrder = data.order || [];
-
+        
         settingsToSet.levels = VALUE_CATEGORIES.reduce((acc, category) => {
           acc[category.id] = savedLevels[category.id] ?? NEUTRAL_LEVEL;
           return acc;
         }, {} as { [key: string]: number });
-
-        // Ensure order is valid and contains all categories
+        
         const allCategoryIds = VALUE_CATEGORIES.map((c) => c.id);
-        const validOrder = allCategoryIds.every((id) =>
-          savedOrder.includes(id)
-        );
+        const validOrder = allCategoryIds.every((id) => savedOrder.includes(id));
         settingsToSet.order = validOrder ? savedOrder : allCategoryIds;
-
+        
+        // Set the hash from the loaded data, or compute if missing
+        settingsToSet.valuesHash = data.valuesHash || createValuesHash(settingsToSet.levels);
+        
         set({ valuesCommittedUntil: data.valuesCommittedUntil || null });
       } else {
-        // If no doc, create one with defaults
-        await setDoc(userSettingsRef, settingsToSet, { merge: true });
+        // Compute hash for new user
+         settingsToSet.valuesHash = createValuesHash(settingsToSet.levels);
+         await setDoc(userSettingsRef, settingsToSet, { merge: true });
       }
 
       set({ userValueSettings: settingsToSet, appStatus: "idle" });
-      get().setTransactions(get().transactions); // Recalculate impact with loaded settings
+      get().setTransactions(get().transactions); 
     } catch (error) {
       console.error("Error initializing user value settings:", error);
       set({ appStatus: "error" });
     }
-  },
+},
 
   updateCategoryOrder: async (userId, newOrderIds) => {
     if (!userId) return;
@@ -1144,15 +1159,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   // --- REWRITTEN updateUserValue to use the explicit order ---
   updateUserValue: async (userId, categoryId, newLevel) => {
+    // ... (existing logic for updating levels)
     if (!userId) return;
 
     const { userValueSettings, transactions } = get();
     const oldLevel = userValueSettings.levels[categoryId];
     if (newLevel === oldLevel) return;
 
-    // Create a working copy of the levels
     const newLevels = { ...userValueSettings.levels };
-
+    // ... (existing logic for balancing points) ...
     const change = newLevel - oldLevel;
     const currentTotal = Object.values(newLevels).reduce(
       (sum, level) => sum + level,
@@ -1160,42 +1175,33 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     );
     const proposedTotal = currentTotal + change;
 
-    // Apply the user's intended change
     newLevels[categoryId] = newLevel;
 
-    // Only run adjustment logic if the proposed change EXCEEDS the total budget
     if (proposedTotal > TOTAL_VALUE_POINTS) {
       let pointsToRemove = proposedTotal - TOTAL_VALUE_POINTS;
-
-      // Use the user-defined order, but reversed (lowest priority first)
       const candidates = [...userValueSettings.order].reverse();
-
-      // Pre-check if the change is possible
       const availablePointsToDecrease = candidates
         .filter((id) => id !== categoryId)
         .reduce((sum, id) => sum + (newLevels[id] - MIN_LEVEL), 0);
 
       if (availablePointsToDecrease < pointsToRemove) {
-        console.warn(
-          "Change rejected: Not enough points to take from lower-priority categories."
-        );
-        return; // Abort the entire operation
+        console.warn("Change rejected: Not enough points to take from lower-priority categories.");
+        return;
       }
-
-      // Remove points from the lowest priority items first
       for (const candId of candidates) {
         if (pointsToRemove === 0) break;
-        if (candId === categoryId) continue; // Skip the one we're increasing
-
+        if (candId === categoryId) continue; 
         const availableToTake = newLevels[candId] - MIN_LEVEL;
         const pointsToTake = Math.min(pointsToRemove, availableToTake);
-
         newLevels[candId] -= pointsToTake;
         pointsToRemove -= pointsToTake;
       }
     }
+    
+    // --- ADD HASH CALCULATION ---
+    const newHash = createValuesHash(newLevels);
 
-    const finalSettings = { ...userValueSettings, levels: newLevels };
+    const finalSettings = { ...userValueSettings, levels: newLevels, valuesHash: newHash };
 
     set({ userValueSettings: finalSettings, appStatus: "saving_settings" });
 
@@ -1207,14 +1213,14 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     try {
       const userSettingsRef = doc(db, "userValueSettings", userId);
+      // Save the entire settings object including the new hash
       await setDoc(userSettingsRef, finalSettings, { merge: true });
     } catch (error) {
-      // Handle save error
       console.error("Error saving updated user values:", error);
     } finally {
       set({ appStatus: "idle" });
     }
-  },
+},
   getUserValueMultiplier: (practiceCategoryName) => {
     /* ... (no change) ... */
     if (!practiceCategoryName) return 1.0;
@@ -1262,43 +1268,29 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 },
 
 
-  commitUserValues: async (userId: string) => {
-    /* ... (previous version with type-safe error handling) ... */
-    set({ appStatus: "saving_settings" });
-    try {
-      const now = new Date();
-      const endOfMonth = new Date(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        0,
-        23,
-        59,
-        59,
-        999
-      );
-      const endOfMonthTimestamp = Timestamp.fromDate(endOfMonth);
-      const userSettingsRef = doc(db, "userValueSettings", userId);
-      await setDoc(
-        userSettingsRef,
-        { valuesCommittedUntil: endOfMonthTimestamp },
-        { merge: true }
-      );
-      set({ valuesCommittedUntil: endOfMonthTimestamp, appStatus: "idle" });
-      firebaseDebug.log("COMMIT_USER_VALUES", {
-        status: "User values committed.",
-        userId,
-        commitUntil: endOfMonth.toISOString(),
-      });
-    } catch (error: unknown) {
-      // UPDATED
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      console.error("Error committing user values:", errorMessage, error);
-      firebaseDebug.log("COMMIT_USER_VALUES_ERROR", {
-        userId,
-        error: errorMessage,
-      });
-      set({ appStatus: "error" });
-    }
-  },
+commitUserValues: async (userId: string): Promise<boolean> => {
+  set({ appStatus: "saving_settings" });
+  try {
+    const now = new Date();
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const endOfMonthTimestamp = Timestamp.fromDate(endOfMonth);
+    const userSettingsRef = doc(db, "userValueSettings", userId);
+
+    await updateDoc(userSettingsRef, { 
+      valuesCommittedUntil: endOfMonthTimestamp 
+    });
+
+    set({ valuesCommittedUntil: endOfMonthTimestamp, appStatus: "idle" });
+    firebaseDebug.log("COMMIT_USER_VALUES", {
+      status: "User values committed.",
+      userId,
+      commitUntil: endOfMonth.toISOString(),
+    });
+    return true; // --- RETURN TRUE ON SUCCESS ---
+  } catch (error) {
+    console.error("Error committing user values:", error);
+    set({ appStatus: "error" });
+    return false; // --- RETURN FALSE ON FAILURE ---
+  }
+},
 }));
