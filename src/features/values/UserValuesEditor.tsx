@@ -20,7 +20,6 @@ const usePrevious = <T,>(value: T): T | undefined => {
   return ref.current;
 };
 
-
 const ValueSquare = ({
   levelPosition,
   currentLevel,
@@ -69,6 +68,7 @@ interface ValueRowProps {
 const ValueRow: React.FC<ValueRowProps> = ({ category, currentLevel, onUpdate, disabled, highlightClass }) => {
   const handleSquareClick = (levelClicked: number) => {
     if (disabled) return;
+    // If user clicks the currently active square, set level to 0 (ignored)
     const newLevel = levelClicked === currentLevel ? 0 : levelClicked;
     onUpdate(category.id, newLevel);
   };
@@ -76,7 +76,7 @@ const ValueRow: React.FC<ValueRowProps> = ({ category, currentLevel, onUpdate, d
     <div className={`py-2 sm:py-2 px-2 sm:px-3 rounded-md transition-colors duration-200 ${highlightClass}`}>
       <div className="flex items-center gap-2 sm:gap-3 w-full">
         <button 
-          onClick={() => onUpdate(category.id, 0)} // THIS IS THE FIX
+          onClick={() => onUpdate(category.id, 0)}
           disabled={disabled || currentLevel === 0}
           className="text-gray-400 hover:text-red-500 disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed font-mono text-lg p-1"
           title="Set value to zero"
@@ -104,7 +104,6 @@ const ValueRow: React.FC<ValueRowProps> = ({ category, currentLevel, onUpdate, d
     </div>
   );
 };
-
 
 export const UserValuesEditor: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
@@ -137,17 +136,19 @@ export const UserValuesEditor: React.FC = () => {
     return "";
   }, [isEditingDisabled, valuesCommittedUntil]);
 
+  // This effect now correctly sorts the list for display
   useEffect(() => {
     const masterOrder = userValueSettings.order || [];
     const newSorted = [...VALUE_CATEGORIES].sort((a, b) => {
       const levelA = userValueSettings.levels[a.id] ?? NEUTRAL_LEVEL;
       const levelB = userValueSettings.levels[b.id] ?? NEUTRAL_LEVEL;
-      if (levelB !== levelA) return levelB - levelA;
-      return masterOrder.indexOf(a.id) - masterOrder.indexOf(b.id);
+      if (levelB !== levelA) return levelB - levelA; // Primary sort: by level
+      return masterOrder.indexOf(a.id) - masterOrder.indexOf(b.id); // Secondary sort: by user's preferred order
     });
     setOrderedCategories(newSorted);
   }, [userValueSettings]);
 
+  // Effect for highlighting auto-balanced rows
   useEffect(() => {
     if (prevUserValueSettings && prevUserValueSettings.levels) {
       const changed: Record<string, boolean> = {};
@@ -160,7 +161,7 @@ export const UserValuesEditor: React.FC = () => {
       }
       if (hasChanges) {
         setHighlightedCategories(changed);
-        const timer = setTimeout(() => { setHighlightedCategories({}); }, 1500);
+        const timer = setTimeout(() => setHighlightedCategories({}), 1500);
         return () => clearTimeout(timer);
       }
     }
@@ -182,26 +183,41 @@ export const UserValuesEditor: React.FC = () => {
     updateUserValue(user.uid, categoryId, newLevel);
   };
   
-  // This handler is now robust for reordering within a group
-  const handleReorder = (reorderedGroup: ValueCategoryDefinition[]) => {
-    if (!user || reorderedGroup.length <= 1) return;
+  // --- THIS IS THE NEW, SMARTER REORDER HANDLER ---
+  const handleReorder = (newlyOrderedCategories: ValueCategoryDefinition[]) => {
+    if (!user || isEditingDisabled) return;
 
-    const masterOrder = [...userValueSettings.order];
-    const reorderedIds = reorderedGroup.map(c => c.id);
-    const reorderedIdSet = new Set(reorderedIds);
+    const newOrderIds = newlyOrderedCategories.map(cat => cat.id);
+    
+    // Find the item that was actually moved by the user
+    const movedItem = newlyOrderedCategories.find((cat, index) => {
+        return cat.id !== orderedCategories[index].id;
+    });
 
-    let groupIdx = 0;
-    const finalMasterOrder = masterOrder.map(id => 
-      reorderedIdSet.has(id) ? reorderedIds[groupIdx++] : id
-    );
+    if (movedItem) {
+        const newIndex = newlyOrderedCategories.findIndex(cat => cat.id === movedItem.id);
+        // Infer the target level from the item it was dropped next to
+        const neighborIndex = newIndex > 0 ? newIndex - 1 : newIndex + 1;
+        const neighbor = newlyOrderedCategories[neighborIndex];
 
-    updateCategoryOrder(user.uid, finalMasterOrder);
+        if (neighbor) {
+            const targetLevel = userValueSettings.levels[neighbor.id] ?? NEUTRAL_LEVEL;
+            const currentLevel = userValueSettings.levels[movedItem.id] ?? NEUTRAL_LEVEL;
+            
+            // If the level has changed, update the value.
+            // This will trigger the balancing logic and a re-sort.
+            if (targetLevel !== currentLevel) {
+                handleUpdate(movedItem.id, targetLevel);
+                return; // Stop here, the value update will handle the re-render.
+            }
+        }
+    }
+
+    // If no level change occurred, just update the priority order.
+    updateCategoryOrder(user.uid, newOrderIds);
   };
   
   const isLoading = authLoading || appStatus === "loading_settings" || appStatus === "initializing";
-
-
-
 
   if (isLoading) { return <div className="p-6 text-center">Loading Values...</div>; }
   if (!user) { return <div className="p-6 text-center">Please sign in to set your values.</div>; }
@@ -218,28 +234,25 @@ export const UserValuesEditor: React.FC = () => {
       <Reorder.Group
         axis="y"
         values={orderedCategories}
-        onReorder={handleReorder}
-        className="px-2"
+        onReorder={handleReorder} // Use the new smart handler
+        className="px-2 space-y-1 py-2" // Add some spacing for better visual separation
       >
         {orderedCategories.map((category) => {
           const currentLevel = userValueSettings.levels[category.id] ?? NEUTRAL_LEVEL;
-          
           return (
-            <React.Fragment key={category.id}>
-              {/* {showHeader && <LevelHeader level={currentLevel} />} */}
-              <Reorder.Item 
-                value={category} 
-                className="bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-sm cursor-grab active:cursor-grabbing"
-              >
-                <ValueRow
-                  category={category}
-                  currentLevel={currentLevel}
-                  onUpdate={handleUpdate}
-                  disabled={isEditingDisabled}
-                  highlightClass={highlightedCategories[category.id] ? 'highlight-change' : ''}
-                />
-              </Reorder.Item>
-            </React.Fragment>
+            <Reorder.Item 
+              key={category.id}
+              value={category} 
+              className="bg-gray-50 dark:bg-gray-700/50 rounded-lg shadow-sm cursor-grab active:cursor-grabbing"
+            >
+              <ValueRow
+                category={category}
+                currentLevel={currentLevel}
+                onUpdate={handleUpdate}
+                disabled={isEditingDisabled}
+                highlightClass={highlightedCategories[category.id] ? 'highlight-change' : ''}
+              />
+            </Reorder.Item>
           );
         })}
       </Reorder.Group>
