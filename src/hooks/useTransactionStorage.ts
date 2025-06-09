@@ -8,7 +8,6 @@ import { calculationService } from "@/core/calculations/impactService";
 import { User } from "firebase/auth";
 import { auth, db } from "@/core/firebase/firebase";
 import { Timestamp, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import { config } from "@/config";
 import {
   mapPlaidTransactions,
   mergeTransactions,
@@ -18,8 +17,7 @@ import {
   saveVendorAnalysis,
   normalizeVendorName,
 } from "@/features/vendors/vendorStorageService";
-import { VendorAnalysis } from "@/shared/types/vendors";
-import { firebaseDebug } from "@/core/firebase/debugUtils";
+
 import {
   VALUE_CATEGORIES,
   NEUTRAL_LEVEL,
@@ -137,18 +135,12 @@ function getTransactionIdentifier(transaction: Transaction): string | null {
 
 function sanitizeDataForFirestore<T>(data: T): T | null {
   if (data === undefined) return null;
-  if (data === null || typeof data !== "object") {
-    return data;
-  }
-  if (data instanceof Timestamp) {
-    return data;
-  }
+  if (data === null || typeof data !== "object") return data;
+  if (data instanceof Timestamp) return data;
   if (Array.isArray(data)) {
-    return data
-      .map((item) => sanitizeDataForFirestore(item))
-      .filter((item) => item !== undefined) as T;
+    return data.map((item) => sanitizeDataForFirestore(item)).filter((item) => item !== undefined) as T;
   }
-  const sanitizedObject: { [key: string]: any } = {};
+  const sanitizedObject: Record<string, unknown> = {};
   for (const key in data) {
     if (Object.prototype.hasOwnProperty.call(data, key)) {
       const value = (data as Record<string, unknown>)[key];

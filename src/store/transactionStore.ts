@@ -18,7 +18,6 @@ import {
   normalizeVendorName,
 } from "@/features/vendors/vendorStorageService";
 import { VendorAnalysis } from "@/shared/types/vendors";
-import { firebaseDebug } from "@/core/firebase/debugUtils";
 import {
   VALUE_CATEGORIES,
   NEUTRAL_LEVEL,
@@ -125,7 +124,7 @@ function sanitizeDataForFirestore<T>(data: T): T | null {
   if (Array.isArray(data)) {
     return data.map((item) => sanitizeDataForFirestore(item)).filter((item) => item !== undefined) as T;
   }
-  const sanitizedObject: { [key: string]: any } = {};
+  const sanitizedObject: Record<string, unknown> = {};
   for (const key in data) {
     if (Object.prototype.hasOwnProperty.call(data, key)) {
       const value = (data as Record<string, unknown>)[key];
@@ -522,9 +521,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       if (newLevel === userValueSettings.levels[categoryId]) return;
 
       const newLevels = { ...userValueSettings.levels };
-      const change = newLevel - (newLevels[categoryId] || 0);
       newLevels[categoryId] = newLevel;
-      let currentTotal = Object.values(newLevels).reduce((sum, level) => sum + level, 0);
+      const currentTotal = Object.values(newLevels).reduce((sum, level) => sum + level, 0);
 
       if (currentTotal > TOTAL_VALUE_POINTS) {
           let pointsToReclaim = currentTotal - TOTAL_VALUE_POINTS;
