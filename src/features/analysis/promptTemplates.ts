@@ -107,7 +107,6 @@ JSON Schema Example (Note 'citations' uses an array of objects):
         "Small Business": "Community Support" 
     },
     "information": {
-        // Updated info to be more generic benefit
         "Small Business": "Purchasing from local businesses helps circulate money within the community and supports local jobs."
     },
     "citations": {
