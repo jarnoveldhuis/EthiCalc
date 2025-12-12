@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 
 
 export const metadata: Metadata = {
-  title: "Social Balance",
-  description: "Social Balance is a tool that helps you align your spending with your values.",
+  title: "Karma Balance",
+  description: "Karma Balance is a tool that helps you align your spending with your values.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

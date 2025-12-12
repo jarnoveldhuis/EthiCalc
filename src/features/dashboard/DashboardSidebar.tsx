@@ -239,7 +239,7 @@ export function DashboardSidebar() {
               />
             </div>
             <p className="text-sm font-medium text-white opacity-80">
-              Your Social Balance
+              Your Karma Balance
             </p>
           </div>
           <div className="mt-4">{getActionButton()}</div>

@@ -70,7 +70,7 @@ export function DashboardLayout({
               {/* The Image component remains unchanged */}
               <Image src="/cashLogo.png" alt="KarmaBalance Logo" width={60} height={60} className="mr-2" />
               <h1 className="text-xl font-bold bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">
-                Social Balance
+                Karma Balance
               </h1>
             </div>
 
