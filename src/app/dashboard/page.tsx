@@ -23,13 +23,6 @@ export default function Dashboard() {
   const connectionStatus = useTransactionStore(state => state.connectionStatus);
   const impactAnalysis: ImpactAnalysis | null = useTransactionStore(state => state.impactAnalysis);
 
-  const effectiveDebt = useMemo(() => {
-    if (impactAnalysis) {
-      return Math.max(0, -(impactAnalysis.netEthicalBalance ?? 0));
-    }
-    return 0;
-  }, [impactAnalysis]);
-
   const connectBank = useTransactionStore(state => state.connectBank);
   const disconnectBank = useTransactionStore(state => state.disconnectBank);
   const manuallyFetchTransactions = useTransactionStore(state => state.manuallyFetchTransactions);
