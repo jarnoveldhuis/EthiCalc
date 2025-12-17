@@ -17,6 +17,7 @@ export function PracticeDebtTable({
 }: PracticeDebtTableProps) {
   const [selectedPractice, setSelectedPractice] = useState<string | null>(null);
   const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+  const [isOffsetAllMode, setIsOffsetAllMode] = useState(false);
 
   // Early return if no data
   if (totalSocietalDebt === 0 || Object.keys(practiceDonations).length === 0) {
@@ -53,12 +54,19 @@ export function PracticeDebtTable({
   // Handle offset click for a specific practice
   const handleOffsetPractice = (practice: string) => {
     setSelectedPractice(practice);
+    setIsOffsetAllMode(false);
     setIsDonationModalOpen(true);
   };
 
-  // Handle offset all button
+  // Handle offset all button - use the practice with the highest debt for search term,
+  // but the amount will be totalSocietalDebt
   const handleOffsetAll = () => {
-    setSelectedPractice("All Societal Debt");
+    // Find the practice with the highest debt amount for better charity search
+    const highestDebtPractice = sortedPractices.length > 0 
+      ? sortedPractices[0][0] // First practice in sorted list (highest amount)
+      : "All Societal Debt"; // Fallback if no practices
+    setSelectedPractice(highestDebtPractice);
+    setIsOffsetAllMode(true); // Flag that we're in "offset all" mode
     setIsDonationModalOpen(true);
   };
 
@@ -140,12 +148,21 @@ export function PracticeDebtTable({
       {/* Donation Modal */}
       {isDonationModalOpen && (
         <DonationModal
-          practice={selectedPractice || "All Societal Debt"}
-          amount={selectedPractice && selectedPractice !== "All Societal Debt" 
-            ? practiceDonations[selectedPractice].amount 
-            : totalSocietalDebt!}
+          practice={selectedPractice || (sortedPractices.length > 0 ? sortedPractices[0][0] : "All Societal Debt")}
+          amount={
+            // If "Offset All" was clicked, always use totalSocietalDebt
+            // Otherwise use the specific practice's amount
+            isOffsetAllMode
+              ? totalSocietalDebt!
+              : (selectedPractice && practiceDonations[selectedPractice]
+                  ? practiceDonations[selectedPractice].amount 
+                  : totalSocietalDebt!)
+          }
           isOpen={isDonationModalOpen}
-          onClose={() => setIsDonationModalOpen(false)}
+          onClose={() => {
+            setIsDonationModalOpen(false);
+            setIsOffsetAllMode(false);
+          }}
         />
       )}
     </div>

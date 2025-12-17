@@ -6,6 +6,7 @@ import {
   NEGATIVE_PRACTICE_MULTIPLIERS,
   NEUTRAL_LEVEL,
   VALUE_CATEGORIES,
+  normalizeCategoryName,
 } from "@/config/valuesConfig";
 
 // Helper function to get the multiplier based on user's value settings for a category.
@@ -14,8 +15,10 @@ const getNegativePracticeMultiplierForCategory = (
   userValueSettings: UserValueSettings
 ): number => {
   if (!practiceCategoryName) return 1.0; // Default multiplier if no category
+  // Normalize the category name to handle migrations from old names to new names
+  const normalizedCategoryName = normalizeCategoryName(practiceCategoryName);
   const categoryDefinition = VALUE_CATEGORIES.find(
-    (catDef) => catDef.name === practiceCategoryName
+    (catDef) => catDef.name === normalizedCategoryName
   );
   if (!categoryDefinition) return 1.0; // Default if category definition not found
 
@@ -201,7 +204,8 @@ export const calculationService = {
 
       // Process unethical practices for negative impact
       (tx.unethicalPractices || []).forEach((practice) => {
-        const practiceCategoryName = tx.practiceCategories?.[practice];
+        const rawPracticeCategoryName = tx.practiceCategories?.[practice];
+        const practiceCategoryName = normalizeCategoryName(rawPracticeCategoryName);
         if (practiceCategoryName && categoryTotals[practiceCategoryName]) {
           const weight = tx.practiceWeights?.[practice] || 0;
           const baseImpactAmount = tx.amount * (weight / 100);
@@ -223,7 +227,8 @@ export const calculationService = {
 
       // Process ethical practices for positive impact
       (tx.ethicalPractices || []).forEach((practice) => {
-        const practiceCategoryName = tx.practiceCategories?.[practice];
+        const rawPracticeCategoryName = tx.practiceCategories?.[practice];
+        const practiceCategoryName = normalizeCategoryName(rawPracticeCategoryName);
         if (practiceCategoryName && categoryTotals[practiceCategoryName]) {
           const weight = tx.practiceWeights?.[practice] || 0;
           const impactAmount = tx.amount * (weight / 100); // Positive impacts don't use user value multipliers currently

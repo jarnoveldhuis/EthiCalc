@@ -15,6 +15,7 @@ import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal"; // Corrected path
 import { valueEmojis } from "@/config/valueEmojis";
+import { normalizeCategoryName } from "@/config/valuesConfig";
 import { DesktopCategoryRow } from "./DesktopCategoryRow";
 
 // --- Interface Definitions ---
@@ -42,6 +43,7 @@ export interface CategoryInlineOffsetState {
   recommendedCharity: EnrichedCharityResult | null;
   donationAmount: number;
   errorMessage: string | null;
+  searchTerm: string | null;
 }
 
 // --- Helper Functions ---
@@ -227,7 +229,8 @@ export function BalanceSheetView({
           ? tx.ethicalPractices || []
           : tx.unethicalPractices || [];
         practices.forEach((practice) => {
-          const categoryName = tx.practiceCategories?.[practice];
+          const rawCategoryName = tx.practiceCategories?.[practice];
+          const categoryName = normalizeCategoryName(rawCategoryName);
           if (categoryName && categoryMap[categoryName]) {
             const weight = tx.practiceWeights?.[practice] || 0;
             const baseImpactAmount = tx.amount * (weight / 100);
@@ -318,6 +321,7 @@ export function BalanceSheetView({
             recommendedCharity: null,
             donationAmount: 0,
             errorMessage: null,
+            searchTerm: null,
           }),
           ...updates,
         },
@@ -342,7 +346,8 @@ export function BalanceSheetView({
       > = {};
       transactions.forEach((tx) => {
         (tx.unethicalPractices || []).forEach((practice) => {
-          if (tx.practiceCategories?.[practice] === categoryName) {
+          const txCategoryName = normalizeCategoryName(tx.practiceCategories?.[practice]);
+          if (txCategoryName === categoryName) {
             const weight = tx.practiceWeights?.[practice] || 0;
             const contribution = Math.abs(tx.amount) * (weight / 100);
             const currentTotal = practiceContributions[practice]?.amount || 0;
@@ -411,12 +416,7 @@ export function BalanceSheetView({
           recommendationStatus: "loaded",
           recommendedCharity: recommendation,
           donationAmount: defaultAmount,
-        });
-
-        updateInlineOffsetState(categoryName, {
-          recommendationStatus: "loaded",
-          recommendedCharity: recommendation,
-          donationAmount: defaultAmount,
+          searchTerm: searchTerm,
         });
       } catch (error) {
         console.error(
@@ -427,6 +427,7 @@ export function BalanceSheetView({
           recommendationStatus: "error",
           recommendedCharity: null,
           errorMessage: "Failed to load charity suggestion.",
+          searchTerm: null,
         });
       }
     },
@@ -494,6 +495,7 @@ export function BalanceSheetView({
             Math.round(Math.abs(category.totalNegativeImpact ?? 1)-Math.abs(category.totalPositiveImpact ?? 1))
           ),
           errorMessage: null,
+          searchTerm: null,
         });
       } else {
         const currentAmountState =
@@ -717,7 +719,7 @@ export function BalanceSheetView({
             {category.negativeDetails.map((detail, index) => (
               <div
                 key={`mob-neg-detail-${index}`}
-                className="bg-rose-50/[.6] dark:bg-rose-900/[.3] p-2 rounded"
+                className="bg-black/5 dark:bg-white/10 p-2 rounded"
               >
                 <DetailItem
                   detail={detail}
@@ -728,7 +730,7 @@ export function BalanceSheetView({
             {category.positiveDetails.map((detail, index) => (
               <div
                 key={`mob-pos-detail-${index}`}
-                className="bg-emerald-50/[.6] dark:bg-emerald-900/[.3] p-2 rounded"
+                className="bg-black/10 dark:bg-white/15 p-2 rounded"
               >
                 <DetailItem
                   detail={detail}
@@ -772,6 +774,11 @@ export function BalanceSheetView({
                         <CharityRating
                           charity={inlineOffsetState.recommendedCharity}
                         />
+                        {inlineOffsetState.searchTerm && (
+                          <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                            Searching: {inlineOffsetState.searchTerm}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <button
@@ -871,7 +878,7 @@ export function BalanceSheetView({
       <div className="hidden lg:block space-y-0">
         {/* UPDATED HEADER ORDER */}
         <div className="grid grid-cols-2 gap-x-6 pb-2 mb-4 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-xl font-semibold text-center text-[var(--card-foreground)] opacity-80">
+          <h3 className="text-xl font-semibold text-center text-[var(--card-foreground)] opacity-80 rounded-md py-1 bg-black/10 dark:bg-white/15">
             Positive Impact
             <span className="text-lg text-[var(--success)] dark:text-emerald-400">
               {" "}
@@ -887,7 +894,7 @@ export function BalanceSheetView({
               )
             </span>
           </h3>
-          <h3 className="text-xl font-semibold text-center text-[var(--card-foreground)] opacity-80">
+          <h3 className="text-xl font-semibold text-center text-[var(--card-foreground)] opacity-80 rounded-md py-1 bg-black/5 dark:bg-white/10">
             Negative Impact
             <span className="text-lg text-[var(--destructive)] dark:text-rose-400">
               {" "}

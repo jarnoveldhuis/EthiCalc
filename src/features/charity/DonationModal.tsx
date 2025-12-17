@@ -165,6 +165,11 @@ export function DonationModal({
                                 <div className="flex-grow min-w-0">
                                     <h4 className="font-medium text-lg text-blue-800 dark:text-blue-300">{selectedCharity.name}</h4>
                                     <CharityRating charity={selectedCharity} />
+                                    {dynamicSearchTerm && (
+                                        <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                                            Searching: {dynamicSearchTerm}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                             <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 whitespace-normal break-words">{selectedCharity.mission || selectedCharity.cnRating?.mission}</p>

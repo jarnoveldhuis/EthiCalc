@@ -1,7 +1,7 @@
 // src/config/valueEmojis.ts (or constants file)
 export const valueEmojis: Record<string, string> = {
     Environment: "🌱",
-    "Labor Ethics": "⚖️",
+    "Labor": "⚖️",
     "Animal Welfare": "🐮", 
     "Political Ethics": "🗳️",
     Transparency: "🔍",

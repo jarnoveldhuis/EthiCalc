@@ -1,21 +1,19 @@
 
 // Helper function to get color class for debt values
 export function getColorClass(value: number): string {
-  if (value < 0) return "text-green-600";
-  if (value === 0) return "text-blue-600";
-  if (value <= 10) return "text-yellow-600";
-  if (value <= 20) return "text-orange-600";
-  if (value <= 50) return "text-red-600";
-  return "text-red-700";
+  // Distinct monochrome: positive vs negative via semantic tokens
+  if (value < 0) return "text-[var(--success)]"; // favorable
+  if (value === 0) return "text-gray-600";
+  return "text-[var(--destructive)]"; // unfavorable
 }
 
-export const getImpactColorClass = (value: number): string => 
+export const getImpactColorClass = (value: number): string =>
   value < 0
-    ? "text-green-600"  // Positive impact
+    ? "text-[var(--success)]"
     : value === 0
-    ? "text-gray-600"   // Neutral
+    ? "text-gray-600"
     : value < 10
-    ? "text-yellow-600" // Minor negative
+    ? "text-[var(--destructive)] opacity-70"
     : value < 20
-    ? "text-orange-600" // Moderate negative
-    : "text-red-600";   // Severe negative
+    ? "text-[var(--destructive)] opacity-85"
+    : "text-[var(--destructive)]"

@@ -33,7 +33,7 @@ export default function SigninPage() {
         {/* Logo */}
         <div className="flex justify-center mb-4">
           <Image
-            src="/cashLogo.png" // Make sure this path is correct in your public folder
+            src="/stonesLogo.png" // Make sure this path is correct in your public folder
             alt="ValueBalance Logo"
             width={80} // Adjust size as needed
             height={80}

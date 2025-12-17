@@ -162,6 +162,11 @@ export function DesktopCategoryRow({
                   {inlineOffsetState.recommendedCharity.name}
                 </p>
                 <CharityRating charity={inlineOffsetState.recommendedCharity} />
+                {inlineOffsetState.searchTerm && (
+                  <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                    Searching: {inlineOffsetState.searchTerm}
+                  </p>
+                )}
               </div>
             </div>
             <button
@@ -280,7 +285,8 @@ export function DesktopCategoryRow({
       </div>
       {isExpanded && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-0 border-t border-slate-200 dark:border-slate-700">
-          <div className="p-3 sm:p-4 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 space-y-3">
+          {/* Positive column (distinct darker monochrome background) */}
+          <div className="p-3 sm:p-4 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 space-y-3 bg-black/10 dark:bg-white/15">
             <h4 className="text-sm font-semibold mb-2 text-center text-[var(--success)] dark:text-emerald-400">
               Positive Impact ({formatCurrency(totalPositiveImpact)})
             </h4>
@@ -301,7 +307,8 @@ export function DesktopCategoryRow({
             {renderInlineOffsetSection()}
           </div>
 
-          <div className="p-3 sm:p-4 space-y-3">
+          {/* Negative column (distinct lighter monochrome background) */}
+          <div className="p-3 sm:p-4 space-y-3 bg-black/5 dark:bg-white/10">
             <h4 className="text-sm font-semibold mb-2 text-center text-[var(--destructive)] dark:text-rose-400">
               Negative Impact -({formatCurrency(totalNegativeImpact)})
             </h4>

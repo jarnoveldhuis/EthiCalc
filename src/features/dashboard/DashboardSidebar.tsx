@@ -16,6 +16,7 @@ import { useDonationModal } from "@/hooks/useDonationModal";
 // import { useAuth } from "@/hooks/useAuth"; // REMOVED
 import { ShareImpactButton } from "./ShareImpactButton";
 import { ImpactAnalysis } from "@/core/calculations/type";
+import { calculationService } from "@/core/calculations/impactService";
 
 type TierInfo = {
   name: string;
@@ -57,6 +58,8 @@ export function DashboardSidebar() {
   const isBankConnected = useTransactionStore((state) => state.connectionStatus.isConnected);
   const impactAnalysis = useTransactionStore((state) => state.impactAnalysis);
   const appStatus = useTransactionStore((state) => state.appStatus);
+  const transactions = useTransactionStore((state) => state.transactions);
+  const userValueSettings = useTransactionStore((state) => state.userValueSettings);
   const { modalState, openDonationModal, closeDonationModal } = useDonationModal();
 
   const targetTierInfo = useMemo(() => {
@@ -143,12 +146,13 @@ export function DashboardSidebar() {
   );
 
   const topCardBackgroundClass = useMemo(() => {
-    if (!isBankConnected || !impactAnalysis) return "bg-gray-400 dark:bg-gray-600";
-    if (netEthicalBalance >= 0) return "bg-sky-500 dark:bg-sky-700";
-    if (netEthicalBalance > -20) return "bg-lime-500 dark:bg-lime-700";
-    if (netEthicalBalance > -50) return "bg-yellow-400 dark:bg-yellow-600";
-    if (netEthicalBalance > -100) return "bg-orange-500 dark:bg-orange-700";
-    return "bg-rose-600 dark:bg-rose-800";
+    // Monochrome overlays for strong contrast in both themes
+    if (!isBankConnected || !impactAnalysis) return "bg-black/8 dark:bg-white/12";
+    if (netEthicalBalance >= 0) return "bg-black/12 dark:bg-white/16";
+    if (netEthicalBalance > -20) return "bg-black/10 dark:bg-white/14";
+    if (netEthicalBalance > -50) return "bg-black/8 dark:bg-white/12";
+    if (netEthicalBalance > -100) return "bg-black/7 dark:bg-white/10";
+    return "bg-black/6 dark:bg-white/8";
   }, [isBankConnected, impactAnalysis, netEthicalBalance]);
 
   const targetProgressPercentage = useMemo(() => {
@@ -158,7 +162,10 @@ export function DashboardSidebar() {
   }, [impactAnalysis, totalPositiveImpact, totalNegativeImpact, isBankConnected]);
 
   const progressBarAnimationDuration = 2000;
-  const progressBarTrackColor = netEthicalBalance < 0 ? "bg-rose-200 dark:bg-rose-900/[.5]" : "bg-emerald-200 dark:bg-emerald-900/[.5]";
+  const progressBarTrackColor =
+    netEthicalBalance < 0
+      ? "bg-black/10 dark:bg-white/10"
+      : "bg-black/15 dark:bg-white/15";
 
   useEffect(() => {
     if (!isBankConnected) {
@@ -181,11 +188,34 @@ export function DashboardSidebar() {
     };
   }, [targetProgressPercentage, impactAnalysis, isBankConnected]);
 
+  // Find the category with the highest debt
+  const categoryWithHighestDebt = useMemo(() => {
+    if (!transactions || transactions.length === 0 || netEthicalBalance >= 0) {
+      return null;
+    }
+    const categoryImpacts = calculationService.calculateCategoryImpacts(
+      transactions,
+      userValueSettings
+    );
+    let highestDebtCategory: string | null = null;
+    let highestDebt = 0;
+    Object.entries(categoryImpacts).forEach(([categoryName, impacts]) => {
+      const netDebt = impacts.negativeImpact - impacts.positiveImpact;
+      if (netDebt > highestDebt) {
+        highestDebt = netDebt;
+        highestDebtCategory = categoryName;
+      }
+    });
+    return highestDebtCategory;
+  }, [transactions, userValueSettings, netEthicalBalance]);
+
   const handleOpenOffsetModal = useCallback(() => {
     const amountToPotentiallyOffset = netEthicalBalance < 0 ? Math.abs(netEthicalBalance) : 5;
-    const practiceForModal = netEthicalBalance < 0 ? "All Societal Debt" : "General Donation";
+    const practiceForModal = netEthicalBalance < 0 
+      ? (categoryWithHighestDebt || "All Societal Debt")
+      : "General Donation";
     openDonationModal(practiceForModal, amountToPotentiallyOffset);
-  }, [openDonationModal, netEthicalBalance]);
+  }, [openDonationModal, netEthicalBalance, categoryWithHighestDebt]);
 
   const getActionButton = () => {
     const isBusy = appStatus !== "idle" && appStatus !== "error";
@@ -227,7 +257,7 @@ export function DashboardSidebar() {
   return (
     <div className="w-full lg:col-span-1 min-h-[100px] lg:min-h-0">
       <div className="card mb-6 h-full flex flex-col">
-        <div className={`${topCardBackgroundClass} transition-colors duration-2000 p-4 sm:p-6 rounded-t-lg`}>
+        <div className={`${topCardBackgroundClass} transition-colors duration-2000 p-4 sm:p-6 rounded-t-lg ring-1 ring-black/5 dark:ring-white/10`}>
           <div className="text-center mb-4">
             <div className="mb-1">
               <AnimatedCounter
@@ -281,7 +311,7 @@ export function DashboardSidebar() {
                     {netEthicalBalance < -0.005 ? "Net Debt" : "Net Surplus"}
                   </span>
                 </div>
-                <div className={`w-full ${progressBarTrackColor} rounded-full h-3 overflow-hidden relative transition-colors duration-1000`}>
+                <div className={`w-full ${progressBarTrackColor} rounded-full h-3 overflow-hidden relative transition-colors duration-1000 ring-1 ring-black/5 dark:ring-white/10`}>
                   <div
                     className="bg-[var(--success)] h-3 rounded-l-full absolute top-0 left-0 transition-all ease-out"
                     style={{

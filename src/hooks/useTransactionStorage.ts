@@ -24,6 +24,7 @@ import {
   NEGATIVE_PRACTICE_MULTIPLIERS,
   TOTAL_VALUE_POINTS,
   MIN_LEVEL,
+  normalizeCategoryName,
 } from "@/config/valuesConfig";
 
 export type AppStatus =
@@ -605,7 +606,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   getUserValueMultiplier: (practiceCategoryName) => {
     if (!practiceCategoryName) return 1.0;
     const { userValueSettings } = get();
-    const categoryDefinition = VALUE_CATEGORIES.find(cat => cat.name === practiceCategoryName);
+    // Normalize the category name to handle migrations from old names to new names
+    const normalizedCategoryName = normalizeCategoryName(practiceCategoryName);
+    const categoryDefinition = VALUE_CATEGORIES.find(cat => cat.name === normalizedCategoryName);
     if (!categoryDefinition) return 1.0;
     const userLevel = userValueSettings.levels[categoryDefinition.id] || NEUTRAL_LEVEL;
     return NEGATIVE_PRACTICE_MULTIPLIERS[userLevel] ?? 1.0;
