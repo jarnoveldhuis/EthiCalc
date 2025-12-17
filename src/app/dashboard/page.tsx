@@ -157,7 +157,6 @@ export default function Dashboard() {
         onLogout={logout}
         onDisconnectBank={disconnectBank}
         isBankConnected={effectiveConnectionStatus}
-        effectiveDebt={effectiveDebt}
     >
       {error && appStatus === 'error' && <ErrorAlert message={error} />}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
