@@ -12,7 +12,6 @@ import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
 import { DashboardSidebar } from "@/features/dashboard/DashboardSidebar";
 import { DashboardLoading, DashboardEmptyState } from "@/features/dashboard/DashboardLoading";
 import { useSampleData } from "@/features/debug/useSampleData";
-import { ImpactAnalysis } from "@/core/calculations/type";
 
 export default function Dashboard() {
   const [loadingMessage, setLoadingMessage] = useState<string>("Loading dashboard...");
@@ -21,7 +20,6 @@ export default function Dashboard() {
   const appStatus = useTransactionStore(state => state.appStatus);
   const transactions = useTransactionStore(state => state.transactions);
   const connectionStatus = useTransactionStore(state => state.connectionStatus);
-  const impactAnalysis: ImpactAnalysis | null = useTransactionStore(state => state.impactAnalysis);
 
   const connectBank = useTransactionStore(state => state.connectBank);
   const disconnectBank = useTransactionStore(state => state.disconnectBank);
