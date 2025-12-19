@@ -12,7 +12,6 @@ import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
 import { DashboardSidebar } from "@/features/dashboard/DashboardSidebar";
 import { DashboardLoading, DashboardEmptyState } from "@/features/dashboard/DashboardLoading";
 import { useSampleData } from "@/features/debug/useSampleData";
-import { ImpactAnalysis } from "@/core/calculations/type";
 
 export default function Dashboard() {
   const [loadingMessage, setLoadingMessage] = useState<string>("Loading dashboard...");
@@ -21,14 +20,6 @@ export default function Dashboard() {
   const appStatus = useTransactionStore(state => state.appStatus);
   const transactions = useTransactionStore(state => state.transactions);
   const connectionStatus = useTransactionStore(state => state.connectionStatus);
-  const impactAnalysis: ImpactAnalysis | null = useTransactionStore(state => state.impactAnalysis);
-
-  const effectiveDebt = useMemo(() => {
-    if (impactAnalysis) {
-      return Math.max(0, -(impactAnalysis.netEthicalBalance ?? 0));
-    }
-    return 0;
-  }, [impactAnalysis]);
 
   const connectBank = useTransactionStore(state => state.connectBank);
   const disconnectBank = useTransactionStore(state => state.disconnectBank);
@@ -157,7 +148,6 @@ export default function Dashboard() {
         onLogout={logout}
         onDisconnectBank={disconnectBank}
         isBankConnected={effectiveConnectionStatus}
-        effectiveDebt={effectiveDebt}
     >
       {error && appStatus === 'error' && <ErrorAlert message={error} />}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
