@@ -2,7 +2,7 @@
 "use client";
 
 import { User } from "firebase/auth";
-import { ReactNode, useState } from "react";
+import { ReactNode, useMemo, useState } from "react"; // Import useState
 import { Header } from "@/shared/components/Header";
 import Image from "next/image";
 import { UserValuesModal } from "@/features/values/UserValuesModal"; // Import the modal
@@ -14,6 +14,7 @@ interface DashboardLayoutProps {
   onLogout: () => void;
   onDisconnectBank: () => void;
   isBankConnected?: boolean;
+  effectiveDebt?: number; // <-- Add prop type for effectiveDebt
 }
 
 // Removed dynamic header color logic to keep header consistent
@@ -24,6 +25,7 @@ export function DashboardLayout({
   onLogout,
   onDisconnectBank,
   isBankConnected = false,
+  effectiveDebt = 0 // <-- Receive the prop, default to 0
 }: DashboardLayoutProps) {
 
   const [isValuesModalOpen, setIsValuesModalOpen] = useState(false); // State for the modal

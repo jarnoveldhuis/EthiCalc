@@ -204,8 +204,7 @@ export const calculationService = {
 
       // Process unethical practices for negative impact
       (tx.unethicalPractices || []).forEach((practice) => {
-        const rawPracticeCategoryName = tx.practiceCategories?.[practice];
-        const practiceCategoryName = normalizeCategoryName(rawPracticeCategoryName);
+        const practiceCategoryName = tx.practiceCategories?.[practice];
         if (practiceCategoryName && categoryTotals[practiceCategoryName]) {
           const weight = tx.practiceWeights?.[practice] || 0;
           const baseImpactAmount = tx.amount * (weight / 100);
@@ -227,8 +226,7 @@ export const calculationService = {
 
       // Process ethical practices for positive impact
       (tx.ethicalPractices || []).forEach((practice) => {
-        const rawPracticeCategoryName = tx.practiceCategories?.[practice];
-        const practiceCategoryName = normalizeCategoryName(rawPracticeCategoryName);
+        const practiceCategoryName = tx.practiceCategories?.[practice];
         if (practiceCategoryName && categoryTotals[practiceCategoryName]) {
           const weight = tx.practiceWeights?.[practice] || 0;
           const impactAmount = tx.amount * (weight / 100); // Positive impacts don't use user value multipliers currently

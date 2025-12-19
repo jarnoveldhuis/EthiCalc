@@ -15,7 +15,6 @@ import { AnimatedCounter } from "@/shared/ui/AnimatedCounter";
 import { DonationModal } from "@/features/charity/DonationModal";
 import { useDonationModal } from "@/hooks/useDonationModal"; // Corrected path
 import { valueEmojis } from "@/config/valueEmojis";
-import { normalizeCategoryName } from "@/config/valuesConfig";
 import { DesktopCategoryRow } from "./DesktopCategoryRow";
 
 // --- Interface Definitions ---
@@ -229,8 +228,7 @@ export function BalanceSheetView({
           ? tx.ethicalPractices || []
           : tx.unethicalPractices || [];
         practices.forEach((practice) => {
-          const rawCategoryName = tx.practiceCategories?.[practice];
-          const categoryName = normalizeCategoryName(rawCategoryName);
+          const categoryName = tx.practiceCategories?.[practice];
           if (categoryName && categoryMap[categoryName]) {
             const weight = tx.practiceWeights?.[practice] || 0;
             const baseImpactAmount = tx.amount * (weight / 100);
@@ -346,8 +344,7 @@ export function BalanceSheetView({
       > = {};
       transactions.forEach((tx) => {
         (tx.unethicalPractices || []).forEach((practice) => {
-          const txCategoryName = normalizeCategoryName(tx.practiceCategories?.[practice]);
-          if (txCategoryName === categoryName) {
+          if (tx.practiceCategories?.[practice] === categoryName) {
             const weight = tx.practiceWeights?.[practice] || 0;
             const contribution = Math.abs(tx.amount) * (weight / 100);
             const currentTotal = practiceContributions[practice]?.amount || 0;

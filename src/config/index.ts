@@ -23,11 +23,8 @@ export const config = {
   // Add new Gemini configuration section
   gemini: {
     apiKey: process.env.GEMINI_API_KEY, // Add this environment variable
-    model: "gemini-2.0-flash", // Default stable model, can be overridden
-    // You could specify the preview model via env var if needed:
-    // model: process.env.GEMINI_MODEL_OVERRIDE || "gemini-1.5-pro-latest",
-    // Let's use the specific one you mentioned for now if ANALYSIS_PROVIDER is 'gemini'
-    previewModel: "gemini-2.5-flash", // The specific model user wants
+    model: "gemini-2.0-flash", 
+    previewModel: "gemini-1.5-flash",    
     timeout: 200000, // Adjust timeout if needed
   },
   firebase: {

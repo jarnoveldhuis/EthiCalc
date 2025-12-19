@@ -244,10 +244,10 @@
   --accent: #e5e5e5;
   --accent-foreground: #000000;
 
-  /* Status colors mapped to grayscale - distinct values for accessibility */
-  --destructive: #4b5563; /* gray-600 - medium dark for negative actions */
+  /* Status colors mapped to grayscale */
+  --destructive: #111111;
   --destructive-foreground: #ffffff;
-  --success: #000000; /* black - darkest for positive actions */
+  --success: #111111;
   --success-foreground: #ffffff;
   --warning: #6b7280; /* gray-500 */
   --warning-foreground: #ffffff;
@@ -271,9 +271,9 @@
     --accent: #262626;
     --accent-foreground: #ffffff;
 
-    --destructive: #9ca3af; /* gray-400 - medium light for negative actions */
+    --destructive: #f5f5f5;
     --destructive-foreground: #000000;
-    --success: #ffffff; /* white - lightest for positive actions */
+    --success: #f5f5f5;
     --success-foreground: #000000;
     --warning: #9ca3af; /* gray-400 */
     --warning-foreground: #000000;
