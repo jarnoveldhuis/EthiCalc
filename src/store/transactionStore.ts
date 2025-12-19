@@ -382,17 +382,19 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       localStorage.setItem("plaid_access_token_info", JSON.stringify(tokenInfo));
       sessionStorage.removeItem("wasManuallyDisconnected");
       set({ connectionStatus: { isConnected: true, error: null } });
+      // Don't set appStatus to 'idle' here - let fetchTransactions manage the status
+      // It will set it to 'fetching_plaid', then 'analyzing', etc.
       await get().fetchTransactions(data.access_token);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to connect bank";
       set({ appStatus: "error", connectionStatus: { isConnected: false, error: errorMessage } });
-    } finally {
-        if(get().appStatus === 'connecting_bank') set({appStatus: 'idle'});
     }
   },
 
   fetchTransactions: async (accessToken) => {
-    if (get().appStatus !== "idle" && get().appStatus !== "error") return;
+    // Allow fetching when status is 'idle', 'error', or 'connecting_bank' (when called from connectBank)
+    const currentStatus = get().appStatus;
+    if (currentStatus !== "idle" && currentStatus !== "error" && currentStatus !== "connecting_bank") return;
     set({ appStatus: "fetching_plaid" });
     let tokenToUse = accessToken;
     try {
