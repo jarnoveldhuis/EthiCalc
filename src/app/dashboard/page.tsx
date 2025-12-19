@@ -112,7 +112,9 @@ export default function Dashboard() {
   if (!user) { return <DashboardLoading message="Redirecting to login..." />; }
 
   const renderContent = () => {
-    if ((isOverallLoading && !hasData) || appStatus === 'initializing') {
+    // Show loading if we're loading or if we're connected but fetching/analyzing transactions
+    const isFetchingTransactions = effectiveConnectionStatus && (appStatus === 'fetching_plaid' || appStatus === 'analyzing');
+    if ((isOverallLoading && !hasData) || appStatus === 'initializing' || isFetchingTransactions) {
         return <DashboardLoading message={loadingMessage} />;
     }
     if (!isOverallLoading && !hasData) {
