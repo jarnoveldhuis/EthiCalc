@@ -23,8 +23,8 @@ export const config = {
   // Add new Gemini configuration section
   gemini: {
     apiKey: process.env.GEMINI_API_KEY, // Add this environment variable
-    model: "gemini-2.0-flash", 
-    previewModel: "gemini-1.5-flash",    
+    model: "gemini-2.5-flash-lite", 
+    previewModel: "gemini-2.5-flash-lite",    
     timeout: 200000, // Adjust timeout if needed
   },
   firebase: {
