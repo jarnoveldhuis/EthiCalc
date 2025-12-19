@@ -117,7 +117,8 @@ export async function analyzeTransactionsViaAPI(
       }
       const genAI = new GoogleGenAI({ apiKey: config.gemini.apiKey });
       modelUsed = config.gemini.previewModel;
-      const tools: Tool[] = [{ googleSearch: {} }];
+      const tools: Tool[] = [];
+      // const tools: Tool[] = [{ googleSearch: {} }];
       const contents = [
         {
           role: "user",
