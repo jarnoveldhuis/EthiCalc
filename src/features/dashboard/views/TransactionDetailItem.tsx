@@ -13,7 +13,6 @@ interface TransactionDetailItemProps {
 export function TransactionDetailItem({ transaction }: TransactionDetailItemProps) {
   const [expandedPractices, setExpandedPractices] = useState<Set<string>>(new Set());
   const [citationsVisible, setCitationsVisible] = useState<Record<string, boolean>>({});
-  const userValueSettings = useTransactionStore(state => state.userValueSettings);
   const getUserValueMultiplier = useTransactionStore(state => state.getUserValueMultiplier);
 
   const {
@@ -21,7 +20,6 @@ export function TransactionDetailItem({ transaction }: TransactionDetailItemProp
     name,
     merchant_name,
     amount,
-    societalDebt = 0,
     unethicalPractices = [],
     ethicalPractices = [],
     practiceWeights = {},
