@@ -308,7 +308,16 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   
         if (finalTransactions.length > 0) {
           set({ appStatus: "saving_batch" });
-          await get().saveTransactionBatch(finalTransactions);
+          try {
+            await get().saveTransactionBatch(finalTransactions);
+            console.log(`analyzeAndCacheTransactions: Successfully saved batch of ${finalTransactions.length} transactions`);
+          } catch (saveError) {
+            // Log the error but don't fail the entire analysis
+            console.error("analyzeAndCacheTransactions: Failed to save batch to Firestore:", saveError);
+            // Still update savedTransactions locally even if Firestore save fails
+            // This allows the UI to work, but the data won't persist across sessions
+            set({ hasSavedData: false });
+          }
         }
       }
     } catch (error) {
@@ -324,13 +333,21 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   saveTransactionBatch: async (transactionsToSave) => {
     const currentUser = auth.currentUser;
-    if (!currentUser) throw new Error("User not logged in for save.");
+    if (!currentUser) {
+      console.error("saveTransactionBatch: User not logged in");
+      throw new Error("User not logged in for save.");
+    }
     
     const { userValueSettings } = get();
     
     try {
+        console.log(`saveTransactionBatch: Starting save for ${transactionsToSave.length} transactions`);
+        
         const authHeaders = await getAuthHeader();
-        if (!authHeaders) throw new Error("User not authenticated for saving batch.");
+        if (!authHeaders) {
+          console.error("saveTransactionBatch: Failed to get auth headers");
+          throw new Error("User not authenticated for saving batch.");
+        }
         
         const analysisForSave = calculationService.calculateImpactAnalysis(transactionsToSave, userValueSettings);
         const batchPayload = {
@@ -344,19 +361,39 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         };
 
         const sanitizedPayload = sanitizeDataForFirestore(batchPayload);
-        if (!sanitizedPayload) throw new Error("Failed to sanitize payload.");
+        if (!sanitizedPayload) {
+          console.error("saveTransactionBatch: Failed to sanitize payload");
+          throw new Error("Failed to sanitize payload.");
+        }
 
+        console.log(`saveTransactionBatch: Sending request to /api/transactions/save with ${sanitizedPayload.analyzedData.transactions.length} transactions`);
+        
         const response = await fetch("/api/transactions/save", {
             method: "POST", headers: authHeaders, body: JSON.stringify(sanitizedPayload),
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Save Batch API Error: ${response.status}`);
+            const errorMessage = errorData.error || `Save Batch API Error: ${response.status}`;
+            console.error(`saveTransactionBatch: API error (${response.status}):`, errorMessage, errorData);
+            throw new Error(errorMessage);
         }
+        
+        const responseData = await response.json().catch(() => ({}));
+        if (!responseData.success || !responseData.batchId) {
+          console.error(`saveTransactionBatch: API returned success but missing batchId:`, responseData);
+          throw new Error("Save batch API returned invalid response format");
+        }
+        console.log(`saveTransactionBatch: Successfully saved batch with ID: ${responseData.batchId}`);
         set({ hasSavedData: true });
     } catch (error) {
-        console.error("Error saving batch via API:", error);
+        console.error("saveTransactionBatch: Error saving batch via API:", error);
+        if (error instanceof Error) {
+          console.error("saveTransactionBatch: Error details:", {
+            message: error.message,
+            stack: error.stack
+          });
+        }
         throw error;
     }
   },
@@ -394,7 +431,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   fetchTransactions: async (accessToken) => {
     // Allow fetching when status is 'idle', 'error', or 'connecting_bank' (when called from connectBank)
     const currentStatus = get().appStatus;
-    if (currentStatus !== "idle" && currentStatus !== "error" && currentStatus !== "connecting_bank") return;
+    if (
+      currentStatus !== "idle" &&
+      currentStatus !== "error" &&
+      currentStatus !== "connecting_bank" &&
+      currentStatus !== "initializing" &&
+      currentStatus !== "loading_latest"
+    ) {
+      return;
+    }
     set({ appStatus: "fetching_plaid" });
     let tokenToUse = accessToken;
     try {
@@ -420,11 +465,67 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       await get().analyzeAndCacheTransactions(mappedTransactions);
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Failed to load transactions";
-        set({ appStatus: "error", connectionStatus: { isConnected: false, error: errorMessage } });
+        console.error("fetchTransactions error:", errorMessage);
+        // Only disconnect if it's a token/auth issue
+        if (errorMessage.includes("No access token") || 
+            errorMessage.includes("Invalid access token") ||
+            errorMessage.includes("not authenticated")) {
+          set({ appStatus: "error", connectionStatus: { isConnected: false, error: errorMessage } });
+        } else {
+          // For other errors (network, Plaid API issues), keep connection status but show error
+          set({ 
+            appStatus: "error", 
+            connectionStatus: { ...get().connectionStatus, error: errorMessage } 
+          });
+        }
     }
   },
   
-  manuallyFetchTransactions: () => get().fetchTransactions(),
+  manuallyFetchTransactions: async () => {
+    // Check if we have an access token before attempting to fetch
+    const storedData = localStorage.getItem("plaid_access_token_info");
+    if (!storedData) {
+      const errorMsg = "No access token available. Please reconnect your bank account.";
+      console.error("manuallyFetchTransactions:", errorMsg);
+      set({ 
+        appStatus: "error", 
+        connectionStatus: { isConnected: false, error: errorMsg } 
+      });
+      return;
+    }
+    
+    try {
+      const tokenInfo = JSON.parse(storedData);
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        throw new Error("User not logged in");
+      }
+      
+      if (tokenInfo.userId !== currentUser.uid) {
+        throw new Error("Access token does not match current user");
+      }
+      
+      // Call fetchTransactions with the token
+      await get().fetchTransactions(tokenInfo.token);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch transactions";
+      console.error("manuallyFetchTransactions error:", errorMessage);
+      // Only disconnect if it's a token/auth issue, not a network issue
+      if (errorMessage.includes("token") || errorMessage.includes("auth") || errorMessage.includes("No access token")) {
+        set({ 
+          appStatus: "error", 
+          connectionStatus: { isConnected: false, error: errorMessage } 
+        });
+      } else {
+        // For other errors (network, etc.), keep connection but show error
+        set({ 
+          appStatus: "error", 
+          connectionStatus: { ...get().connectionStatus, error: errorMessage } 
+        });
+      }
+    }
+  },
 
   loadLatestTransactions: async (): Promise<boolean> => {
     if (!auth.currentUser) return false;
@@ -465,30 +566,50 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
 
-  initializeStore: async (user: User | null) => {
-    if (!user) { get().resetState(); return; }
-    if (sessionStorage.getItem("wasManuallyDisconnected") === "true") {
-      set({connectionStatus: { isConnected: false, error: null }});
-      return;
+ // src/store/transactionStore.ts
+
+initializeStore: async (user: User | null) => {
+  if (!user) {
+    get().resetState();
+    return;
+  }
+  
+  if (sessionStorage.getItem("wasManuallyDisconnected") === "true") {
+    set({ connectionStatus: { isConnected: false, error: null } });
+    return;
+  }
+
+  set({ appStatus: "initializing" });
+  
+  try {
+    await get().initializeUserValueSettings(user.uid);
+    
+    // 1. Load saved data (don't care if it returns true/false, we just want to show what we have)
+    await get().loadLatestTransactions();
+
+    // 2. ALWAYS try to fetch fresh data if we have a token
+    const storedData = localStorage.getItem("plaid_access_token_info");
+    if (storedData) {
+      const tokenInfo = JSON.parse(storedData);
+      if (tokenInfo.userId === user.uid) {
+        // This will now work because we updated the guard clause in fetchTransactions
+        await get().fetchTransactions(tokenInfo.token); 
+      }
     }
-    set({ appStatus: "initializing" });
-    try {
-        await get().initializeUserValueSettings(user.uid);
-        const loaded = await get().loadLatestTransactions();
-        if (!loaded) {
-            const storedData = localStorage.getItem("plaid_access_token_info");
-            if (storedData) {
-                const tokenInfo = JSON.parse(storedData);
-                if (tokenInfo.userId === user.uid) {
-                    await get().fetchTransactions(tokenInfo.token);
-                }
-            }
-        }
-    } catch (error) {
-        set({ appStatus: "error", connectionStatus: { isConnected: false, error: error instanceof Error ? error.message : "Init failed" } });
-    } finally {
-        if (get().appStatus === "initializing") set({ appStatus: "idle" });
+  } catch (error) {
+    set({
+      appStatus: "error",
+      connectionStatus: {
+        isConnected: false,
+        error: error instanceof Error ? error.message : "Initialization failed",
+      },
+    });
+  } finally {
+    // Only reset to idle if we are still in the initializing phase
+    if (get().appStatus === "initializing") {
+        set({ appStatus: "idle" });
     }
+  }
 },
 
   initializeUserValueSettings: async (userId: string) => {

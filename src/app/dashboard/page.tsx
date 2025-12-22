@@ -8,6 +8,9 @@ import { ErrorAlert } from "@/shared/ui/ErrorAlert";
 import { DashboardLayout } from "@/features/dashboard/DashboardLayout";
 import { PlaidConnectionSection } from "@/features/banking/PlaidConnectionSection";
 import { BalanceSheetView } from "@/features/dashboard/views/BalanceSheetView";
+import { TransactionsListView } from "@/features/dashboard/views/TransactionsListView";
+import { ViewTabs, ViewType } from "@/features/dashboard/ViewTabs";
+import { RefreshTransactionsButton } from "@/features/dashboard/RefreshTransactionsButton";
 import { ManualFetchButton } from "@/features/debug/ManualFetchButton";
 import { DashboardSidebar } from "@/features/dashboard/DashboardSidebar";
 import { DashboardLoading, DashboardEmptyState } from "@/features/dashboard/DashboardLoading";
@@ -15,6 +18,7 @@ import { useSampleData } from "@/features/debug/useSampleData";
 
 export default function Dashboard() {
   const [loadingMessage, setLoadingMessage] = useState<string>("Loading dashboard...");
+  const [activeView, setActiveView] = useState<ViewType>('balance');
   const { user, loading: authLoading, logout } = useAuth();
 
   const appStatus = useTransactionStore(state => state.appStatus);
@@ -139,7 +143,21 @@ export default function Dashboard() {
       );
     }
     if (hasData) {
-        return ( <div className="card overflow-visible"> <BalanceSheetView transactions={transactions} /> </div> );
+        return (
+          <div className="card overflow-visible">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+              <ViewTabs activeView={activeView} onViewChange={setActiveView} />
+              {effectiveConnectionStatus && (
+                <RefreshTransactionsButton onRefresh={handleManualFetch} />
+              )}
+            </div>
+            {activeView === 'balance' ? (
+              <BalanceSheetView transactions={transactions} />
+            ) : (
+              <TransactionsListView />
+            )}
+          </div>
+        );
     }
     return <DashboardLoading message={loadingMessage} />;
   };
