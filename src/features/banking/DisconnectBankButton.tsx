@@ -30,7 +30,7 @@ export function DisconnectBankButton({ onDisconnect, className = "" }: Disconnec
   ) : (
     <button
       onClick={() => setConfirming(true)}
-      className={`text-red-600 hover:text-red-800 text-sm ${className}`}
+      className={`bg-white dark:bg-white text-gray-900 dark:text-gray-900 hover:bg-gray-100 dark:hover:bg-gray-100 px-3 py-1.5 rounded text-sm font-medium border border-gray-300 dark:border-gray-300 ${className}`}
     >
       Disconnect Bank
     </button>
