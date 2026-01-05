@@ -147,7 +147,7 @@ export function TransactionDetailItem({ transaction }: TransactionDetailItemProp
                   </div>
                   <div className="flex-shrink-0 text-right ml-4 flex items-center gap-2">
                     <div className={`text-xs font-medium ${getColorClass(practiceInfo.debt)}`}>
-                      {practiceInfo.debt >= 0 ? '+' : ''}${Math.abs(practiceInfo.debt).toFixed(2)}
+                      {practiceInfo.debt >= 0 ? '+' : '-'}${Math.abs(practiceInfo.debt).toFixed(2)}
                     </div>
                     {hasExpandableContent && (
                       <svg
