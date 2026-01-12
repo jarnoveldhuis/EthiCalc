@@ -129,8 +129,8 @@ export function TransactionDetailItem({ transaction }: TransactionDetailItemProp
                 key={idx}
                 className={`p-2 rounded ${
                   practiceInfo.type === "unethical" 
-                    ? "bg-black/5 dark:bg-white/5 border-l-2 border-gray-400 dark:border-gray-500"
-                    : "bg-black/10 dark:bg-white/10 border-l-2 border-gray-600 dark:border-gray-400"
+                    ? "bg-black/5 dark:bg-white/10 border-l-4 border-gray-600 dark:border-gray-400"
+                    : "bg-black/15 dark:bg-white/20 border-l-4 border-gray-300 dark:border-gray-600"
                 }`}
               >
                 <div 
@@ -138,7 +138,11 @@ export function TransactionDetailItem({ transaction }: TransactionDetailItemProp
                   onClick={() => hasExpandableContent && togglePractice(practiceInfo.practice)}
                 >
                   <div className="flex-grow min-w-0">
-                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                    <div className={`font-medium text-sm ${
+                      practiceInfo.type === "unethical" 
+                        ? "text-[var(--destructive)] dark:text-gray-200" 
+                        : "text-[var(--success)] dark:text-gray-100"
+                    }`}>
                       {practiceInfo.practice}
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-400">
@@ -147,7 +151,7 @@ export function TransactionDetailItem({ transaction }: TransactionDetailItemProp
                   </div>
                   <div className="flex-shrink-0 text-right ml-4 flex items-center gap-2">
                     <div className={`text-xs font-medium ${getColorClass(practiceInfo.debt)}`}>
-                      {practiceInfo.debt >= 0 ? '+' : '-'}${Math.abs(practiceInfo.debt).toFixed(2)}
+                      {practiceInfo.type === "ethical" ? '+' : '-'}${Math.abs(practiceInfo.debt).toFixed(2)}
                     </div>
                     {hasExpandableContent && (
                       <svg
